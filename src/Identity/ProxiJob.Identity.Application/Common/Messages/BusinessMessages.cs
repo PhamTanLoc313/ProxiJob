@@ -34,7 +34,7 @@ namespace ProxiJob.Identity.Application.Common.Messages
         public const string AlreadyOnPlan = "Tài khoản đang sử dụng gói này.";
         public const string PlanIdRequired = "Vui lòng chọn gói dịch vụ (planId).";
         public const string InvalidPlanId = "Gói dịch vụ không hợp lệ hoặc không được phép mua.";
-        public const string InvalidPlanName = "Gói dịch vụ không hợp lệ. Chọn: PerShift, Basic, Standard, Premium.";
+        public const string InvalidPlanName = "Gói dịch vụ không hợp lệ. Chọn: PerShift, Recruit, HRM Basic, Enterprise.";
         public const string UserNotFound = "Không tìm thấy tài khoản.";
         public const string PlanNotFound = "Không tìm thấy gói dịch vụ.";
         public const string InvalidRefreshToken = "Phiên đăng nhập không hợp lệ.";

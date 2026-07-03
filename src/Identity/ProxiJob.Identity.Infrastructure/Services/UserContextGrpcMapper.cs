@@ -21,7 +21,10 @@ namespace ProxiJob.Identity.Infrastructure.Services
                 JobPostsUsed = dto.JobPostsUsed,
                 ProfileStatus = dto.ProfileStatus ?? string.Empty,
                 ReputationScore = (double)dto.ReputationScore,
-                IsActive = dto.IsActive
+                IsActive = dto.IsActive,
+                MaxEmployees = dto.MaxEmployees,
+                MaxActiveQrs = dto.MaxActiveQrs,
+                MaxSearchRadius = dto.MaxSearchRadius
             };
             message.Features.AddRange(dto.Features);
             return message;

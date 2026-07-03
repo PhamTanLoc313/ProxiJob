@@ -7,12 +7,15 @@ import { JOB_API_BASE_URL, getAuthHeader } from './apiConfig';
  * @param {number} [pageSize=10] 
  * @returns {Promise<object>}
  */
-export async function getPublishedJobs(categoryId, pageNumber = 1, pageSize = 20) {
+export async function getPublishedJobs(categoryId, pageNumber = 1, pageSize = 20, latitude = null, longitude = null) {
   try {
     const headers = await getAuthHeader();
     let url = `${JOB_API_BASE_URL}/job-posts/published?pageNumber=${pageNumber}&pageSize=${pageSize}`;
     if (categoryId) {
       url += `&categoryId=${categoryId}`;
+    }
+    if (latitude !== null && longitude !== null) {
+      url += `&latitude=${latitude}&longitude=${longitude}`;
     }
 
     const response = await fetch(url, { headers });

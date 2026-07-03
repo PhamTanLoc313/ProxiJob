@@ -107,6 +107,10 @@ export default function PayrollSettlementScreen() {
   };
 
   const handleExportExcel = async () => {
+    if (user?.subscriptionTier !== 'Enterprise') {
+      showToast('Nâng cấp gói Enterprise để sử dụng tính năng Xuất đối soát nâng cao ⚡', 'error');
+      return;
+    }
     try {
       const csvHeader = "ID,Nhan vien,So gio,Thanh tien,Ngay thanh toan,Trang thai\n";
       const csvRows = payrolls.map(p =>
@@ -329,6 +333,15 @@ export default function PayrollSettlementScreen() {
                 <Text style={[styles.filterChipText, shiftFilter === 'afternoon' && styles.filterChipTextActive]}>{"Ca dài (> 4h)"}</Text>
               </TouchableOpacity>
             </View>
+
+            {user?.subscriptionTier !== 'Enterprise' && (
+              <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.7)' }]}>
+                <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="light" />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#ff6b00', textAlign: 'center', paddingHorizontal: 12 }}>
+                  Nâng cấp gói Enterprise để sử dụng tính năng Xuất đối soát nâng cao ⚡
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -475,10 +488,14 @@ export default function PayrollSettlementScreen() {
 
       {/* Floating Action Button for Excel Export */}
       <TouchableOpacity
-        style={styles.floatingShareBtn}
+        style={[styles.floatingShareBtn, user?.subscriptionTier !== 'Enterprise' && { backgroundColor: '#a0aab2' }]}
         onPress={handleExportExcel}
+        activeOpacity={user?.subscriptionTier !== 'Enterprise' ? 1 : 0.7}
       >
         <Text style={styles.floatingShareBtnText}>📊 Xuất file Excel đối soát</Text>
+        {user?.subscriptionTier !== 'Enterprise' && (
+          <BlurView intensity={35} style={[StyleSheet.absoluteFill, { borderRadius: 99 }]} tint="light" />
+        )}
       </TouchableOpacity>
 
       {/* Rating & Offline Payment Form Modal */}

@@ -89,10 +89,16 @@ const fetchJobShiftsWithCache = async (jobId) => {
 
 export const useShiftsQuery = (user, studentCoords) => {
   return useQuery({
-    queryKey: ['shifts', user?.id],
+    queryKey: ['shifts', user?.id, studentCoords?.latitude, studentCoords?.longitude],
     queryFn: async () => {
       try {
-        const res = await getPublishedJobs();
+        const res = await getPublishedJobs(
+          null,
+          1,
+          50,
+          studentCoords?.latitude,
+          studentCoords?.longitude
+        );
         const jobPosts = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : (res?.items || res?.Items || res?.data?.items || res?.data?.Items || []));
 
         // Fetch all job shifts in parallel instead of sequentially for much faster loading
