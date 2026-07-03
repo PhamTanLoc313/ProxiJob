@@ -658,30 +658,6 @@ export default function PayrollSettlementScreen() {
             />
           </View>
 
-          {/* Advanced Filter - Fully interactive and free */}
-          <View style={styles.filtersBlock}>
-            <Text style={styles.filterHeader}>Bộ lọc ca trực công nhật:</Text>
-            <View style={styles.filterRow}>
-              <TouchableOpacity
-                style={[styles.filterChip, shiftFilter === 'all' && styles.filterChipActive]}
-                onPress={() => setShiftFilter('all')}
-              >
-                <Text style={[styles.filterChipText, shiftFilter === 'all' && styles.filterChipTextActive]}>Tất cả ca trực</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterChip, shiftFilter === 'morning' && styles.filterChipActive]}
-                onPress={() => setShiftFilter('morning')}
-              >
-                <Text style={[styles.filterChipText, shiftFilter === 'morning' && styles.filterChipTextActive]}>{"Ca ngắn (≤ 4h)"}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterChip, shiftFilter === 'afternoon' && styles.filterChipActive]}
-                onPress={() => setShiftFilter('afternoon')}
-              >
-                <Text style={[styles.filterChipText, shiftFilter === 'afternoon' && styles.filterChipTextActive]}>{"Ca dài (> 4h)"}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </View>
 
         {/* Bottom Section: Grouped Lists */}

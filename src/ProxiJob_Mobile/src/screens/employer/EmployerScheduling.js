@@ -26,6 +26,215 @@ import {
 
 const EMPTY_ARRAY = [];
 
+const pickerModalStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerContainer: {
+    width: '100%',
+    maxWidth: 300,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+  pickerColumnsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  pickerColumnWrapper: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  columnLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 8,
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+  columnScrollView: {
+    height: 150,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  timeItem: {
+    paddingVertical: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  timeItemSelected: {
+    backgroundColor: '#FF6B00',
+  },
+  timeItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular',
+  },
+  timeItemTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+  pickerSeparator: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#475569',
+    marginHorizontal: 12,
+    marginTop: 20,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: '#F1F5F9',
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+  confirmBtn: {
+    backgroundColor: '#FF6B00',
+  },
+  confirmBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+});
+
+const CustomTimePickerModal = ({ visible, value, onClose, onSelect, title }) => {
+  let initialHour = 8;
+  let initialMinute = 0;
+  if (value) {
+    const parts = value.split(':');
+    if (parts.length === 2) {
+      initialHour = parseInt(parts[0]);
+      initialMinute = parseInt(parts[1]);
+    }
+  }
+
+  const [selectedHour, setSelectedHour] = useState(initialHour);
+  const [selectedMinute, setSelectedMinute] = useState(initialMinute);
+
+  React.useEffect(() => {
+    if (value) {
+      const parts = value.split(':');
+      if (parts.length === 2) {
+        setSelectedHour(parseInt(parts[0]));
+        setSelectedMinute(parseInt(parts[1]));
+      }
+    }
+  }, [value, visible]);
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
+
+  const handleConfirm = () => {
+    const h = String(selectedHour).padStart(2, '0');
+    const m = String(selectedMinute).padStart(2, '0');
+    onSelect(`${h}:${m}`);
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={pickerModalStyles.modalOverlay}>
+        <View style={pickerModalStyles.pickerContainer}>
+          <Text style={pickerModalStyles.modalTitle}>{title || 'Chọn thời gian'}</Text>
+          
+          <View style={pickerModalStyles.pickerColumnsRow}>
+            <View style={pickerModalStyles.pickerColumnWrapper}>
+              <Text style={pickerModalStyles.columnLabel}>Giờ</Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={pickerModalStyles.columnScrollView}>
+                {hours.map((h) => {
+                  const isSelected = selectedHour === h;
+                  return (
+                    <TouchableOpacity
+                      key={h}
+                      style={[pickerModalStyles.timeItem, isSelected && pickerModalStyles.timeItemSelected]}
+                      onPress={() => setSelectedHour(h)}
+                    >
+                      <Text style={[pickerModalStyles.timeItemText, isSelected && pickerModalStyles.timeItemTextSelected]}>
+                        {String(h).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <Text style={pickerModalStyles.pickerSeparator}>:</Text>
+
+            <View style={pickerModalStyles.pickerColumnWrapper}>
+              <Text style={pickerModalStyles.columnLabel}>Phút</Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={pickerModalStyles.columnScrollView}>
+                {minutes.map((m) => {
+                  const isSelected = selectedMinute === m;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      style={[pickerModalStyles.timeItem, isSelected && pickerModalStyles.timeItemSelected]}
+                      onPress={() => setSelectedMinute(m)}
+                    >
+                      <Text style={[pickerModalStyles.timeItemText, isSelected && pickerModalStyles.timeItemTextSelected]}>
+                        {String(m).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+
+          <View style={pickerModalStyles.actionsRow}>
+            <TouchableOpacity onPress={onClose} style={[pickerModalStyles.actionBtn, pickerModalStyles.cancelBtn]}>
+              <Text style={pickerModalStyles.cancelBtnText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleConfirm} style={[pickerModalStyles.actionBtn, pickerModalStyles.confirmBtn]}>
+              <Text style={pickerModalStyles.confirmBtnText}>Xác nhận</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 function getCurrentWeekDays() {
   const today = new Date();
   const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
@@ -96,6 +305,11 @@ export default function EmployerScheduling() {
   const [newShiftStart, setNewShiftStart] = useState('');
   const [newShiftEnd, setNewShiftEnd] = useState('');
   const [newShiftIcon, setNewShiftIcon] = useState('☀️');
+  const [errors, setErrors] = useState({});
+  const [startTimeVisible, setStartTimeVisible] = useState(false);
+  const [endTimeVisible, setEndTimeVisible] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [slotToDelete, setSlotToDelete] = useState(null);
 
   React.useEffect(() => {
     const days = getCurrentWeekDays();
@@ -265,19 +479,44 @@ export default function EmployerScheduling() {
     setNewShiftEnd('');
     setNewShiftIcon('☀️');
     setEditingSlotId(null);
+    setErrors({});
   };
 
   const handleAddShiftSubmit = async () => {
+    const newErrors = {};
     if (!newShiftName.trim()) {
-      showToast('Vui lòng nhập tên ca làm', 'warning');
-      return;
+      newErrors.name = 'Vui lòng nhập tên ca làm!';
     }
+    
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-    if (!timeRegex.test(newShiftStart) || !timeRegex.test(newShiftEnd)) {
-      showToast('Giờ phải đúng định dạng HH:MM (ví dụ 11:00)', 'warning');
+    if (!newShiftStart) {
+      newErrors.start = 'Vui lòng chọn giờ bắt đầu!';
+    } else if (!timeRegex.test(newShiftStart)) {
+      newErrors.start = 'Giờ bắt đầu không đúng định dạng!';
+    }
+    
+    if (!newShiftEnd) {
+      newErrors.end = 'Vui lòng chọn giờ kết thúc!';
+    } else if (!timeRegex.test(newShiftEnd)) {
+      newErrors.end = 'Giờ kết thúc không đúng định dạng!';
+    }
+    
+    if (newShiftStart && newShiftEnd && timeRegex.test(newShiftStart) && timeRegex.test(newShiftEnd)) {
+      const [startH, startM] = newShiftStart.split(':').map(Number);
+      const [endH, endM] = newShiftEnd.split(':').map(Number);
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = endH * 60 + endM;
+      if (startMinutes >= endMinutes) {
+        newErrors.end = 'Giờ kết thúc phải sau giờ bắt đầu!';
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
+    setErrors({});
     if (editingSlotId) {
       const updatedSlots = shiftSlots.map(s => {
         if (s.id === editingSlotId) {
@@ -328,6 +567,7 @@ export default function EmployerScheduling() {
   const openEditShiftModal = (slot) => {
     setEditingSlotId(slot.id);
     setNewShiftName(slot.name);
+    setErrors({});
     
     let start = '';
     let end = '';
@@ -348,30 +588,25 @@ export default function EmployerScheduling() {
   const handleDeleteShiftSlot = (slotId) => {
     const targetSlot = shiftSlots.find(s => s.id === slotId);
     if (!targetSlot) return;
+    setSlotToDelete(targetSlot);
+    setDeleteConfirmVisible(true);
+  };
 
-    Alert.alert(
-      'Xóa ca làm việc',
-      `Bạn có chắc chắn muốn xóa ca làm "${targetSlot.name}" không?`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa',
-          style: 'destructive',
-          onPress: async () => {
-            const updatedSlots = shiftSlots.filter(s => s.id !== slotId);
-            setShiftSlots(updatedSlots);
-            showToast('Đã xóa ca làm việc thành công!', 'info');
+  const handleConfirmDeleteShiftSlot = async () => {
+    if (!slotToDelete) return;
+    const slotId = slotToDelete.id;
+    const updatedSlots = shiftSlots.filter(s => s.id !== slotId);
+    setShiftSlots(updatedSlots);
+    setDeleteConfirmVisible(false);
+    setSlotToDelete(null);
+    showToast('Đã xóa ca làm việc thành công!', 'info');
 
-            try {
-              const storageKey = `@custom_shift_slots_${user?.id || 'default'}`;
-              await AsyncStorage.setItem(storageKey, JSON.stringify(updatedSlots));
-            } catch (err) {
-              console.log('Error saving shift slots:', err);
-            }
-          }
-        }
-      ]
-    );
+    try {
+      const storageKey = `@custom_shift_slots_${user?.id || 'default'}`;
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updatedSlots));
+    } catch (err) {
+      console.log('Error saving shift slots:', err);
+    }
   };
 
   const selectedDay = weekDays[selectedDayIndex];
@@ -872,29 +1107,34 @@ export default function EmployerScheduling() {
                 value={newShiftName}
                 onChangeText={setNewShiftName}
               />
+              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
 
               <View style={styles.timeInputsRow}>
                 <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={styles.inputLabel}>Giờ bắt đầu</Text>
-                  <TextInput
+                  <TouchableOpacity
                     style={styles.formInput}
-                    placeholder="HH:MM (ví dụ: 11:00)"
-                    placeholderTextColor="#94A3B8"
-                    value={newShiftStart}
-                    onChangeText={setNewShiftStart}
-                    maxLength={5}
-                  />
+                    onPress={() => setStartTimeVisible(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: newShiftStart ? '#181C1E' : '#94A3B8', fontSize: 14 }}>
+                      {newShiftStart || 'Chọn giờ'}
+                    </Text>
+                  </TouchableOpacity>
+                  {errors.start && <Text style={styles.errorText}>{errors.start}</Text>}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>Giờ kết thúc</Text>
-                  <TextInput
+                  <TouchableOpacity
                     style={styles.formInput}
-                    placeholder="HH:MM (ví dụ: 15:00)"
-                    placeholderTextColor="#94A3B8"
-                    value={newShiftEnd}
-                    onChangeText={setNewShiftEnd}
-                    maxLength={5}
-                  />
+                    onPress={() => setEndTimeVisible(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: newShiftEnd ? '#181C1E' : '#94A3B8', fontSize: 14 }}>
+                      {newShiftEnd || 'Chọn giờ'}
+                    </Text>
+                  </TouchableOpacity>
+                  {errors.end && <Text style={styles.errorText}>{errors.end}</Text>}
                 </View>
               </View>
 
@@ -922,6 +1162,80 @@ export default function EmployerScheduling() {
                 <Text style={styles.submitShiftButtonText}>{editingSlotId ? 'Cập nhật Ca Làm' : 'Thêm Ca Làm Việc'}</Text>
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+        <CustomTimePickerModal
+          visible={startTimeVisible}
+          value={newShiftStart}
+          onClose={() => setStartTimeVisible(false)}
+          onSelect={setNewShiftStart}
+          title="Chọn giờ bắt đầu"
+        />
+        <CustomTimePickerModal
+          visible={endTimeVisible}
+          value={newShiftEnd}
+          onClose={() => setEndTimeVisible(false)}
+          onSelect={setNewShiftEnd}
+          title="Chọn giờ kết thúc"
+        />
+      </Modal>
+
+      {/* Custom Delete Confirm Modal */}
+      <Modal
+        visible={deleteConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmVisible(false)}
+      >
+        <View style={pickerModalStyles.modalOverlay}>
+          <View style={[pickerModalStyles.pickerContainer, { padding: 24, maxWidth: 320 }]}>
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{
+                width: 60,
+                height: 60,
+                borderRadius: 30,
+                backgroundColor: '#FEE2E2',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 16
+              }}>
+                <Ionicons name="trash-outline" size={32} color="#EF4444" />
+              </View>
+              <Text style={{
+                fontSize: 18,
+                fontWeight: '800',
+                color: '#1F2937',
+                textAlign: 'center',
+                marginBottom: 8,
+                fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold'
+              }}>
+                Xóa ca làm việc
+              </Text>
+              <Text style={{
+                fontSize: 14,
+                color: '#6B7280',
+                textAlign: 'center',
+                lineHeight: 20,
+                fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular'
+              }}>
+                Bạn có chắc chắn muốn xóa ca làm <Text style={{ fontWeight: 'bold', color: '#111827' }}>"{slotToDelete?.name}"</Text> không? Hành động này không thể hoàn tác.
+              </Text>
+            </View>
+
+            <View style={pickerModalStyles.actionsRow}>
+              <TouchableOpacity
+                onPress={() => setDeleteConfirmVisible(false)}
+                style={[pickerModalStyles.actionBtn, pickerModalStyles.cancelBtn]}
+              >
+                <Text style={pickerModalStyles.cancelBtnText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmDeleteShiftSlot}
+                style={[pickerModalStyles.actionBtn, pickerModalStyles.confirmBtn, { backgroundColor: '#EF4444' }]}
+              >
+                <Text style={[pickerModalStyles.confirmBtnText, { color: '#FFFFFF' }]}>Xóa</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1506,6 +1820,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 14,
     color: '#181C1E',
+    justifyContent: 'center',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+    marginBottom: 4,
+    marginLeft: 4,
   },
   timeInputsRow: {
     flexDirection: 'row',
