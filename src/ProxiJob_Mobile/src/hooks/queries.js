@@ -65,6 +65,21 @@ const formatDateVN = (dateInput) => {
   }
 };
 
+const checkIsEmergency = (title, description) => {
+  const t = (title || '').toLowerCase();
+  const d = (description || '').toLowerCase();
+  return t.includes('khẩn cấp') || 
+         t.includes('khấn cấp') || 
+         t.includes('khần cấp') || 
+         t.includes('tuyển gấp') || 
+         t.includes('gấp') || 
+         d.includes('khẩn cấp') || 
+         d.includes('khấn cấp') || 
+         d.includes('khần cấp') || 
+         d.includes('tuyển gấp') || 
+         d.includes('gấp');
+};
+
 const jobShiftsCache = new Map(); // jobId -> { data, timestamp }
 const CACHE_TTL = 30000; // 30 seconds
 
@@ -113,6 +128,7 @@ export const useShiftsQuery = (user, studentCoords) => {
                 startTime: s.startTime,
                 endTime: s.endTime,
                 title: job.title,
+                categoryName: job.categoryName,
                 shopName: job.categoryName || 'Cửa hàng',
                 hourlyRate: s.salary,
                 latitude: job.latitude || job.location?.latitude || 0,
@@ -125,7 +141,7 @@ export const useShiftsQuery = (user, studentCoords) => {
                 rating: 5.0,
                 reviewsCount: 1,
                 status: s.remainingSlots <= 0 ? 'full' : 'available',
-                isEmergency: (job.title || '').toLowerCase().includes('khần cấp') || (job.title || '').toLowerCase().includes('khấn cấp') || (job.description || '').toLowerCase().includes('khần cấp') || (job.description || '').toLowerCase().includes('khấn cấp'),
+                isEmergency: checkIsEmergency(job.title, job.description),
                 createdAt: job.createdAt || job.CreatedAt || s.startTime,
                 auditFields: {
                   createdBy: job.createdBy,
@@ -263,6 +279,7 @@ export const useShiftsQuery = (user, studentCoords) => {
                   startTime: sStartTime,
                   endTime: sEndTime,
                   title,
+                  categoryName: matchingJob ? matchingJob.categoryName : 'Cửa hàng',
                   shopName,
                   hourlyRate: sJobShiftSalary || 28000,
                   latitude,
@@ -431,6 +448,7 @@ export const useEmployerJobsQuery = (user) => {
                 id: s.id,
                 jobPostId: job.id,
                 title: job.title,
+                categoryName: job.categoryName,
                 shopName: job.categoryName || 'Cửa hàng',
                 hourlyRate: s.salary,
                 latitude: job.latitude || job.location?.latitude || 0,
@@ -443,7 +461,7 @@ export const useEmployerJobsQuery = (user) => {
                 rating: 5.0,
                 reviewsCount: 0,
                 status: currentStatus,
-                isEmergency: (job.title || '').toLowerCase().includes('khẩn cấp') || (job.title || '').toLowerCase().includes('khấn cấp'),
+                isEmergency: checkIsEmergency(job.title, job.description),
                 applicantCount,
                 applicantName,
                 applicantSchool,
