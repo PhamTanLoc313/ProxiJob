@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Collections.Concurrent;
 using ProxiJob.Identity.Application.Common.Interfaces;
 using ProxiJob.Identity.Application.DTOs;
 using ProxiJob.Identity.Domain.Constants;
@@ -8,6 +9,14 @@ namespace ProxiJob.Identity.Application.Services
 {
     public class UserContextService : IUserContextService
     {
+        private static readonly ConcurrentDictionary<int, (UserContextDto Context, DateTime Expiry)> _userContextCache = new();
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(10); // 10 seconds cache for rapid consecutive calls
+
+        public static void Evict(int userId)
+        {
+            _userContextCache.TryRemove(userId, out _);
+        }
+
         private readonly IAuthRepository _authRepository;
         private readonly IRoleRepository _roleRepository;
         private readonly ISubscriptionRepository _subscriptionRepository;
@@ -56,6 +65,11 @@ namespace ProxiJob.Identity.Application.Services
             if (userId <= 0)
                 return null;
 
+            if (_userContextCache.TryGetValue(userId, out var cached) && cached.Expiry > DateTime.UtcNow)
+            {
+                return cached.Context;
+            }
+
             var user = await _authRepository.GetUserByIdAsync(userId, cancellationToken);
             if (user == null)
                 return null;
@@ -80,7 +94,26 @@ namespace ProxiJob.Identity.Application.Services
                 reputationScore = businessProfile?.ReputationScore ?? 0;
             }
 
-            return new UserContextDto
+            int maxEmployees = 0;
+            int maxActiveQrs = 0;
+            int maxSearchRadius = 3; // default for student/none B2B
+
+            if (roleName == RoleNames.Business)
+            {
+                var activeSubscriptionInfo = await _subscriptionRepository.GetActiveByUserIdAsync(user.Id, cancellationToken);
+                if (activeSubscriptionInfo != null)
+                {
+                    var planDetail = await _subscriptionRepository.GetByIdAsync(activeSubscriptionInfo.SubscriptionId, cancellationToken);
+                    if (planDetail != null)
+                    {
+                        maxEmployees = planDetail.MaxEmployees;
+                        maxActiveQrs = planDetail.MaxActiveQrs;
+                        maxSearchRadius = planDetail.MaxSearchRadius;
+                    }
+                }
+            }
+
+            var result = new UserContextDto
             {
                 UserId = user.Id,
                 BusinessId = roleName == RoleNames.Business ? user.Id : 0,
@@ -95,8 +128,14 @@ namespace ProxiJob.Identity.Application.Services
                 ProfileStatus = profileStatus,
                 ReputationScore = reputationScore,
                 IsActive = user.IsActive,
-                Features = featureCodes
+                Features = featureCodes,
+                MaxEmployees = maxEmployees,
+                MaxActiveQrs = maxActiveQrs,
+                MaxSearchRadius = maxSearchRadius
             };
+
+            _userContextCache[userId] = (result, DateTime.UtcNow.Add(CacheDuration));
+            return result;
         }
     }
 }
