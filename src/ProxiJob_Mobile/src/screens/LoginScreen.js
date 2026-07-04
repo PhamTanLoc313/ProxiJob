@@ -50,12 +50,19 @@ export default function LoginScreen() {
     return Object.keys(tempErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateForm()) {
       showToast("Vui lòng kiểm tra lại thông tin", "error");
       return;
     }
-    login(email.trim(), password);
+    try {
+      await login(email.trim(), password);
+    } catch (err) {
+      setErrors({
+        email: ' ',
+        password: err.message || 'Tài khoản hoặc mật khẩu không chính xác.'
+      });
+    }
   };
 
   const handleGoogleLogin = () => {
@@ -128,7 +135,9 @@ export default function LoginScreen() {
                 value={email}
                 onChangeText={(e) => {
                   setEmail(e);
-                  if (errors.email) setErrors(prev => ({ ...prev, email: null }));
+                  if (errors.email || errors.password) {
+                    setErrors({ email: null, password: null });
+                  }
                 }}
                 onFocus={() => setIsEmailFocused(true)}
                 onBlur={() => setIsEmailFocused(false)}
@@ -136,7 +145,7 @@ export default function LoginScreen() {
                 autoCapitalize="none"
                 editable={!authLoading}
               />
-              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+              {errors.email && errors.email.trim() !== '' && <Text style={styles.errorText}>{errors.email}</Text>}
 
               <Text style={styles.inputLabel}>Mật khẩu</Text>
               <View style={styles.passwordContainer}>
@@ -152,7 +161,9 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={(e) => {
                     setPassword(e);
-                    if (errors.password) setErrors(prev => ({ ...prev, password: null }));
+                    if (errors.email || errors.password) {
+                      setErrors({ email: null, password: null });
+                    }
                   }}
                   onFocus={() => setIsPasswordFocused(true)}
                   onBlur={() => setIsPasswordFocused(false)}
