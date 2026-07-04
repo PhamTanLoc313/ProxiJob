@@ -106,6 +106,7 @@ export default function UpgradePackageScreen() {
         orderId: res.orderId, orderCode: res.orderCode,
         amount: res.amount, expiresAt: res.expiresAt,
         planName: plan.planName, bankTransfer: res.bankTransfer,
+        checkoutUrl: res.checkoutUrl, qrCode: res.qrCode,
       });
     } catch (err) {
       showToast('Tạo đơn thất bại: ' + (err.message || 'Thử lại.'), 'error');

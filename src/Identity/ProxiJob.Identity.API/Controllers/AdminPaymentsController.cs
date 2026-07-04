@@ -27,6 +27,15 @@ namespace ProxiJob.Identity.API.Controllers
             _authRepository = authRepository;
         }
 
+        /// <summary>Danh sách tất cả các đơn thanh toán</summary>
+        [HttpGet]
+        public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+        {
+            await EnsureAdminAsync(cancellationToken);
+            var orders = await _paymentService.GetAllOrdersAsync(cancellationToken);
+            return Ok(orders);
+        }
+
         /// <summary>Danh sách đơn chuyển khoản chờ admin xác nhận</summary>
         [HttpGet("pending")]
         public async Task<IActionResult> GetPending(CancellationToken cancellationToken)

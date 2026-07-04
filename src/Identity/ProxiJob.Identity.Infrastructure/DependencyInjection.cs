@@ -36,7 +36,9 @@ namespace ProxiJob.Identity.Infrastructure
 
             services.Configure<PaymentSettings>(configuration.GetSection("PaymentSettings"));
             services.Configure<BankTransferSettings>(configuration.GetSection("BankTransfer"));
+            services.Configure<PayOsSettings>(configuration.GetSection("PayOs"));
             services.AddScoped<IBankTransferPaymentService, BankTransferPaymentService>();
+            services.AddScoped<IPayOsPaymentService, PayOsPaymentService>();
 
             var secretKey = configuration["JwtSettings:SecretKey"]!;
             var issuer = configuration["JwtSettings:Issuer"]!;
