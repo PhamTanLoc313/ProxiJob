@@ -80,7 +80,7 @@ export const useAuth = ({
 
   useEffect(() => {
     if (user) {
-      const premiumTiers = ['Enterprise', 'Premium', 'Standard'];
+      const premiumTiers = ['Enterprise', 'HRM Basic'];
       setIsEnterprise(premiumTiers.includes(user?.subscriptionTier));
     } else {
       setIsEnterprise(false);
