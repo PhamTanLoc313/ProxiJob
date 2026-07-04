@@ -23,6 +23,7 @@ import Toast from "./src/components/Toast";
 import { Ionicons } from "@expo/vector-icons";
 
 import { getAvatarSource, isValidAvatar } from "./src/utils/avatarHelper";
+import { getJobPostQuotaApi } from "./src/api/auth";
 
 const cacheBuster = Date.now();
 const queryClient = new QueryClient();
@@ -46,6 +47,20 @@ function MainAppShell() {
   };
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [quota, setQuota] = useState(null);
+
+  const toggleAvatarMenu = async () => {
+    const nextState = !avatarMenuOpen;
+    setAvatarMenuOpen(nextState);
+    if (nextState && user && user.role !== "student") {
+      try {
+        const q = await getJobPostQuotaApi();
+        if (q) setQuota(q);
+      } catch (err) {
+        console.log("Failed to fetch quota:", err);
+      }
+    }
+  };
 
   if (isRestoringSession) {
     return (
@@ -148,7 +163,7 @@ function MainAppShell() {
                   {/* Avatar Button */}
                   <TouchableOpacity
                     style={[styles.avatarTouch, isStudent ? styles.studentAvatarRing : styles.employerAvatarRing]}
-                    onPress={() => setAvatarMenuOpen(!avatarMenuOpen)}
+                    onPress={toggleAvatarMenu}
                     activeOpacity={0.8}
                   >
                     <Image
@@ -190,18 +205,53 @@ function MainAppShell() {
               {/* Section 1: Current Plan */}
               <View style={styles.dropdownSection1}>
                 <Text style={styles.dropdownStoreName}>
-                  {isStudent ? (user?.name || "Sinh viên") : "DN Test ProxiJob"}
+                  {isStudent ? (user?.name || "Sinh viên") : (user?.name || "Doanh nghiệp")}
                 </Text>
                 <Text style={styles.dropdownEmail}>
-                  {isStudent ? (user?.email || "student@proxijob.test") : "business@proxijob.test"}
+                  {isStudent ? (user?.email || "student@proxijob.test") : (user?.email || "business@proxijob.test")}
                 </Text>
                 <View style={styles.planRow}>
                   <Text style={styles.planLabel}>
                     {isStudent ? "Vai trò:" : "Gói dịch vụ:"}
                   </Text>
-                  <View style={isStudent ? styles.studentPill : styles.enterprisePill}>
-                    <Text style={isStudent ? styles.studentPillText : styles.enterprisePillText}>
-                      {isStudent ? "Student" : "Enterprise"}
+                  <View style={
+                    isStudent 
+                      ? styles.studentPill 
+                      : (!user?.subscriptionTier || user.subscriptionTier === 'None' || user.subscriptionTier === '')
+                        ? { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
+                        : user.subscriptionTier.toLowerCase() === 'standard'
+                          ? { backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
+                          : user.subscriptionTier.toLowerCase() === 'premium'
+                            ? { backgroundColor: '#FAF5FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
+                            : styles.enterprisePill
+                  }>
+                    <Text style={
+                      isStudent 
+                        ? styles.studentPillText 
+                        : (!user?.subscriptionTier || user.subscriptionTier === 'None' || user.subscriptionTier === '')
+                          ? { color: '#64748B', fontSize: 11, fontWeight: '800' }
+                          : user.subscriptionTier.toLowerCase() === 'standard'
+                            ? { color: '#059669', fontSize: 11, fontWeight: '800' }
+                            : user.subscriptionTier.toLowerCase() === 'premium'
+                              ? { color: '#7C3AED', fontSize: 11, fontWeight: '800' }
+                              : styles.enterprisePillText
+                    }>
+                      {(() => {
+                        if (isStudent) return "Student";
+                        const tierName = user?.subscriptionTier || "None";
+                        if (tierName === 'None' || tierName === '') return "Chưa đăng ký";
+                        
+                        const remaining = quota 
+                          ? quota.jobPostsRemaining 
+                          : (user?.jobPostLimit !== undefined && user?.jobPostsUsed !== undefined)
+                            ? Math.max(0, user.jobPostLimit - user.jobPostsUsed)
+                            : (tierName.toLowerCase() === 'pershift' ? 1 : tierName.toLowerCase() === 'basic' ? 15 : 999);
+                        
+                        if (tierName.toLowerCase() === 'pershift') {
+                          return `Còn ${remaining} lượt`;
+                        }
+                        return `${tierName} (Còn ${remaining} lượt)`;
+                      })()}
                     </Text>
                   </View>
                 </View>

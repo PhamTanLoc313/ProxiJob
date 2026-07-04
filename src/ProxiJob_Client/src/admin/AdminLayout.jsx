@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, Navigate, Outlet } from "react-router-dom";
 import { getAdminSession, adminLogout, getStats } from "./adminData";
+import logoImg from "../assets/logoproxijobcamden.png";
 import {
   LayoutDashboard,
   CreditCard,
@@ -10,6 +11,8 @@ import {
   LogOut,
   Menu,
   X,
+  Bell,
+  Settings,
 } from "lucide-react";
 import "./admin.css";
 
@@ -54,7 +57,7 @@ export default function AdminLayout() {
       {/* Sidebar */}
       <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="admin-sidebar-logo">
-          <div className="admin-sidebar-logo-icon">P</div>
+          <img src={logoImg} className="admin-sidebar-logo-img" style={{ width: 36, height: 36, borderRadius: 8, marginRight: 8, objectFit: "contain" }} />
           <div className="admin-sidebar-logo-text">
             <span className="admin-sidebar-logo-title">ProxiJob</span>
             <span className="admin-sidebar-logo-sub">Admin Panel</span>
@@ -68,8 +71,7 @@ export default function AdminLayout() {
           </button>
         </div>
 
-        <nav className="admin-sidebar-nav">
-          <span className="admin-nav-label">Quản lý</span>
+        <nav className="admin-nav">
           {navItems.map((item) => (
             <Link
               key={item.path}
@@ -86,17 +88,6 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        <div className="admin-sidebar-footer">
-          <div className="admin-sidebar-user">
-            <div className="admin-sidebar-avatar">
-              {session.fullName?.charAt(0)?.toUpperCase() || "A"}
-            </div>
-            <div className="admin-sidebar-user-info">
-              <div className="admin-sidebar-user-name">{session.fullName}</div>
-              <div className="admin-sidebar-user-role">Administrator</div>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* Main */}
@@ -113,11 +104,19 @@ export default function AdminLayout() {
               {navItems.find((item) => isActive(item.path, item.end))?.label || "Admin"}
             </h1>
           </div>
-          <div className="admin-header-actions">
-            <button className="admin-logout-btn" onClick={handleLogout}>
+          <div className="admin-header-actions" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <button className="admin-btn-icon" style={{ border: "none", background: "transparent", color: "var(--admin-text-muted)", position: "relative", cursor: "pointer", display: "flex", padding: 4 }}>
+              <Bell size={20} />
+              <span style={{ position: "absolute", top: 2, right: 2, width: 6, height: 6, background: "var(--admin-danger)", borderRadius: "50%" }} />
+            </button>
+            <button className="admin-btn-icon" style={{ border: "none", background: "transparent", color: "var(--admin-text-muted)", cursor: "pointer", display: "flex", padding: 4 }}>
+              <Settings size={20} />
+            </button>
+            <button className="admin-logout-btn" onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--admin-border)", border: "1px solid var(--admin-border)", padding: "6px 12px", borderRadius: 8, fontSize: 13, color: "var(--admin-text)", cursor: "pointer" }}>
               <LogOut size={16} />
               <span>Đăng xuất</span>
             </button>
+            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
           </div>
         </header>
 

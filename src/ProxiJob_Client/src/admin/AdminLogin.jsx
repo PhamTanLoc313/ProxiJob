@@ -2,12 +2,13 @@ import { useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { LogIn } from "lucide-react";
 import { adminLogin, getAdminSession } from "./adminData";
+import logoImg from "../assets/logoproxijobcamden.png";
 import "./admin.css";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@proxijob.vn");
-  const [password, setPassword] = useState("Admin123!");
+  const [email, setEmail] = useState("admin@proxijob.test");
+  const [password, setPassword] = useState("Password1!");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +40,7 @@ export default function AdminLogin() {
     <div className="admin-login-page">
       <div className="admin-login-card">
         <div className="admin-login-header">
-          <div className="admin-login-logo">P</div>
+          <img src={logoImg} style={{ width: 64, height: 64, borderRadius: 16, margin: "0 auto 16px", objectFit: "contain", display: "block" }} />
           <h1 className="admin-login-title">ProxiJob Admin</h1>
           <p className="admin-login-subtitle">Đăng nhập vào hệ thống quản trị</p>
         </div>

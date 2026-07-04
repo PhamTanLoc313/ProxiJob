@@ -6,7 +6,7 @@ export default function SubscriptionManagement() {
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#fff", margin: "0 0 6px" }}>Gói dịch vụ</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 6px" }}>Gói dịch vụ</h2>
           <p style={{ fontSize: 14, color: "var(--admin-text-secondary)", margin: 0 }}>Quản lý các gói thuê bao cung cấp cho chủ quán.</p>
         </div>
       </div>
@@ -14,7 +14,7 @@ export default function SubscriptionManagement() {
       <div className="admin-sub-cards">
         {mockSubscriptions.map((sub) => (
           <div key={sub.id} className={`admin-sub-card ${sub.hasPriorityDisplay ? "admin-sub-card-popular" : ""}`}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: "0 0 8px" }}>{sub.name}</h3>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 8px" }}>{sub.name}</h3>
             <p style={{ fontSize: 13, color: "var(--admin-text-secondary)", margin: 0, minHeight: 40 }}>
               {sub.description}
             </p>
