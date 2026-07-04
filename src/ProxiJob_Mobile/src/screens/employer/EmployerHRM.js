@@ -36,6 +36,7 @@ export default function EmployerHRM() {
   const [newStaffPhone, setNewStaffPhone] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [errors, setErrors] = useState({});
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [expandedIds, setExpandedIds] = useState({});
   const [editingStaff, setEditingStaff] = useState(null);
@@ -77,33 +78,56 @@ export default function EmployerHRM() {
   const externalStaff = (staffList || []).filter(s => s.isExternal);
 
   const handleSaveStaff = async () => {
-    if (newStaffName.trim() && newStaffRole.trim() && newStaffPhone.trim()) {
-      setIsAdding(true);
-      try {
-        if (editingStaff) {
-          await updateStaffMutation.mutateAsync({
-            id: editingStaff.id,
-            name: newStaffName,
-            role: newStaffRole,
-            phone: newStaffPhone
-          });
-        } else {
-          await addStaffMutation.mutateAsync({
-            name: newStaffName,
-            role: newStaffRole,
-            phone: newStaffPhone
-          });
-        }
-        setNewStaffName('');
-        setNewStaffRole('');
-        setNewStaffPhone('');
-        setEditingStaff(null);
-        setModalVisible(false);
-      } catch (err) {
-        console.log('Error saving staff:', err);
-      } finally {
-        setIsAdding(false);
+    const newErrors = {};
+    if (!newStaffName.trim()) {
+      newErrors.name = 'Vui lòng nhập họ và tên nhân viên!';
+    }
+    if (!newStaffRole.trim()) {
+      newErrors.role = 'Vui lòng nhập vị trí/vai trò!';
+    }
+    
+    const phoneTrimmed = newStaffPhone.trim();
+    if (!phoneTrimmed) {
+      newErrors.phone = 'Vui lòng nhập số điện thoại!';
+    } else if (!phoneTrimmed.startsWith('0')) {
+      newErrors.phone = 'Số điện thoại phải bắt đầu bằng số 0!';
+    } else if (phoneTrimmed.length !== 10 && phoneTrimmed.length !== 11) {
+      newErrors.phone = 'Số điện thoại phải có 10 hoặc 11 chữ số!';
+    } else if (!/^\d+$/.test(phoneTrimmed)) {
+      newErrors.phone = 'Số điện thoại chỉ được chứa các chữ số!';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
+    setIsAdding(true);
+    try {
+      if (editingStaff) {
+        await updateStaffMutation.mutateAsync({
+          id: editingStaff.id,
+          name: newStaffName,
+          role: newStaffRole,
+          phone: newStaffPhone
+        });
+      } else {
+        await addStaffMutation.mutateAsync({
+          name: newStaffName,
+          role: newStaffRole,
+          phone: newStaffPhone
+        });
       }
+      setNewStaffName('');
+      setNewStaffRole('');
+      setNewStaffPhone('');
+      setEditingStaff(null);
+      setModalVisible(false);
+    } catch (err) {
+      console.log('Error saving staff:', err);
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -112,6 +136,7 @@ export default function EmployerHRM() {
     setNewStaffName(staff.name);
     setNewStaffRole(staff.role);
     setNewStaffPhone(staff.phone);
+    setErrors({});
     setModalVisible(true);
   };
 
@@ -120,6 +145,7 @@ export default function EmployerHRM() {
     setNewStaffRole('');
     setNewStaffPhone('');
     setEditingStaff(null);
+    setErrors({});
     setModalVisible(false);
   };
 
@@ -589,6 +615,7 @@ export default function EmployerHRM() {
                   onChangeText={setNewStaffName}
                 />
               </View>
+              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
 
               <Text style={styles.inputLabel}>VỊ TRÍ / VAI TRÒ</Text>
               <View style={styles.inputWrapper}>
@@ -600,6 +627,7 @@ export default function EmployerHRM() {
                   onChangeText={setNewStaffRole}
                 />
               </View>
+              {errors.role && <Text style={styles.errorText}>{errors.role}</Text>}
 
               <Text style={styles.inputLabel}>SỐ ĐIỆN THOẠI</Text>
               <View style={styles.inputWrapper}>
@@ -612,14 +640,15 @@ export default function EmployerHRM() {
                   onChangeText={setNewStaffPhone}
                 />
               </View>
+              {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
 
               <TouchableOpacity
                 style={[
                   styles.submitBtn,
-                  (!newStaffName.trim() || !newStaffRole.trim() || !newStaffPhone.trim()) && styles.submitBtnDisabled
+                  isAdding && styles.submitBtnDisabled
                 ]}
                 onPress={handleSaveStaff}
-                disabled={isAdding || !newStaffName.trim() || !newStaffRole.trim() || !newStaffPhone.trim()}
+                disabled={isAdding}
                 activeOpacity={0.85}
               >
                 {isAdding ? (
@@ -1254,6 +1283,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 14,
     color: '#181C1E',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: -16,
+    marginBottom: 16,
+    marginLeft: 4,
+    fontFamily: FONT_REGULAR,
   },
   submitBtn: {
     height: 52,
