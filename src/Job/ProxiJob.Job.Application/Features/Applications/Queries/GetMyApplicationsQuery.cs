@@ -45,6 +45,7 @@ namespace ProxiJob.Job.Application.Features.Applications.Queries
                                         Id = a.Id,
                                         ShiftId = a.JobShiftId,
                                         StudentId = a.StudentId,
+                                        BusinessId = a.JobShift.JobPost.BusinessId,
                                         ShiftStartTime = a.JobShift.StartTime,
                                         ShiftEndTime = a.JobShift.EndTime,
                                         Salary = a.JobShift.Salary,

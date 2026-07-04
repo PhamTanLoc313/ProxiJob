@@ -1,9 +1,12 @@
-import React, { createContext, useRef, useState } from "react";
+import React, { createContext, useRef, useState, useEffect } from "react";
 import { useToast } from "./useToast";
 import { useLocation } from "./useLocation";
 import { useAuth } from "./useAuth";
 import { useNavigation } from "./useNavigation";
 import { useShifts } from "./useShifts";
+import { getStoredToken } from "../api/auth";
+import { HubConnectionBuilder } from '@microsoft/signalr/dist/browser/signalr.js';
+import { IDENTITY_API_BASE_URL } from '../api/apiConfig';
 
 export const AppContext = createContext();
 
@@ -26,6 +29,9 @@ export const AppProvider = ({ children }) => {
     onLogoutResets: () => {
       shiftsStateRef.current?.setActiveShift(null);
       locationState.setSimulatedDistanceToActive(3200);
+      toastState.setNotifications([
+        { id: 1, title: 'Hệ thống', content: 'Chào mừng bạn đến với ProxiJob - Nền tảng việc làm hyperlocal!', time: 'Vừa xong', read: false }
+      ]);
     },
   });
 
@@ -49,6 +55,64 @@ export const AppProvider = ({ children }) => {
   // Static review state for backward compatibility
   const [reviews, setReviews] = useState([]);
   const [isChatRoomActive, setIsChatRoomActive] = useState(false);
+
+  // Global SignalR connection for Notifications
+  useEffect(() => {
+    let active = true;
+    let connection = null;
+
+    async function startSignalR() {
+      if (!authState.user) {
+        return;
+      }
+
+      try {
+        const token = await getStoredToken();
+        if (!token) return;
+
+        const hubUrl = IDENTITY_API_BASE_URL.replace('/api', '/hub/chat');
+        console.log('[Global Notifications SignalR] Connecting to:', hubUrl);
+
+        connection = new HubConnectionBuilder()
+          .withUrl(hubUrl, {
+            accessTokenFactory: () => token
+          })
+          .configureLogging({
+            log(logLevel, message) {
+              if (message.includes("status code: 1006") || message.includes("WebSocket closed")) {
+                console.log("[Global Notifications SignalR] Connection closed gracefully.");
+              } else if (logLevel >= 4) { // Error level
+                console.warn("[Global Notifications SignalR Error]", message);
+              }
+            }
+          })
+          .withAutomaticReconnect()
+          .build();
+
+        connection.on("ReceiveNotification", (title, content, time) => {
+          console.log('[Global Notifications SignalR] Received Notification:', title, content);
+          if (active) {
+            toastState.addNotification(title, content, time || 'Vừa xong');
+            toastState.showToast(content, 'info');
+          }
+        });
+
+        await connection.start();
+        console.log('[Global Notifications SignalR] Connection started successfully.');
+      } catch (err) {
+        console.log('[Global Notifications SignalR] Connection failed:', err);
+      }
+    }
+
+    startSignalR();
+
+    return () => {
+      active = false;
+      if (connection) {
+        connection.stop().catch(err => console.log('[Global Notifications SignalR] Stop error:', err));
+      }
+    };
+  }, [authState.user]);
 
   return (
     <AppContext.Provider

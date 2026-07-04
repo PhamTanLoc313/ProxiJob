@@ -15,10 +15,16 @@ export const useToast = () => {
   }, []);
 
   const addNotification = useCallback((title, content, time = 'Vừa xong') => {
-    setNotifications((prev) => [
-      { id: Date.now(), title, content, time, read: false },
-      ...prev
-    ]);
+    setNotifications((prev) => {
+      const isDuplicate = prev.some(
+        n => n.title === title && n.content === content && (n.time === time || time === 'Vừa xong')
+      );
+      if (isDuplicate) return prev;
+      return [
+        { id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, title, content, time, read: false },
+        ...prev
+      ];
+    });
   }, []);
 
   return {

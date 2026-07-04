@@ -132,6 +132,7 @@ public class ConfirmReceiptPayrollCommandHandler : IRequestHandler<ConfirmReceip
                 await _publishEndpoint.Publish(new PayrollPaidEvent(
                     PayrollId: payroll.Id,
                     EmployeeId: payroll.EmployeeId,
+                    StudentId: payroll.Employee.UserId ?? 0,
                     BusinessId: payroll.Employee.BusinessId,
                     FinalAmount: payroll.FinalAmount,
                     PayDate: payroll.PayDate.Value,

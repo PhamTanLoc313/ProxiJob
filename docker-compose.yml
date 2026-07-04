@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: proxijob-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - proxijob-network
+
+  identity-api:
+    build:
+      context: .
+      dockerfile: src/Identity/ProxiJob.Identity.API/Dockerfile
+    container_name: proxijob-identity-api
+    ports:
+      - "5231:5231" # REST API & Swagger / SignalR
+      - "5232:5232" # gRPC HTTP/2 port
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=${SUPABASE_CONNECTION_STRING}
+      - Kestrel__EndpointDefaults__Protocols=Http1AndHttp2
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=${RABBITMQ_DEFAULT_USER}
+      - RabbitMQ__Password=${RABBITMQ_DEFAULT_PASS}
+    networks:
+      - proxijob-network
+    depends_on:
+      - rabbitmq
+
+  job-api:
+    build:
+      context: .
+      dockerfile: src/Job/ProxiJob.Job.API/Dockerfile
+    container_name: proxijob-job-api
+    ports:
+      - "5021:5021"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5021
+      - ConnectionStrings__DefaultConnection=${SUPABASE_CONNECTION_STRING}
+      - GrpcServices__Identity=http://identity-api:5232
+      - RabbitMQ__Enabled=true
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=${RABBITMQ_DEFAULT_USER}
+      - RabbitMQ__Password=${RABBITMQ_DEFAULT_PASS}
+    networks:
+      - proxijob-network
+    depends_on:
+      - rabbitmq
+      - identity-api
+
+  management-api:
+    build:
+      context: .
+      dockerfile: src/Management/ProxiJob.Management.API/Dockerfile
+    container_name: proxijob-management-api
+    ports:
+      - "5057:5057"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5057
+      - ConnectionStrings__DefaultConnection=${SUPABASE_CONNECTION_STRING}
+      - GrpcServices__Identity=http://identity-api:5232
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=${RABBITMQ_DEFAULT_USER}
+      - RabbitMQ__Password=${RABBITMQ_DEFAULT_PASS}
+    networks:
+      - proxijob-network
+    depends_on:
+      - rabbitmq
+      - identity-api
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  proxijob-network:
+    driver: bridge

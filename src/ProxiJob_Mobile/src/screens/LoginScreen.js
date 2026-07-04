@@ -52,7 +52,6 @@ export default function LoginScreen() {
 
   const handleSubmit = async () => {
     if (!validateForm()) {
-      showToast("Vui lòng kiểm tra lại thông tin", "error");
       return;
     }
     try {
