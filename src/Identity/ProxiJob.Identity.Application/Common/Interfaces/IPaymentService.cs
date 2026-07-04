@@ -26,5 +26,10 @@ namespace ProxiJob.Identity.Application.Common.Interfaces
             string adminEmail,
             string? adminNote,
             CancellationToken cancellationToken = default);
+
+        /// <summary>Xử lý webhook callback từ PayOS — tự động confirm đơn khi thanh toán thành công</summary>
+        Task HandlePayOsWebhookAsync(string webhookBody, CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<AdminPaymentOrderDto>> GetAllOrdersAsync(CancellationToken cancellationToken = default);
     }
 }

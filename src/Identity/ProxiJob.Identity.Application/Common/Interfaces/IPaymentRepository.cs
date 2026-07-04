@@ -12,5 +12,7 @@ namespace ProxiJob.Identity.Application.Common.Interfaces
         Task<PaymentOrder?> GetByIdWithUserAsync(int id, CancellationToken cancellationToken = default);
         Task AddAsync(PaymentOrder order, CancellationToken cancellationToken = default);
         Task UpdateAsync(PaymentOrder order, CancellationToken cancellationToken = default);
+        Task<PaymentOrder?> GetByPayOsOrderCodeAsync(long payOsOrderCode, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<PaymentOrder>> GetAllAsync(CancellationToken cancellationToken = default);
     }
 }

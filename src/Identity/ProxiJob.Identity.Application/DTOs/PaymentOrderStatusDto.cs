@@ -13,6 +13,9 @@ namespace ProxiJob.Identity.Application.DTOs
         public DateTime? PaidAt { get; set; }
         public string? FailureReason { get; set; }
         public BankTransferInstructionsDto? BankTransfer { get; set; }
+        /// <summary>Link thanh toán PayOS</summary>
+        public string? CheckoutUrl { get; set; }
+        /// <summary>QR code URL từ PayOS</summary>
+        public string? QrCode { get; set; }
     }
 }
-

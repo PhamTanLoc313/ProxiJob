@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { loginUser } from "./authStorage";
 import { useAuth } from "./AuthContext";
+import { adminLogin } from "../admin/adminData";
 
 function Login() {
   const navigate = useNavigate();
@@ -35,6 +36,17 @@ function Login() {
     }
 
     setErrors({});
+
+    if (email === "admin@proxijob.vn") {
+      const adminResult = adminLogin(email, password);
+      if (adminResult.ok) {
+        navigate("/admin");
+      } else {
+        setErrors({ submit: adminResult.message });
+      }
+      return;
+    }
+
     const result = loginUser({ email, password });
     if (!result.ok) {
       setErrors({ submit: result.message });

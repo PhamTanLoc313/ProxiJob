@@ -54,5 +54,15 @@ namespace ProxiJob.Identity.Infrastructure.Repositories
             _context.PaymentOrders.Update(order);
             return Task.CompletedTask;
         }
+
+        public async Task<PaymentOrder?> GetByPayOsOrderCodeAsync(long payOsOrderCode, CancellationToken cancellationToken = default)
+            => await _context.PaymentOrders.FirstOrDefaultAsync(o => o.PayOsOrderCode == payOsOrderCode, cancellationToken);
+
+        public async Task<IReadOnlyList<PaymentOrder>> GetAllAsync(CancellationToken cancellationToken = default)
+        {
+            return await _context.PaymentOrders
+                .OrderByDescending(o => o.CreatedAt)
+                .ToListAsync(cancellationToken);
+        }
     }
 }
