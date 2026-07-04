@@ -180,6 +180,11 @@ export const useShifts = ({
         try {
           const appsRes = await getMyApplications(userId);
           const apps = Array.isArray(appsRes) ? appsRes : (Array.isArray(appsRes?.data) ? appsRes.data : (appsRes?.items || appsRes?.Items || appsRes?.data?.items || appsRes?.data?.Items || []));
+          
+          let notifiedJson = await AsyncStorage.getItem('notified_approved_apps');
+          let notifiedList = notifiedJson ? JSON.parse(notifiedJson) : [];
+          let updatedNotified = false;
+
           baseShifts = baseShifts.map(shift => {
             const app = apps.find(a => {
               const aShiftId = a.shiftId !== undefined ? a.shiftId : a.ShiftId;
@@ -190,7 +195,16 @@ export const useShifts = ({
               let status = 'applied';
               const appStatus = app.status !== undefined ? app.status : app.Status;
               const appId = app.id !== undefined ? app.id : app.Id;
-              if (appStatus === 'Approved') status = 'approved';
+              if (appStatus === 'Approved') {
+                status = 'approved';
+                if (!notifiedList.includes(appId)) {
+                  notifiedList.push(appId);
+                  updatedNotified = true;
+                  if (addNotification) {
+                    addNotification('Ứng tuyển', `Chúc mừng! Đơn ứng tuyển ca làm "${shift.title}" của bạn đã được DUYỆT.`, 'Vừa xong');
+                  }
+                }
+              }
               else if (appStatus === 'Rejected') status = 'available';
               else if (appStatus === 'Completed') status = 'completed';
 
@@ -201,6 +215,10 @@ export const useShifts = ({
             }
             return shift;
           });
+
+          if (updatedNotified) {
+            await AsyncStorage.setItem('notified_approved_apps', JSON.stringify(notifiedList));
+          }
         } catch (appErr) {
           console.log('Error merging applications inside loadShifts:', appErr);
         }
@@ -260,7 +278,7 @@ export const useShifts = ({
                 const staffName = emp ? (emp.fullName || emp.name || emp.FullName) : `Sinh viên #${a.studentId}`;
                 const position = emp ? (emp.position || emp.role || emp.Position || 'Nhân viên') : 'Nhân viên';
 
-                const reason = a.introduction || 'Yêu cầu hủy ca làm việc / xin nghỉ phép';
+                const reason = a.cancelNote || a.introduction || 'Yêu cầu hủy ca làm việc / xin nghỉ phép';
                 const isSwap = reason.toLowerCase().includes('đổi') || reason.toLowerCase().includes('chuyển') || reason.toLowerCase().includes('sang') || reason.toLowerCase().includes('ca');
                 const requestType = isSwap ? 'swap' : 'leave';
                 const shiftTime = `${new Date(s.startTime).getHours().toString().padStart(2, '0')}:${new Date(s.startTime).getMinutes().toString().padStart(2, '0')} - ${new Date(s.endTime).getHours().toString().padStart(2, '0')}:${new Date(s.endTime).getMinutes().toString().padStart(2, '0')}`;

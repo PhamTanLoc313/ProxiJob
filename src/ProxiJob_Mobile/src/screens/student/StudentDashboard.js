@@ -1299,7 +1299,6 @@ export default function StudentDashboard() {
       ) : (
         renderMapView()
       )}
-
       {/* Location Picker Modal */}
       <Modal
         visible={locationModalVisible}

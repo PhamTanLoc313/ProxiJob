@@ -524,6 +524,10 @@ export default function EmployerApprovals() {
   const updateJobPostWizardMutation = useUpdateJobPostWizardMutation(user, showToast);
   const handleLeaveRequestMutation = useHandleLeaveRequestMutation(user, showToast);
 
+  const handleLeaveRequest = (requestId, status) => {
+    handleLeaveRequestMutation.mutate({ requestId, status });
+  };
+
   const [activeSegment, setActiveSegment] = useState('job_posts'); // 'job_posts' | 'leaves'
 
   // Categories & Skills local states

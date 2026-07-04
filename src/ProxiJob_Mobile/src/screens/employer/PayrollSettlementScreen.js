@@ -1,4 +1,6 @@
 import React, { useContext, useState } from 'react';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import {
   StyleSheet,
   View,
@@ -275,25 +277,38 @@ export default function PayrollSettlementScreen() {
   };
 
   const handleExportExcel = async () => {
-    if (user?.subscriptionTier !== 'Enterprise') {
+    if (user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') {
       showToast('Nâng cấp gói Enterprise để sử dụng tính năng Xuất đối soát nâng cao ⚡', 'error');
       return;
     }
     try {
       const csvHeader = "ID,Nhan vien,So gio,Thanh tien,Ngay thanh toan,Trang thai\n";
-      const csvRows = payrolls.map(p =>
-        `#${p.id || p.Id},"${p.employeeName || p.EmployeeName || 'Sinh vien'}",${p.totalHours || p.TotalHours},${p.finalAmount || p.FinalAmount},"${p.payDate || p.PayDate || ''}",${p.status || p.Status}`
-      ).join("\n");
-      const csvContent = csvHeader + csvRows;
-
-      await Share.share({
-        message: csvContent,
-        title: 'Bảng đối soát lương ProxiJob',
+      const csvRows = payrolls.map(p => {
+        const id = p.id ?? p.Id ?? '';
+        const name = p.employeeName ?? p.EmployeeName ?? 'Sinh vien';
+        const hours = p.totalHours ?? p.TotalHours ?? 0;
+        const amount = p.finalAmount ?? p.FinalAmount ?? 0;
+        const payDate = p.payDate ?? p.PayDate ?? '';
+        const status = p.status ?? p.Status ?? '';
+        return `#${id},"${name}",${hours},${amount},"${payDate}",${status}`;
+      }).join("\n");
+      
+      // UTF-8 BOM to ensure Excel opens with correct Vietnamese encoding
+      const csvContent = "\uFEFF" + csvHeader + csvRows;
+      const fileUri = FileSystem.documentDirectory + 'doisoat_luong.csv';
+      
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, { encoding: 'utf8' });
+      
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'text/csv',
+        dialogTitle: 'Bảng đối soát lương ProxiJob',
+        UTI: 'public.comma-separated-values-text'
       });
+      
       showToast('Xuất file đối soát thành công!', 'success');
     } catch (error) {
       console.log('Error sharing CSV:', error);
-      showToast('Không thể xuất file đối soát!', 'error');
+      showToast('Không thể xuất tệp đối soát: ' + error.message, 'error');
     }
   };
 
@@ -483,6 +498,22 @@ export default function PayrollSettlementScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Top Export Button */}
+        <View style={styles.topExportContainer}>
+          <TouchableOpacity
+            style={[styles.wideExportBtn, (user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}
+            onPress={handleExportExcel}
+            activeOpacity={(user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') ? 1 : 0.7}
+          >
+            <Text style={[styles.wideExportBtnText, (user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') && { color: '#94A3B8' }]}>
+              📊 Xuất file Excel đối soát chi phí
+            </Text>
+            {(user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') && (
+              <BlurView intensity={25} style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} tint="light" />
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* Top Bento Cards Section */}
         <View style={styles.bentoContainer}>
           {/* Card 1: Monthly Total Disbursed */}
@@ -837,17 +868,7 @@ export default function PayrollSettlementScreen() {
 
       </ScrollView>
 
-      {/* Floating Action Button for Excel Export */}
-      <TouchableOpacity
-        style={[styles.floatingShareBtn, user?.subscriptionTier !== 'Enterprise' && { backgroundColor: '#a0aab2' }]}
-        onPress={handleExportExcel}
-        activeOpacity={user?.subscriptionTier !== 'Enterprise' ? 1 : 0.7}
-      >
-        <Text style={styles.floatingShareBtnText}>📊 Xuất file Excel đối soát</Text>
-        {user?.subscriptionTier !== 'Enterprise' && (
-          <BlurView intensity={35} style={[StyleSheet.absoluteFill, { borderRadius: 99 }]} tint="light" />
-        )}
-      </TouchableOpacity>
+      {/* Floating Action Button for Excel Export removed */}
 
       {/* Rating & Offline Payment Form Modal */}
       <Modal
@@ -1598,7 +1619,7 @@ const styles = StyleSheet.create({
   },
   floatingShareBtn: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 110,
     right: 24,
     backgroundColor: '#0F172A',
     paddingVertical: 14,
@@ -1609,6 +1630,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 5,
+    zIndex: 9999,
   },
   floatingShareBtnText: {
     color: '#ffffff',

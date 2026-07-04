@@ -14,7 +14,8 @@ import {
   rejectApplication,
   getJobPostsByBusiness,
   updateJobPostApi,
-  deleteJobPostApi
+  deleteJobPostApi,
+  cancelApplicationApi
 } from '../api/jobs';
 import {
   getEmployees,
@@ -125,6 +126,7 @@ export const useShiftsQuery = (user, studentCoords) => {
               return jobShifts.map(s => ({
                 id: s.id,
                 jobPostId: job.id,
+                businessId: job.businessId ?? job.BusinessId,
                 startTime: s.startTime,
                 endTime: s.endTime,
                 title: job.title,
@@ -275,7 +277,9 @@ export const useShiftsQuery = (user, studentCoords) => {
 
                 baseShifts.push({
                   id: `sched_${sId}`, // virtual id to avoid overlaps
+                  jobShiftId: sJobShiftId || null, // original job shift ID for application matching
                   jobPostId: null,
+                  businessId: sBusinessId,
                   startTime: sStartTime,
                   endTime: sEndTime,
                   title,
@@ -368,7 +372,7 @@ export const useEmployerJobsQuery = (user) => {
                   const staffName = emp ? (emp.fullName || emp.name || emp.FullName) : `Sinh viên #${a.studentId}`;
                   const position = emp ? (emp.position || emp.role || emp.Position || 'Nhân viên') : 'Nhân viên';
 
-                  const reason = a.introduction || 'Yêu cầu hủy ca làm việc / xin nghỉ phép';
+                  const reason = a.cancelNote || a.introduction || 'Yêu cầu hủy ca làm việc / xin nghỉ phép';
                   const isSwap = reason.toLowerCase().includes('đổi') || reason.toLowerCase().includes('chuyển') || reason.toLowerCase().includes('sang') || reason.toLowerCase().includes('ca');
                   const requestType = isSwap ? 'swap' : 'leave';
                   const shiftTime = `${formatTimeVN(s.startTime)} - ${formatTimeVN(s.endTime)}`;
@@ -1295,6 +1299,27 @@ export const useConfirmReceiptPayrollMutation = (user, showToast) => {
     },
     onError: (err) => {
       showToast('Xác nhận lỗi: ' + err.message, 'error');
+    }
+  });
+};
+
+export const useCancelApplicationMutation = (user, showToast) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ applicationId, businessId, note, isSwap }) => {
+      if (!user) throw new Error('Vui lòng đăng nhập.');
+      const reasonPrefix = isSwap ? '[Yêu cầu Đổi ca] ' : '[Yêu cầu Xin nghỉ] ';
+      const finalNote = reasonPrefix + note;
+      return await cancelApplicationApi(applicationId, businessId, finalNote, 'Student');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
+      showToast('Gửi yêu cầu nghỉ ca thành công!', 'success');
+    },
+    onError: (err) => {
+      console.log('Error requesting leave:', err);
+      showToast('Yêu cầu thất bại: ' + (err.message || 'Thử lại sau.'), 'error');
     }
   });
 };

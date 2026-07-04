@@ -32,16 +32,21 @@ namespace ProxiJob.Job.Application.Features.Applications.Queries
                 .Include(s => s.JobPost)
                 .FirstOrDefaultAsync(s => s.Id == request.ShiftId, cancellationToken);
             
-            if (shift == null)
-                throw new Exception($"Shift not found. ID={request.ShiftId}");
-            if (shift.JobPost == null)
-                throw new Exception($"JobPost is null for Shift ID={request.ShiftId}");
-            if (shift.JobPost.BusinessId != request.BusinessId)
-                throw new Exception($"Permission denied. JobPost.BusinessId={shift.JobPost.BusinessId}, request.BusinessId={request.BusinessId}");
+            if (shift == null || shift.JobPost == null || shift.JobPost.BusinessId != request.BusinessId)
+            {
+                return new PagedResult<ApplicationDto>
+                {
+                    Items = new List<ApplicationDto>(),
+                    TotalCount = 0,
+                    PageNumber = request.PageNumber,
+                    PageSize = request.PageSize
+                };
+            }
 
             var query = _context.Applications
                 .Include(a => a.JobShift)
                 .ThenInclude(s => s.JobPost)
+                .Include(a => a.Histories)
                 .Where(a => a.JobShiftId == request.ShiftId && !a.IsDeleted);
 
             if (!string.IsNullOrEmpty(request.Status))
@@ -64,6 +69,11 @@ namespace ProxiJob.Job.Application.Features.Applications.Queries
                                        Salary = a.JobShift.Salary,
                                        JobTitle = a.JobShift.JobPost.Title,
                                        Status = a.Status,
+                                       CancelNote = a.Histories
+                                           .Where(h => h.Status == "Cancelled")
+                                           .OrderByDescending(h => h.ChangedAt)
+                                           .Select(h => h.Note)
+                                           .FirstOrDefault(),
                                        CreatedAt = a.CreatedAt
                                    })
                                    .ToListAsync(cancellationToken);

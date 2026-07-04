@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAvatarSource } from '../../utils/avatarHelper';
 import { getActiveStudentProfilesApi } from '../../api/studentApi';
 import { handleCallUser } from '../../utils/callHelper';
+import { getApplicationsByShift } from '../../api/jobs';
 const removeAccents = (str) => {
   if (!str) return '';
   return str
