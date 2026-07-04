@@ -86,7 +86,7 @@ public class ApplicationApprovedConsumer : IConsumer<ApplicationApprovedEvent>
                 EmployeeId = employee.Id,
                 JobShiftId = msg.JobShiftId,
                 JobShiftSalary = msg.Salary,
-                Date = DateOnly.FromDateTime(msg.ShiftStartTime),
+                Date = DateOnly.FromDateTime(msg.ShiftStartTime.AddHours(7)),
                 StartTime = msg.ShiftStartTime,
                 EndTime = msg.ShiftEndTime,
                 CreatedBy = "RabbitMQ",

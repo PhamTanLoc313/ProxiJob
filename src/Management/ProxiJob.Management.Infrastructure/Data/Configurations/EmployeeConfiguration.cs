@@ -52,6 +52,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
         builder.Property(e => e.UserId)
             .HasColumnName("user_id");
+
+        builder.HasIndex(e => e.BusinessId);
+        builder.HasIndex(e => e.UserId);
     }
 }
 

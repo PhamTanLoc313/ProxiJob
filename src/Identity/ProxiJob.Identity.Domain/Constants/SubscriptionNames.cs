@@ -9,10 +9,10 @@ namespace ProxiJob.Identity.Domain.Constants
         public const string None = "None";
 
         public const string PerShift = "PerShift";
-        public const string Basic = "Basic";
-        public const string Standard = "Standard";
-        public const string Premium = "Premium";
+        public const string Recruit = "Recruit";
+        public const string HrmBasic = "HRM Basic";
+        public const string Enterprise = "Enterprise";
 
-        public static readonly string[] AllPaidPlans = { PerShift, Basic, Standard, Premium };
+        public static readonly string[] AllPaidPlans = { PerShift, Recruit, HrmBasic, Enterprise };
     }
 }

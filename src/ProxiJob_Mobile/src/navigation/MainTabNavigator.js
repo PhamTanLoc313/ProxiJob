@@ -36,8 +36,8 @@ export default function MainTabNavigator({ isStudent }) {
   const { currentScreen, navigateTo, isChatRoomActive, user } = useContext(AppContext);
 
   const tier = user?.subscriptionTier?.toLowerCase() || '';
-  const hasPremium = tier === 'premium' || tier === 'enterprise';
-  const hasStandard = tier === 'standard' || tier === 'premium' || tier === 'enterprise';
+  const hasPremium = tier === 'enterprise';
+  const hasStandard = tier === 'hrm basic' || tier === 'enterprise';
 
   const hideTabBarScreens = [
     'employer_emergency_post',

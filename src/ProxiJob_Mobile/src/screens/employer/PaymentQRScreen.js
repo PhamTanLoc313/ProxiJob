@@ -424,7 +424,8 @@ const st = StyleSheet.create({
 
   /* Header */
   header: {
-    height: 56,
+    paddingTop: Platform.OS === 'ios' ? 44 : 34,
+    paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

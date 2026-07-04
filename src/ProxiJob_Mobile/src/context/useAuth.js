@@ -80,7 +80,7 @@ export const useAuth = ({
 
   useEffect(() => {
     if (user) {
-      const premiumTiers = ['Enterprise', 'Premium', 'Standard'];
+      const premiumTiers = ['Enterprise', 'HRM Basic'];
       setIsEnterprise(premiumTiers.includes(user?.subscriptionTier));
     } else {
       setIsEnterprise(false);
@@ -129,11 +129,10 @@ export const useAuth = ({
       }
 
       addNotification('Bảo mật', `Đăng nhập thành công với vai trò ${userRole === 'student' ? 'Sinh viên' : 'Chủ quán'}`, 'Vừa xong');
-      showToast(`Đăng nhập thành công!`, 'success');
     } catch (error) {
       console.log('[ProxiJob Login] Auth execution error:', error.message);
       const friendlyMsg = translateError(error);
-      showToast(friendlyMsg, 'error');
+      throw new Error(friendlyMsg);
     } finally {
       setAuthLoading(false);
     }
@@ -160,7 +159,6 @@ export const useAuth = ({
       }
 
       addNotification('Bảo mật', `Đăng nhập bằng Google thành công với vai trò ${userRole === 'student' ? 'Sinh viên' : 'Chủ quán'}`, 'Vừa xong');
-      showToast(`Đăng nhập Google thành công!`, 'success');
     } catch (error) {
       console.log('[ProxiJob Login Google] Auth execution error:', error.message);
       const friendlyMsg = translateError(error);

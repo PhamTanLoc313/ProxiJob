@@ -60,6 +60,9 @@ message UserContextGrpcDto {
   double reputation_score = 12;
   bool is_active = 13;
   repeated string features = 14;
+  int32 max_employees = 15;
+  int32 max_active_qrs = 16;
+  int32 max_search_radius = 17;
 }
 
 message StudentProfileGrpcDto {

@@ -9,7 +9,8 @@ import {
   Dimensions,
   Modal,
   TextInput,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../styles/theme';
@@ -17,9 +18,11 @@ import { AppContext } from '../../context/AppContext';
 import {
   useShiftsQuery,
   usePayrollsQuery,
-  useConfirmReceiptPayrollMutation
+  useConfirmReceiptPayrollMutation,
+  useCancelApplicationMutation
 } from '../../hooks/queries';
 import { Ionicons } from '@expo/vector-icons';
+import { getMyApplications } from '../../api/jobs';
 
 const { width } = Dimensions.get('window');
 
@@ -90,6 +93,7 @@ export default function StudentCalendar() {
   const { data: shifts = [], refetch: loadMyApplications } = useShiftsQuery(user, studentCoords);
   const { data: payrolls = [], refetch: refetchPayrolls } = usePayrollsQuery(user);
   const confirmReceiptMutation = useConfirmReceiptPayrollMutation(user, showToast);
+  const cancelMutation = useCancelApplicationMutation(user, showToast);
 
   const [selectedPayroll, setSelectedPayroll] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -98,6 +102,13 @@ export default function StudentCalendar() {
   const [weekDays, setWeekDays] = useState([]);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' | 'completed'
+
+  // Trạng thái Yêu cầu Xin nghỉ / Đổi ca
+  const [requestModalVisible, setRequestModalVisible] = useState(false);
+  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+  const [selectedShiftForRequest, setSelectedShiftForRequest] = useState(null);
+  const [isSwapRequest, setIsSwapRequest] = useState(false);
+  const [requestReason, setRequestReason] = useState('');
 
   const handleOpenConfirmModal = (payroll) => {
     setSelectedPayroll(payroll);
@@ -120,6 +131,80 @@ export default function StudentCalendar() {
     }).catch(() => {
       setIsModalVisible(false);
       setSelectedPayroll(null);
+    });
+  };
+
+  const handleShiftOptions = (shift) => {
+    if (shift.status !== 'approved') {
+      Alert.alert(
+        'Thông báo',
+        'Ca làm này ở trạng thái chờ duyệt hoặc đã hoàn thành, không thể thực hiện yêu cầu xin nghỉ hay đổi ca.'
+      );
+      return;
+    }
+    setSelectedShiftForRequest(shift);
+    setOptionsModalVisible(true);
+  };
+
+  const handleSubmitRequest = async () => {
+    if (!selectedShiftForRequest) return;
+    if (!requestReason.trim()) {
+      showToast('Lỗi: Vui lòng nhập lý do cụ thể.', 'warning');
+      return;
+    }
+
+    let appId = selectedShiftForRequest.applicationId;
+    const bizId = selectedShiftForRequest.businessId;
+    const shiftId = selectedShiftForRequest.id;
+
+    // If applicationId is missing, try to look it up dynamically
+    if (!appId && user) {
+      try {
+        const appsRes = await getMyApplications(user.id);
+        const apps = Array.isArray(appsRes) ? appsRes : (Array.isArray(appsRes?.data) ? appsRes.data : (appsRes?.items || appsRes?.Items || appsRes?.data?.items || appsRes?.data?.Items || []));
+        
+        // For virtual schedule shifts (sched_*), use jobShiftId to match
+        const realShiftId = selectedShiftForRequest.jobShiftId || shiftId;
+        
+        const matchedApp = apps.find(a => {
+          const aShiftId = a.shiftId !== undefined ? a.shiftId : a.ShiftId;
+          // Match by numeric shift ID
+          if (Number(aShiftId) === Number(realShiftId)) return true;
+          // Fallback: match by job title (any status) if shift is a schedule
+          if (String(shiftId).startsWith('sched_') && a.jobTitle === selectedShiftForRequest.title) return true;
+          return false;
+        });
+        if (matchedApp) {
+          const matchedStatus = matchedApp.status !== undefined ? matchedApp.status : matchedApp.Status;
+          if (matchedStatus === 'Cancelled') {
+            showToast('Bạn đã gửi yêu cầu xin nghỉ/đổi ca cho ca này rồi. Vui lòng chờ Chủ quán phản hồi.', 'warning');
+            setRequestModalVisible(false);
+            return;
+          }
+          appId = matchedApp.id !== undefined ? matchedApp.id : matchedApp.Id;
+        }
+      } catch (err) {
+        console.log('Error fetching applications for leave request:', err);
+      }
+    }
+
+    if (!appId) {
+      showToast('Không tìm thấy thông tin đơn ứng tuyển để gửi yêu cầu. Vui lòng thử lại sau.', 'error');
+      return;
+    }
+
+    cancelMutation.mutateAsync({
+      applicationId: appId,
+      businessId: bizId || 1,
+      note: requestReason,
+      isSwap: isSwapRequest
+    }).then(() => {
+      setRequestModalVisible(false);
+      setSelectedShiftForRequest(null);
+      loadMyApplications();
+    }).catch(() => {
+      setRequestModalVisible(false);
+      setSelectedShiftForRequest(null);
     });
   };
 
@@ -238,7 +323,11 @@ export default function StudentCalendar() {
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusText, { color: badgeText }]}>{statusText}</Text>
           </View>
-          <TouchableOpacity style={styles.ellipsisButton} activeOpacity={0.6}>
+          <TouchableOpacity 
+            style={styles.ellipsisButton} 
+            activeOpacity={0.6}
+            onPress={() => handleShiftOptions(shift)}
+          >
             <Ionicons name="ellipsis-horizontal" size={18} color="#94A3B8" />
           </TouchableOpacity>
         </View>
@@ -578,6 +667,147 @@ export default function StudentCalendar() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Leave/Swap Request Modal */}
+      <Modal
+        visible={requestModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setRequestModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalHeading}>
+              {isSwapRequest ? 'Yêu cầu đổi ca làm việc' : 'Yêu cầu xin nghỉ phép'}
+            </Text>
+            <Text style={styles.modalSubheading}>
+              {isSwapRequest 
+                ? 'Gửi yêu cầu xin chuyển đổi sang một ca làm việc khác đến Chủ quán. Vui lòng ghi rõ thông tin chi tiết.'
+                : 'Xin nghỉ phép cho ca làm việc đã được duyệt này. Yêu cầu của bạn cần được Chủ quán phê duyệt.'}
+            </Text>
+
+            <View style={styles.modalDivider} />
+
+            <View style={styles.checkboxRow}>
+              <View style={[styles.checkboxBox, { backgroundColor: '#EF4444', borderColor: '#EF4444' }]}>
+                <Text style={styles.checkboxTick}>✓</Text>
+              </View>
+              <Text style={styles.checkboxText}>
+                Ca làm: <Text style={{ fontWeight: '800', color: '#1F2937' }}>{selectedShiftForRequest?.title}</Text> ({selectedShiftForRequest?.time})
+              </Text>
+            </View>
+
+            <Text style={styles.modalLabel}>LÝ DO CHI TIẾT (BẮT BUỘC)</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.feedbackInput}
+                value={requestReason}
+                onChangeText={(text) => setRequestReason(text)}
+                placeholder={isSwapRequest 
+                  ? "Ví dụ: Tôi muốn đổi sang ca chiều ngày mai 05/07 từ 13h-17h vì có lịch học đột xuất..."
+                  : "Ví dụ: Em có lịch thi học kỳ đột xuất tại trường nên không thể tham gia ca làm này..."}
+                multiline={true}
+                numberOfLines={3}
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, { backgroundColor: '#EF4444' }]}
+                disabled={cancelMutation.isPending}
+                onPress={handleSubmitRequest}
+              >
+                {cancelMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Gửi yêu cầu duyệt ⚡</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.modalCloseBtn}
+                onPress={() => setRequestModalVisible(false)}
+              >
+                <Text style={styles.modalCloseBtnText}>Hủy</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Bottom Sheet Option Modal */}
+      <Modal
+        visible={optionsModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setOptionsModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.bottomSheetOverlay} 
+          activeOpacity={1} 
+          onPress={() => setOptionsModalVisible(false)}
+        >
+          <View style={styles.bottomSheetContent}>
+            <View style={styles.bottomSheetKnob} />
+
+            <Text style={styles.bottomSheetTitle}>Tùy chọn ca làm việc</Text>
+            <Text style={styles.bottomSheetSubtitle}>
+              Bạn muốn gửi yêu cầu nào cho Chủ quán cho ca làm:{"\n"}
+              <Text style={{ fontWeight: '800', color: theme.colors.text }}>{selectedShiftForRequest?.title}</Text>
+            </Text>
+
+            <View style={styles.bottomSheetButtons}>
+              {/* Option 1: Xin nghỉ phép */}
+              <TouchableOpacity 
+                style={[styles.bottomSheetBtn, { borderLeftColor: theme.colors.danger }]}
+                onPress={() => {
+                  setOptionsModalVisible(false);
+                  setIsSwapRequest(false);
+                  setRequestReason('');
+                  setRequestModalVisible(true);
+                }}
+              >
+                <View style={[styles.bottomSheetIconBg, { backgroundColor: theme.colors.danger + '12' }]}>
+                  <Ionicons name="calendar-outline" size={20} color={theme.colors.danger} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.bottomSheetBtnTitle, { color: theme.colors.danger }]}>Xin nghỉ phép ca này</Text>
+                  <Text style={styles.bottomSheetBtnDesc}>Gửi đơn xin nghỉ phép ca làm đã được duyệt</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+              </TouchableOpacity>
+
+              {/* Option 2: Xin đổi ca */}
+              <TouchableOpacity 
+                style={[styles.bottomSheetBtn, { borderLeftColor: theme.colors.primary }]}
+                onPress={() => {
+                  setOptionsModalVisible(false);
+                  setIsSwapRequest(true);
+                  setRequestReason('');
+                  setRequestModalVisible(true);
+                }}
+              >
+                <View style={[styles.bottomSheetIconBg, { backgroundColor: theme.colors.primary + '12' }]}>
+                  <Ionicons name="swap-horizontal-outline" size={20} color={theme.colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.bottomSheetBtnTitle, { color: theme.colors.primary }]}>Yêu cầu đổi ca làm</Text>
+                  <Text style={styles.bottomSheetBtnDesc}>Đề xuất đổi sang một ca làm việc khác</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.bottomSheetCancelBtn}
+              onPress={() => setOptionsModalVisible(false)}
+            >
+              <Text style={styles.bottomSheetCancelBtnText}>Hủy bỏ</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
@@ -1227,5 +1457,88 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 12,
     fontWeight: '700',
-  }
+  },
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheetContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  bottomSheetKnob: {
+    width: 36,
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  bottomSheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  bottomSheetSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  bottomSheetButtons: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  bottomSheetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  bottomSheetIconBg: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  bottomSheetBtnTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  bottomSheetBtnDesc: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  bottomSheetCancelBtn: {
+    backgroundColor: '#F1F5F9',
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bottomSheetCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
 });

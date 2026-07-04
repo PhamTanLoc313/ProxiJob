@@ -230,7 +230,7 @@ namespace ProxiJob.Job.Application.Features.Applications.Commands
                                  var pDate = cmd.CreateParameter();
                                  pDate.ParameterName = "@date";
                                  pDate.DbType = System.Data.DbType.Date;
-                                 pDate.Value = DateOnly.FromDateTime(application.JobShift.StartTime);
+                                 pDate.Value = DateOnly.FromDateTime(application.JobShift.StartTime.AddHours(7));
                                  cmd.Parameters.Add(pDate);
 
                                  var pStartTime = cmd.CreateParameter();

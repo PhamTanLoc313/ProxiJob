@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   Platform,
   Share,
-  Image
+  Image,
+  Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +44,25 @@ export default function JobDetailScreen() {
 
   const shiftId = navigationParams?.shiftId;
   const shift = shifts.find((s) => s.id === shiftId) || employerShifts.find((s) => s.id === shiftId);
+
+  const [pulseAnim] = useState(new Animated.Value(0.3));
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: false,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 900,
+          useNativeDriver: false,
+        })
+      ])
+    ).start();
+  }, [pulseAnim]);
 
   if (!shift) {
     return (
@@ -107,6 +127,57 @@ export default function JobDetailScreen() {
     const charCode = shopName.charCodeAt(0) || 0;
     const colors = ['#FFE4E6', '#FEF3C7', '#ECFDF5', '#EFF6FF', '#F5F3FF', '#FFF7ED'];
     return colors[charCode % colors.length];
+  };
+
+  const getCategoryColors = (categoryName, shopName) => {
+    const target = (categoryName || shopName || '').trim().toLowerCase();
+    
+    if (target.includes('giao hàng') || target.includes('delivery') || target.includes('shipper')) {
+      return {
+        primary: '#EF4444', // Red
+        bgLight: '#FEF2F2',
+        borderLight: '#FCA5A5',
+        borderUrgent: '#FCA5A5',
+      };
+    }
+    if (target.includes('gia sư') || target.includes('tutor') || target.includes('dạy') || target.includes('học')) {
+      return {
+        primary: '#2563EB', // Blue
+        bgLight: '#EFF6FF',
+        borderLight: '#BFDBFE',
+        borderUrgent: '#93C5FD',
+      };
+    }
+    if (target.includes('sửa chữa') || target.includes('repair') || target.includes('bảo trì') || target.includes('kỹ thuật')) {
+      return {
+        primary: '#F59E0B', // Amber
+        bgLight: '#FFFBEB',
+        borderLight: '#FDE68A',
+        borderUrgent: '#FCD34D',
+      };
+    }
+    if (target.includes('phục vụ') || target.includes('waiter') || target.includes('chạy bàn') || target.includes('phụ vụ')) {
+      return {
+        primary: '#8B5CF6', // Purple
+        bgLight: '#F5F3FF',
+        borderLight: '#DDD6FE',
+        borderUrgent: '#C084FC',
+      };
+    }
+    if (target.includes('thú cưng') || target.includes('pet')) {
+      return {
+        primary: '#EC4899', // Pink
+        bgLight: '#FDF2F8',
+        borderLight: '#FBCFE8',
+        borderUrgent: '#F472B6',
+      };
+    }
+    return {
+      primary: '#0D9488', // Teal
+      bgLight: '#F0FDFA',
+      borderLight: '#CCFBF1',
+      borderUrgent: '#5EEAD4',
+    };
   };
 
   // Helper: Get dynamic logo text color
@@ -188,6 +259,8 @@ export default function JobDetailScreen() {
     'Ngoại hình ưa nhìn, giao tiếp tự tin và thái độ phục vụ khách hàng tốt.'
   ];
 
+  const catColors = getCategoryColors(shift.categoryName, shift.shopName);
+
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <ScrollView 
@@ -203,11 +276,28 @@ export default function JobDetailScreen() {
                 {getShopInitials(shift.shopName)}
               </Text>
             </View>
-            <View style={styles.jobTypeTagContainer}>
-              <Text style={styles.jobTypeTagText}>
-                {shift.isEmergency ? 'TUYỂN GẤP ⚡' : 'TOÀN THỜI GIAN'}
-              </Text>
-            </View>
+            {shift.isEmergency ? (
+              <Animated.View style={[
+                styles.urgentBadge,
+                {
+                  backgroundColor: catColors.primary,
+                  borderColor: catColors.borderUrgent,
+                  opacity: pulseAnim,
+                  transform: [{
+                    scale: pulseAnim.interpolate({
+                      inputRange: [0.3, 1],
+                      outputRange: [0.96, 1.04]
+                    })
+                  }]
+                }
+              ]}>
+                <Text style={styles.urgentBadgeText}>🔥 TUYỂN GẤP</Text>
+              </Animated.View>
+            ) : (
+              <View style={styles.jobTypeTagContainer}>
+                <Text style={styles.jobTypeTagText}>TOÀN THỜI GIAN</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.jobTitleSection}>
@@ -665,5 +755,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#7E22CE',
+  },
+  urgentBadge: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  urgentBadgeText: {
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   }
 });

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AppContext } from '../context/AppContext';
 
@@ -85,26 +86,26 @@ export default function Toast() {
       case 'success':
         return {
           color: theme.colors.success,
-          emoji: '✅',
+          icon: 'checkmark-circle-sharp',
           title: 'Thành công'
         };
       case 'error':
         return {
           color: theme.colors.danger,
-          emoji: '❌',
+          icon: 'close-circle-sharp',
           title: 'Thất bại'
         };
       case 'warning':
         return {
           color: theme.colors.warning,
-          emoji: '⚠️',
+          icon: 'warning-sharp',
           title: 'Cảnh báo'
         };
       case 'info':
       default:
         return {
-          color: theme.colors.primary, // ProxiJob bright gold
-          emoji: '💡',
+          color: theme.colors.primary,
+          icon: 'information-circle-sharp',
           title: 'Thông báo'
         };
     }
@@ -116,7 +117,6 @@ export default function Toast() {
     <Animated.View
       style={[
         styles.toastContainer,
-        theme.shadows.medium,
         {
           transform: [{ translateY: slideAnim }],
           opacity: fadeAnim,
@@ -131,8 +131,8 @@ export default function Toast() {
       >
         <View style={styles.contentRow}>
           {/* Badge Icon */}
-          <View style={[styles.iconContainer, { backgroundColor: config.color + '15' }]}>
-            <Text style={styles.emojiText}>{config.emoji}</Text>
+          <View style={[styles.iconContainer, { backgroundColor: config.color + '12' }]}>
+            <Ionicons name={config.icon} size={20} color={config.color} />
           </View>
           
           {/* Details */}
@@ -146,7 +146,9 @@ export default function Toast() {
           </View>
 
           {/* Close indicator */}
-          <Text style={styles.closeBtn}>✕</Text>
+          <View style={styles.closeBtnContainer}>
+            <Ionicons name="close" size={16} color="#94A3B8" />
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -158,12 +160,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
-    zIndex: 9999,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    zIndex: 99999,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 16,
     borderLeftWidth: 5,
     borderWidth: 1,
-    borderColor: '#E5E7EB', // Fine border to give clean structure
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 8,
   },
   touchArea: {
     paddingVertical: 12,
@@ -174,35 +181,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-  },
-  emojiText: {
-    fontSize: 16,
   },
   textContainer: {
     flex: 1,
   },
   statusTitle: {
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     marginBottom: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
   },
   messageText: {
     fontSize: 13,
-    color: '#374151', // Dark grey for excellent legibility
-    lineHeight: 16,
+    color: '#334155', // Slate-700
+    lineHeight: 18,
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
   },
-  closeBtn: {
-    fontSize: 12,
-    color: '#9CA3AF',
+  closeBtnContainer: {
+    padding: 4,
     marginLeft: 8,
-    fontWeight: '500',
   },
 });

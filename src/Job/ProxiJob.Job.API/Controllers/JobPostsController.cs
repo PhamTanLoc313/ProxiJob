@@ -71,9 +71,16 @@ namespace ProxiJob.Job.API.Controllers
         }
 
         [HttpGet("published")]
-        public async Task<IActionResult> GetPublished([FromQuery] int? categoryId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetPublished([FromQuery] int? categoryId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] double? latitude = null, [FromQuery] double? longitude = null)
         {
-            var result = await _mediator.Send(new GetPublishedJobPostsQuery { CategoryId = categoryId, PageNumber = pageNumber, PageSize = pageSize });
+            var result = await _mediator.Send(new GetPublishedJobPostsQuery 
+            { 
+                CategoryId = categoryId, 
+                PageNumber = pageNumber, 
+                PageSize = pageSize,
+                Latitude = latitude,
+                Longitude = longitude
+            });
             return Ok(result);
         }
     }

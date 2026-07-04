@@ -67,7 +67,10 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ProxiJob.Management.API.Filters.ApiExceptionFilter>();
+});
 builder.Services.AddAuthentication("GrpcAuthentication")
     .AddScheme<ProxiJob.Management.API.Middleware.GrpcAuthenticationOptions, ProxiJob.Management.API.Middleware.GrpcAuthenticationHandler>("GrpcAuthentication", null);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

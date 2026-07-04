@@ -77,7 +77,7 @@ namespace ProxiJob.Identity.Infrastructure
                     policy.RequireRole(RoleNames.Business));
 
                 options.AddPolicy(PolicyNames.PremiumOnly, policy =>
-                    policy.RequireClaim(ClaimNames.SubscriptionTier, SubscriptionNames.Premium));
+                    policy.RequireClaim(ClaimNames.SubscriptionTier, SubscriptionNames.Enterprise));
 
                 options.AddPolicy(PolicyNames.WebPostJob, policy =>
                     policy.Requirements.Add(new FeatureRequirement(FeatureCodes.WebPostJob)));
