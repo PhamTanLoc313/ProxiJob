@@ -492,3 +492,25 @@ export async function loginWithGoogleApi(googleToken, role) {
   }
 }
 
+/**
+ * Fetch dynamic job post quota for current user
+ * @returns {Promise<object|null>}
+ */
+export async function getJobPostQuotaApi() {
+  try {
+    const token = await getStoredToken();
+    if (!token) return null;
+    const response = await fetch(`${API_BASE_URL}/plans/job-posts/quota`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    const resData = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob API] getJobPostQuotaApi failed:', error.message);
+    return null;
+  }
+}
+
