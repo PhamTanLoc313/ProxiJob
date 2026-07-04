@@ -45,7 +45,7 @@ namespace ProxiJob.Identity.Infrastructure.Repositories
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (active != null)
-                return (active.Name, active.JobPostLimit);
+                return (active.Name, active.JobPostLimit + BusinessQuotaConstants.FreeTrialJobPostLimit);
 
             var role = await GetUserRoleNameAsync(userId, cancellationToken);
             if (role == RoleNames.Business)
