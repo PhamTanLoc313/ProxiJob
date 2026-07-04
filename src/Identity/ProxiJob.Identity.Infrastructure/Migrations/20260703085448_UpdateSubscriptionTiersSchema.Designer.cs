@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ProxiJob.Identity.Infrastructure.Data;
@@ -11,9 +12,11 @@ using ProxiJob.Identity.Infrastructure.Data;
 namespace ProxiJob.Identity.Infrastructure.Migrations
 {
     [DbContext(typeof(IdentityDbContext))]
-    partial class IdentityDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260703085448_UpdateSubscriptionTiersSchema")]
+    partial class UpdateSubscriptionTiersSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -255,10 +258,6 @@ namespace ProxiJob.Identity.Infrastructure.Migrations
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("paidat");
-
-                    b.Property<long?>("PayOsOrderCode")
-                        .HasColumnType("bigint")
-                        .HasColumnName("payosordercode");
 
                     b.Property<string>("PaymentUrl")
                         .HasColumnType("text")

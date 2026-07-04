@@ -15,5 +15,8 @@ namespace ProxiJob.Identity.Domain.Models
         public int DurationDays { get; set; }
         public bool HasPriorityDisplay { get; set; }
         public bool HasHrManagement { get; set; }
+        public int MaxEmployees { get; set; }
+        public int MaxActiveQrs { get; set; }
+        public int MaxSearchRadius { get; set; }
     }
 }

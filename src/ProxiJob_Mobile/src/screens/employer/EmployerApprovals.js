@@ -44,6 +44,57 @@ const getLeftBorderColorByCategory = (categoryName, shopName) => {
   return '#0D9488'; // Teal default
 };
 
+const getCategoryColors = (categoryName, shopName) => {
+  const target = (categoryName || shopName || '').trim().toLowerCase();
+  
+  if (target.includes('giao hàng') || target.includes('delivery') || target.includes('shipper')) {
+    return {
+      primary: '#EF4444', // Red
+      bgLight: '#FEF2F2',
+      borderLight: '#FCA5A5',
+      borderUrgent: '#FCA5A5',
+    };
+  }
+  if (target.includes('gia sư') || target.includes('tutor') || target.includes('dạy') || target.includes('học')) {
+    return {
+      primary: '#2563EB', // Blue
+      bgLight: '#EFF6FF',
+      borderLight: '#BFDBFE',
+      borderUrgent: '#93C5FD',
+    };
+  }
+  if (target.includes('sửa chữa') || target.includes('repair') || target.includes('bảo trì') || target.includes('kỹ thuật')) {
+    return {
+      primary: '#F59E0B', // Amber
+      bgLight: '#FFFBEB',
+      borderLight: '#FDE68A',
+      borderUrgent: '#FCD34D',
+    };
+  }
+  if (target.includes('phục vụ') || target.includes('waiter') || target.includes('chạy bàn') || target.includes('phụ vụ')) {
+    return {
+      primary: '#8B5CF6', // Purple
+      bgLight: '#F5F3FF',
+      borderLight: '#DDD6FE',
+      borderUrgent: '#C084FC',
+    };
+  }
+  if (target.includes('thú cưng') || target.includes('pet')) {
+    return {
+      primary: '#EC4899', // Pink
+      bgLight: '#FDF2F8',
+      borderLight: '#FBCFE8',
+      borderUrgent: '#F472B6',
+    };
+  }
+  return {
+    primary: '#0D9488', // Teal
+    bgLight: '#F0FDFA',
+    borderLight: '#CCFBF1',
+    borderUrgent: '#5EEAD4',
+  };
+};
+
 const getShopBgColor = (shopName) => {
   if (!shopName) return '#EFF6FF';
   const charCode = shopName.charCodeAt(0) || 0;
@@ -187,6 +238,175 @@ const geocodeAddressWithFallback = async (queryText) => {
   return null;
 };
 
+const EmployerShiftCard = React.memo(({ shift, navigateTo, handleEditPress, handleDeletePress }) => {
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    let anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: false,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 900,
+          useNativeDriver: false,
+        })
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [pulseAnim]);
+
+  const applicantCount = shift.applicantCount !== undefined ? shift.applicantCount : (shift.status === 'applied' ? 1 : 0);
+  const hasApplicants = applicantCount > 0;
+  const leftBorderColor = getLeftBorderColorByCategory(shift.categoryName, shift.shopName);
+  const cardViews = (shift.applicantCount || 0) * 15 + 120;
+  const catColors = getCategoryColors(shift.categoryName, shift.shopName);
+
+  return (
+    <TouchableOpacity
+      style={styles.cardShadowContainer}
+      activeOpacity={0.9}
+      onPress={() => navigateTo('job_detail', { shiftId: shift.id })}
+    >
+       <Animated.View style={[
+         styles.cardContent,
+         { borderLeftColor: leftBorderColor, borderLeftWidth: 6 },
+         shift.isEmergency && {
+           borderLeftWidth: 8,
+           backgroundColor: pulseAnim.interpolate({
+             inputRange: [0.3, 1],
+             outputRange: ['#FFFFFF', catColors.bgLight]
+           }),
+           borderColor: pulseAnim.interpolate({
+             inputRange: [0.3, 1],
+             outputRange: ['#F1F5F9', catColors.borderLight]
+           }),
+           borderWidth: 1.5,
+           shadowColor: catColors.primary,
+           shadowOffset: { width: 0, height: 6 },
+           shadowOpacity: pulseAnim.interpolate({
+             inputRange: [0.3, 1],
+             outputRange: [0.05, 0.35]
+           }),
+           shadowRadius: 12,
+           elevation: 4
+         }
+       ]}>
+        <View style={styles.cardTopRow}>
+          <View style={styles.logoAndName}>
+            <View style={[styles.shopLogoCircle, { backgroundColor: getShopBgColor(shift.shopName) }]}>
+              <Text style={[styles.shopLogoText, { color: getShopTextColor(shift.shopName) }]}>
+                {getShopInitials(shift.shopName)}
+              </Text>
+            </View>
+            <View style={styles.viewCountRow}>
+              <Ionicons name="eye-outline" size={13} color="#64748B" style={{ marginRight: 2 }} />
+              <Text style={styles.viewCountText}>
+                {cardViews >= 1000 ? (cardViews / 1000).toFixed(1) + 'k' : cardViews} lượt xem
+              </Text>
+            </View>
+            {shift.isEmergency && (
+              <Animated.View style={[
+                styles.urgentBadge,
+                {
+                  backgroundColor: catColors.primary,
+                  borderColor: catColors.borderUrgent,
+                  opacity: pulseAnim,
+                  transform: [{
+                    scale: pulseAnim.interpolate({
+                      inputRange: [0.3, 1],
+                      outputRange: [0.96, 1.04]
+                    })
+                  }]
+                }
+              ]}>
+                <Text style={styles.urgentBadgeText}>🔥 TUYỂN GẤP</Text>
+              </Animated.View>
+            )}
+          </View>
+
+          <View style={styles.cardActionsRow}>
+            <TouchableOpacity
+              style={styles.employerCardActionBtnEdit}
+              onPress={() => handleEditPress(shift)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="pencil" size={15} color="#2563EB" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.employerCardActionBtnDelete}
+              onPress={() => handleDeletePress(shift)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={15} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <Text style={styles.jobTitleText} numberOfLines={2}>{shift.title}</Text>
+        <Text style={styles.shopSubtitleText} numberOfLines={1}>{shift.shopName}</Text>
+
+        <View style={styles.timeInfoRow}>
+          <Ionicons name="calendar-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
+          <Text style={styles.timeInfoText}>{shift.date} • {shift.time}</Text>
+        </View>
+
+        <View style={styles.cardFooterRow}>
+          <View style={styles.salaryAndStatus}>
+            <Text style={styles.salaryText}>
+              {(shift.hourlyRate).toLocaleString('vi-VN')} đ/h
+            </Text>
+            <Text style={[
+              styles.statusText,
+              shift.status === 'completed' && { color: '#64748B' },
+              shift.status === 'checkin_active' && { color: '#10B981' },
+              shift.status === 'approved' && { color: '#0A58CA' }
+            ]}>
+              • {shift.status === 'completed'
+                ? 'Đã hoàn thành'
+                : shift.status === 'checkin_active'
+                  ? 'Sinh viên đang làm'
+                  : shift.status === 'approved'
+                    ? 'Đã duyệt hồ sơ'
+                    : 'Đang hiển thị'}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.viewCandidatesBtn}
+            onPress={() => navigateTo('candidate_list', { shiftId: shift.id })}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.viewCandidatesBtnText}>
+              {hasApplicants ? `Xem ứng viên (${applicantCount})` : 'Tìm lân cận'}
+            </Text>
+            {hasApplicants ? (
+              <Ionicons name="chevron-forward" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
+            ) : (
+              <Ionicons name="search" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+});
+
+const STANDARD_SKILL_NAMES = [
+  'Giao tiếp',
+  'Pha chế',
+  'Xử lý tình huống',
+  'Tiếng Anh',
+  'Sử dụng máy POS',
+  'Làm việc nhóm',
+  'Bưng bê',
+  'Lái xe'
+];
+
 let globalApprovalsPage = 1;
 
 export default function EmployerApprovals() {
@@ -304,6 +524,10 @@ export default function EmployerApprovals() {
   const updateJobPostWizardMutation = useUpdateJobPostWizardMutation(user, showToast);
   const handleLeaveRequestMutation = useHandleLeaveRequestMutation(user, showToast);
 
+  const handleLeaveRequest = (requestId, status) => {
+    handleLeaveRequestMutation.mutate({ requestId, status });
+  };
+
   const [activeSegment, setActiveSegment] = useState('job_posts'); // 'job_posts' | 'leaves'
 
   // Categories & Skills local states
@@ -333,6 +557,7 @@ export default function EmployerApprovals() {
   const [showCustomSkillInput, setShowCustomSkillInput] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [isAddressFocused, setIsAddressFocused] = useState(false);
 
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [selectedLat, setSelectedLat] = useState(10.7769);
@@ -710,7 +935,10 @@ export default function EmployerApprovals() {
     getSkillsApi().then(res => {
       const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : (res?.items || []));
       if (list) {
-        setSkillsList([...list, { id: 'other_skill_trigger', name: 'Khác...' }]);
+        const filteredSkills = list.filter(s => 
+          STANDARD_SKILL_NAMES.map(n => n.toLowerCase()).includes((s.name || '').trim().toLowerCase())
+        );
+        setSkillsList([...filteredSkills, { id: 'other_skill_trigger', name: 'Khác...' }]);
       }
     }).catch(e => console.log('Error loading skills in approvals:', e));
   }, []);
@@ -1008,133 +1236,15 @@ export default function EmployerApprovals() {
                 <Text style={styles.emptySub}>Bấm vào nút "+" ở góc dưới bên phải để bắt đầu tạo tin tuyển dụng mới.</Text>
               </View>
             ) : (
-              paginatedShifts.map((shift, index) => {
-                const applicantCount = shift.applicantCount !== undefined ? shift.applicantCount : (shift.status === 'applied' ? 1 : 0);
-                const hasApplicants = applicantCount > 0;
-                const leftBorderColor = getLeftBorderColorByCategory(shift.categoryName, shift.shopName);
-                const cardViews = (shift.applicantCount || 0) * 15 + 120;
-                
-                return (
-                  <TouchableOpacity
-                    key={shift.id}
-                    style={styles.cardShadowContainer}
-                    activeOpacity={0.9}
-                    onPress={() => navigateTo('job_detail', { shiftId: shift.id })}
-                  >
-                     <Animated.View style={[
-                       styles.cardContent,
-                       { borderLeftColor: leftBorderColor, borderLeftWidth: 6 },
-                       shift.isEmergency && {
-                         borderLeftColor: pulseAnim.interpolate({
-                           inputRange: [0.3, 1],
-                           outputRange: ['#EF4444', '#F59E0B']
-                         }),
-                         borderLeftWidth: 8,
-                         backgroundColor: pulseAnim.interpolate({
-                           inputRange: [0.3, 1],
-                           outputRange: ['#FFFFFF', '#FFF1F2']
-                         }),
-                         borderColor: pulseAnim.interpolate({
-                           inputRange: [0.3, 1],
-                           outputRange: ['#F1F5F9', '#FDA4AF']
-                         }),
-                         borderWidth: 1.5,
-                         shadowColor: '#EF4444',
-                         shadowOffset: { width: 0, height: 6 },
-                         shadowOpacity: pulseAnim.interpolate({
-                           inputRange: [0.3, 1],
-                           outputRange: [0.05, 0.35]
-                         }),
-                         shadowRadius: 12,
-                         elevation: 4
-                       }
-                     ]}>
-                      <View style={styles.cardTopRow}>
-                        <View style={styles.logoAndName}>
-                          <View style={[styles.shopLogoCircle, { backgroundColor: getShopBgColor(shift.shopName) }]}>
-                            <Text style={[styles.shopLogoText, { color: getShopTextColor(shift.shopName) }]}>
-                              {getShopInitials(shift.shopName)}
-                            </Text>
-                          </View>
-                          <View style={styles.viewCountRow}>
-                            <Ionicons name="eye-outline" size={13} color="#64748B" style={{ marginRight: 2 }} />
-                            <Text style={styles.viewCountText}>
-                              {cardViews >= 1000 ? (cardViews / 1000).toFixed(1) + 'k' : cardViews} lượt xem
-                            </Text>
-                          </View>
-                          {shift.isEmergency && (
-                            <Animated.View style={[styles.urgentBadge, { opacity: pulseAnim }]}>
-                              <Text style={styles.urgentBadgeText}>🔥 TUYỂN GẤP</Text>
-                            </Animated.View>
-                          )}
-                        </View>
-
-                        <View style={styles.cardActionsRow}>
-                          <TouchableOpacity
-                            style={[styles.cardActionBtn, { marginRight: 8, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
-                            onPress={() => handleEditPress(shift)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="pencil" size={15} color="#2563EB" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.cardActionBtn, styles.cardActionBtnDelete, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}
-                            onPress={() => handleDeletePress(shift)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="trash" size={15} color="#EF4444" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      <Text style={styles.jobTitleText} numberOfLines={2}>{shift.title}</Text>
-                      <Text style={styles.shopSubtitleText} numberOfLines={1}>{shift.shopName}</Text>
-
-                      <View style={styles.timeInfoRow}>
-                        <Ionicons name="calendar-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
-                        <Text style={styles.timeInfoText}>{shift.date} • {shift.time}</Text>
-                      </View>
-
-                      <View style={styles.cardFooterRow}>
-                        <View style={styles.salaryAndStatus}>
-                          <Text style={styles.salaryText}>
-                            {(shift.hourlyRate).toLocaleString('vi-VN')} đ/h
-                          </Text>
-                          <Text style={[
-                            styles.statusText,
-                            shift.status === 'completed' && { color: '#64748B' },
-                            shift.status === 'checkin_active' && { color: '#10B981' },
-                            shift.status === 'approved' && { color: '#0A58CA' }
-                          ]}>
-                            • {shift.status === 'completed'
-                              ? 'Đã hoàn thành'
-                              : shift.status === 'checkin_active'
-                                ? 'Sinh viên đang làm'
-                                : shift.status === 'approved'
-                                  ? 'Đã duyệt hồ sơ'
-                                  : 'Đang hiển thị'}
-                          </Text>
-                        </View>
-
-                        <TouchableOpacity
-                          style={styles.viewCandidatesBtn}
-                          onPress={() => navigateTo('candidate_list', { shiftId: shift.id })}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.viewCandidatesBtnText}>
-                            {hasApplicants ? `Xem ứng viên (${applicantCount})` : 'Tìm lân cận'}
-                          </Text>
-                          {hasApplicants ? (
-                            <Ionicons name="chevron-forward" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
-                          ) : (
-                            <Ionicons name="search" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    </Animated.View>
-                  </TouchableOpacity>
-                );
-              })
+              paginatedShifts.map((shift) => (
+                <EmployerShiftCard
+                  key={shift.id}
+                  shift={shift}
+                  navigateTo={navigateTo}
+                  handleEditPress={handleEditPress}
+                  handleDeletePress={handleDeletePress}
+                />
+              ))
             )}
 
             {/* Pagination Controls */}
@@ -1303,17 +1413,17 @@ export default function EmployerApprovals() {
 
       {/* Edit Job Modal */}
       <Modal
-        animationType="slide"
-        transparent={false}
+        animationType="fade"
+        transparent={true}
         visible={editModalVisible}
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        <View style={styles.modalOverlayContainer}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
+            style={{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' }}
           >
-            <View style={styles.modalContentFullscreen}>
+            <View style={styles.modalContentCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Chỉnh sửa bài đăng</Text>
               <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeModalBtn}>
@@ -1427,12 +1537,33 @@ export default function EmployerApprovals() {
                   <Text style={styles.modalInputLabel}>Địa chỉ chi tiết</Text>
                   <View style={{ position: 'relative', zIndex: 10, marginBottom: 16 }}>
                     <TextInput
-                      style={[styles.modalPremiumInput, { marginBottom: 0 }]}
+                      style={[styles.modalPremiumInput, { paddingRight: 105, marginBottom: 0, height: 64, textAlignVertical: 'top', paddingTop: 10, paddingBottom: 10 }]}
                       value={editAddress}
                       onChangeText={handleAddressChange}
                       placeholder="Nhập địa chỉ hoặc nhấn nút GPS bên dưới..."
                       placeholderTextColor="#94A3B8"
+                      multiline={true}
                     />
+                    <TouchableOpacity
+                      style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: 7,
+                        backgroundColor: '#64748B',
+                        borderRadius: 10,
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        height: 34,
+                        justifyContent: 'center',
+                        zIndex: 20
+                      }}
+                      onPress={geocodeTypedAddress}
+                      disabled={gpsLoading}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>
+                        {gpsLoading ? '...' : 'Tìm Tọa Độ'}
+                      </Text>
+                    </TouchableOpacity>
 
                     {showSuggestions && (
                       <View style={{
@@ -1584,7 +1715,7 @@ export default function EmployerApprovals() {
             </View>
             </View>
           </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
       </Modal>
 
       {/* Map Picker Modal */}
@@ -1861,13 +1992,12 @@ export default function EmployerApprovals() {
           <View style={styles.confirmContent}>
             {/* Circular warning icon badge */}
             <View style={styles.warningBadge}>
-              <Text style={styles.warningBadgeText}>!</Text>
+              <Ionicons name="trash-outline" size={32} color="#EF4444" />
             </View>
 
             <Text style={styles.confirmTitle}>Xác nhận xóa bài đăng</Text>
             <Text style={styles.confirmMessage}>
-              Bạn có chắc chắn muốn xóa bài đăng{'\n'}
-              <Text style={styles.confirmJobTitle}>"{deletingShift?.title}"</Text>?{'\n'}
+              Bạn có chắc chắn muốn xóa bài đăng <Text style={{ fontWeight: 'bold', color: '#111827' }}>"{deletingShift?.title}"</Text> không?{'\n'}
               Hành động này không thể hoàn tác.
             </Text>
 
@@ -1890,7 +2020,7 @@ export default function EmployerApprovals() {
                 {deletingJob ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.confirmDeleteBtnText}>Xóa tin ⚡</Text>
+                  <Text style={styles.confirmDeleteBtnText}>Xóa</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -2074,7 +2204,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 6,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.02)',
   },
@@ -2108,9 +2238,26 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
   },
-  cardActionBtnDelete: {
+  employerCardActionBtnEdit: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  employerCardActionBtnDelete: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#FEF2F2',
-    borderColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cardActionIcon: {
     fontSize: 14,
@@ -2457,11 +2604,34 @@ const styles = StyleSheet.create({
     elevation: 24,
     overflow: 'hidden',
   },
-  modalContentFullscreen: {
+  modalOverlayContainer: {
     flex: 1,
-    backgroundColor: '#F7FAFC',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '94%',
+    height: '92%',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     display: 'flex',
     flexDirection: 'column',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.15,
+        shadowRadius: 24,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2543,7 +2713,8 @@ const styles = StyleSheet.create({
   modalPremiumInput: {
     backgroundColor: '#F8FAFC',
     borderRadius: 16,
-    paddingVertical: 14,
+    paddingTop: 16,
+    paddingBottom: 12,
     paddingHorizontal: 16,
     fontSize: 14,
     color: '#0F172A',
@@ -2551,6 +2722,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
+    includeFontPadding: false,
   },
   modalTextArea: {
     height: 100,
@@ -2687,18 +2859,13 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   warningBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#EF4444',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FEE2E2',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
   },
   warningBadgeText: {
     color: '#FFFFFF',
@@ -2901,7 +3068,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 8,
-    marginLeft: 10,
+    marginLeft: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

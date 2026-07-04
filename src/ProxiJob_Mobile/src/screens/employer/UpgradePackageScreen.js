@@ -23,12 +23,12 @@ const FONT_BOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'P
 const FONT_EXTRABOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-ExtraBold';
 
 const FEATURE_ROWS = [
-  { label: 'Đăng tin tuyển dụng', basic: '15 tin', standard: 'Không giới hạn', premium: 'Không giới hạn' },
+  { label: 'Đăng tin tuyển dụng', basic: '30 tin', standard: '60 tin', premium: 'Không giới hạn' },
   { label: 'Thời hạn gói', basic: '30 ngày', standard: '30 ngày', premium: '30 ngày' },
   { label: 'Lọc ứng viên AI', basic: false, standard: true, premium: true },
   { label: 'Ưu tiên hiển thị', basic: false, standard: false, premium: true },
-  { label: 'Quản lý nhân sự', basic: false, standard: false, premium: true },
-  { label: 'Xếp lịch tự động', basic: false, standard: true, premium: true },
+  { label: 'Quản lý nhân sự', basic: false, standard: true, premium: true },
+  { label: 'Bán kính quét tin', basic: '7 km', standard: '10 km', premium: 'Không giới hạn' },
 ];
 
 export default function UpgradePackageScreen() {
@@ -40,14 +40,18 @@ export default function UpgradePackageScreen() {
 
   const isPlanActive = (planName) => {
     if (!user || !user.subscriptionTier) return false;
-    // Standard matches both 'Standard' and 'Enterprise' (for demo purposes)
-    if (planName.toLowerCase() === 'standard' && user.subscriptionTier.toLowerCase() === 'enterprise') {
-      return true;
-    }
-    if (planName.toLowerCase() === 'premium' && user.subscriptionTier.toLowerCase() === 'enterprise') {
-      return true;
-    }
-    return user.subscriptionTier.toLowerCase() === planName.toLowerCase();
+    
+    const userTier = user.subscriptionTier.toLowerCase();
+    const targetPlan = planName.toLowerCase();
+
+    if (targetPlan === 'basic' && userTier === 'recruit') return true;
+    if (targetPlan === 'standard' && userTier === 'hrm basic') return true;
+    if (targetPlan === 'premium' && userTier === 'enterprise') return true;
+    if (targetPlan === 'recruit' && userTier === 'recruit') return true;
+    if (targetPlan === 'hrm basic' && userTier === 'hrm basic') return true;
+    if (targetPlan === 'enterprise' && userTier === 'enterprise') return true;
+
+    return userTier === targetPlan;
   };
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -86,9 +90,9 @@ export default function UpgradePackageScreen() {
       console.log('Error loading plans:', err);
       setPlans([
         { id: 1, planName: 'PerShift', price: 15000, jobPostLimit: 1, description: 'Đăng 1 ca làm việc', durationDays: 1, hasPriorityDisplay: false, hasHrManagement: false },
-        { id: 2, planName: 'Basic', price: 99000, jobPostLimit: 15, description: 'Gói tháng cơ bản', durationDays: 30, hasPriorityDisplay: false, hasHrManagement: false },
-        { id: 3, planName: 'Standard', price: 199000, jobPostLimit: 999, description: 'Đăng tuyển không giới hạn', durationDays: 30, hasPriorityDisplay: false, hasHrManagement: false },
-        { id: 4, planName: 'Premium', price: 299000, jobPostLimit: 999, description: 'Ưu tiên hiển thị + quản lý nhân sự', durationDays: 30, hasPriorityDisplay: true, hasHrManagement: true },
+        { id: 2, planName: 'Recruit', price: 99000, jobPostLimit: 30, description: 'Gói tháng cơ bản', durationDays: 30, hasPriorityDisplay: false, hasHrManagement: false },
+        { id: 3, planName: 'HRM Basic', price: 199000, jobPostLimit: 60, description: 'Quản lý HRM cơ bản + Tuyển dụng', durationDays: 30, hasPriorityDisplay: false, hasHrManagement: true },
+        { id: 4, planName: 'Enterprise', price: 299000, jobPostLimit: 9999, description: 'Gói doanh nghiệp toàn diện', durationDays: 30, hasPriorityDisplay: true, hasHrManagement: true },
       ]);
     } finally { setFetchingPlans(false); }
   }
@@ -116,9 +120,9 @@ export default function UpgradePackageScreen() {
   const fmt = (p) => (!p || p === 0) ? '0đ' : p.toLocaleString('vi-VN') + 'đ';
 
   const pershift = plans.find(p => p.planName === 'PerShift');
-  const basic = plans.find(p => p.planName === 'Basic');
-  const standard = plans.find(p => p.planName === 'Standard');
-  const premium = plans.find(p => p.planName === 'Premium');
+  const basic = plans.find(p => p.planName === 'Recruit' || p.planName === 'Basic');
+  const standard = plans.find(p => p.planName === 'HRM Basic' || p.planName === 'Standard');
+  const premium = plans.find(p => p.planName === 'Enterprise' || p.planName === 'Premium');
 
   return (
     <View style={s.container}>
@@ -192,8 +196,8 @@ export default function UpgradePackageScreen() {
                       <Text style={s.cardIcon}>🏪</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.cardName}>Cơ bản</Text>
-                      <Text style={s.cardDesc}>Dành cho cửa hàng nhỏ</Text>
+                      <Text style={s.cardName}>Tuyển dụng (Recruit)</Text>
+                      <Text style={s.cardDesc}>Dành cho cửa hàng cần tuyển dụng</Text>
                     </View>
                   </View>
                   <View style={s.priceRow}>
@@ -202,16 +206,16 @@ export default function UpgradePackageScreen() {
                   </View>
                   <View style={s.features}>
                     <Feat text={`Đăng tuyển ${basic.jobPostLimit} tin/tháng`} color="#10B981" />
-                    <Feat text="Mô tả vị trí cơ bản" color="#10B981" />
+                    <Feat text="Bán kính quét tin 7 km" color="#10B981" />
                     <Feat text="Quản lý ứng viên qua CV" color="#10B981" />
                   </View>
                   <PurchaseBtn
                     plan={basic}
                     loading={loading}
                     onPress={handlePurchase}
-                    label={isPlanActive('Basic') ? "Gói hiện tại ✓" : "Nâng cấp ngay"}
-                    color={isPlanActive('Basic') ? "#10B981" : "#10B981"}
-                    disabled={isPlanActive('Basic')}
+                    label={isPlanActive(basic.planName) ? "Gói hiện tại ✓" : "Nâng cấp ngay"}
+                    color={isPlanActive(basic.planName) ? "#10B981" : "#10B981"}
+                    disabled={isPlanActive(basic.planName)}
                   />
                 </View>
               )}
@@ -230,8 +234,8 @@ export default function UpgradePackageScreen() {
                       <Text style={[s.cardIcon, { color: '#7C3AED' }]}>🚀</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.cardName, { color: '#7C3AED' }]}>Chuyên nghiệp</Text>
-                      <Text style={s.cardDesc}>Không giới hạn bài đăng</Text>
+                      <Text style={[s.cardName, { color: '#7C3AED' }]}>HRM Cơ bản</Text>
+                      <Text style={s.cardDesc}>Tuyển dụng & Quản lý nhân sự</Text>
                     </View>
                   </View>
                   <View style={s.priceRow}>
@@ -239,18 +243,18 @@ export default function UpgradePackageScreen() {
                     <Text style={s.pricePer}>/tháng</Text>
                   </View>
                   <View style={s.features}>
-                    <Feat text="Mọi tính năng Cơ bản" color="#7C3AED" />
-                    <Feat text="Không giới hạn bài đăng" color="#7C3AED" />
-                    <Feat text="Lọc ứng viên thông minh AI" color="#7C3AED" />
-                    <Feat text="Xếp lịch tự động" color="#7C3AED" />
+                    <Feat text="Đăng tuyển 60 tin/tháng" color="#7C3AED" />
+                    <Feat text="Quản lý tối đa 15 nhân viên" color="#7C3AED" />
+                    <Feat text="Kích hoạt 1 mã QR chấm công" color="#7C3AED" />
+                    <Feat text="Bán kính quét tin 10 km" color="#7C3AED" />
                   </View>
                   <PurchaseBtn
                     plan={standard}
                     loading={loading}
                     onPress={handlePurchase}
-                    label={isPlanActive('Standard') ? "Gói hiện tại ✓" : "Nâng cấp Chuyên nghiệp ⚡"}
-                    color={isPlanActive('Standard') ? "#10B981" : "#7C3AED"}
-                    disabled={isPlanActive('Standard')}
+                    label={isPlanActive(standard.planName) ? "Gói hiện tại ✓" : "Nâng cấp HRM Cơ bản ⚡"}
+                    color={isPlanActive(standard.planName) ? "#10B981" : "#7C3AED"}
+                    disabled={isPlanActive(standard.planName)}
                   />
                 </View>
               )}
@@ -275,8 +279,8 @@ export default function UpgradePackageScreen() {
                       <Text style={[s.cardIcon, { color: '#FF6B00' }]}>👑</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.cardName, { color: '#FF6B00' }]}>Cao cấp</Text>
-                      <Text style={s.cardDesc}>Toàn diện nhất cho doanh nghiệp</Text>
+                      <Text style={[s.cardName, { color: '#FF6B00' }]}>Doanh nghiệp</Text>
+                      <Text style={s.cardDesc}>Không giới hạn cho doanh nghiệp lớn</Text>
                     </View>
                   </View>
                   <View style={s.priceRow}>
@@ -284,18 +288,18 @@ export default function UpgradePackageScreen() {
                     <Text style={s.pricePer}>/tháng</Text>
                   </View>
                   <View style={s.features}>
-                    <Feat text="Mọi tính năng Chuyên nghiệp" color="#FF6B00" />
-                    <Feat text="Ưu tiên hiển thị bài đăng" color="#FF6B00" />
-                    <Feat text="Quản lý nhân sự HRM Lite" color="#FF6B00" />
-                    <Feat text="Quyền hẹn phỏng vấn 1-1" color="#FF6B00" />
+                    <Feat text="Đăng tuyển không giới hạn tin" color="#FF6B00" />
+                    <Feat text="Quản lý nhân sự không giới hạn" color="#FF6B00" />
+                    <Feat text="Không giới hạn mã QR chấm công" color="#FF6B00" />
+                    <Feat text="Bán kính quét tin không giới hạn" color="#FF6B00" />
                   </View>
                   <PurchaseBtn
                     plan={premium}
                     loading={loading}
                     onPress={handlePurchase}
-                    label={isPlanActive('Premium') ? "Gói hiện tại ✓" : "Sở hữu Premium ngay 👑"}
-                    color={isPlanActive('Premium') ? "#10B981" : "#FF6B00"}
-                    disabled={isPlanActive('Premium')}
+                    label={isPlanActive(premium.planName) ? "Gói hiện tại ✓" : "Sở hữu Doanh nghiệp ngay 👑"}
+                    color={isPlanActive(premium.planName) ? "#10B981" : "#FF6B00"}
+                    disabled={isPlanActive(premium.planName)}
                   />
                 </View>
               )}
@@ -305,9 +309,9 @@ export default function UpgradePackageScreen() {
                 <Text style={s.compareTitle}>So sánh tính năng</Text>
                 <View style={s.tHead}>
                   <View style={s.tFeatCol}><Text style={s.tHText}>Tính năng</Text></View>
-                  <View style={s.tValCol}><Text style={s.tHText}>Cơ{'\n'}bản</Text></View>
-                  <View style={s.tValCol}><Text style={[s.tHText, { color: '#7C3AED' }]}>Chuyên{'\n'}nghiệp</Text></View>
-                  <View style={s.tValCol}><Text style={[s.tHText, { color: '#FF6B00' }]}>Cao{'\n'}cấp</Text></View>
+                  <View style={s.tValCol}><Text style={s.tHText}>Tuyển{'\n'}dụng</Text></View>
+                  <View style={s.tValCol}><Text style={[s.tHText, { color: '#7C3AED' }]}>HRM{'\n'}Cơ bản</Text></View>
+                  <View style={s.tValCol}><Text style={[s.tHText, { color: '#FF6B00' }]}>Doanh{'\n'}nghiệp</Text></View>
                 </View>
                 {FEATURE_ROWS.map((r, i) => (
                   <View key={i} style={[s.tRow, i % 2 === 0 && { backgroundColor: '#FAFAFA' }]}>

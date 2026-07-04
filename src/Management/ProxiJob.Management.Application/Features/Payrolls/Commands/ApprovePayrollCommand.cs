@@ -86,6 +86,7 @@ public class ApprovePayrollCommandHandler : IRequestHandler<ApprovePayrollComman
                         await _publishEndpoint.Publish(new PayrollPaidEvent(
                             PayrollId: payroll.Id,
                             EmployeeId: payroll.EmployeeId,
+                            StudentId: timekeeping.Employee.UserId ?? 0,
                             BusinessId: timekeeping.Employee.BusinessId,
                             FinalAmount: payroll.FinalAmount,
                             PayDate: payroll.PayDate!.Value,
@@ -133,6 +134,7 @@ public class ApprovePayrollCommandHandler : IRequestHandler<ApprovePayrollComman
                         await _publishEndpoint.Publish(new PayrollPaidEvent(
                             PayrollId: payroll.Id,
                             EmployeeId: payroll.EmployeeId,
+                            StudentId: fallbackEmployee.UserId ?? 0,
                             BusinessId: request.BusinessId,
                             FinalAmount: payroll.FinalAmount,
                             PayDate: payroll.PayDate!.Value,
@@ -187,6 +189,7 @@ public class ApprovePayrollCommandHandler : IRequestHandler<ApprovePayrollComman
                 await _publishEndpoint.Publish(new PayrollPaidEvent(
                     PayrollId: payroll.Id,
                     EmployeeId: payroll.EmployeeId,
+                    StudentId: payroll.Employee.UserId ?? 0,
                     BusinessId: payroll.Employee.BusinessId,
                     FinalAmount: payroll.FinalAmount,
                     PayDate: payroll.PayDate!.Value,

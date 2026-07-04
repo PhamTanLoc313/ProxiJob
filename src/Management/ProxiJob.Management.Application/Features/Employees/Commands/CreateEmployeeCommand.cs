@@ -3,6 +3,8 @@ using ProxiJob.Management.Application.Common.Interfaces;
 using ProxiJob.Management.Domain.Enums;
 using ProxiJob.Management.Domain.Models;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace ProxiJob.Management.Application.Features.Employees.Commands;
 
 public class CreateEmployeeCommand : IRequest<int>
@@ -31,6 +33,15 @@ public class CreateEmployeeCommandHandler : IRequestHandler<CreateEmployeeComman
     {
         if (_currentUser.BusinessId == null)
             throw new InvalidOperationException("BusinessId is required.");
+
+        var maxEmployees = _currentUser.IdentityUser?.MaxEmployees ?? 0;
+        var activeCount = await _context.Employees
+            .CountAsync(e => e.BusinessId == _currentUser.BusinessId.Value && e.Status == EmployeeStatus.Active, cancellationToken);
+
+        if (activeCount >= maxEmployees)
+        {
+            throw new UnauthorizedAccessException("Hạn mức nhân viên tối đa cho gói cước hiện tại đã đạt giới hạn. Vui lòng nâng cấp gói cước!");
+        }
 
         if (string.IsNullOrWhiteSpace(request.FullName))
             throw new ArgumentException("FullName is required.");

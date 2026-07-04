@@ -18,6 +18,14 @@ import { getAvatarSource } from '../../utils/avatarHelper';
 import { getActiveStudentProfilesApi } from '../../api/studentApi';
 import { handleCallUser } from '../../utils/callHelper';
 import { getApplicationsByShift } from '../../api/jobs';
+const removeAccents = (str) => {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+};
 
 export default function CandidateListScreen() {
   const {
@@ -146,10 +154,14 @@ export default function CandidateListScreen() {
   }).filter(cand => {
     if (cand.distanceKm > candidateRadius) return false;
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const nameMatch = cand.fullName?.toLowerCase().includes(query);
-      const skillMatch = cand.skills?.toLowerCase().includes(query);
-      const majorMatch = cand.major?.toLowerCase().includes(query);
+      const queryClean = removeAccents(searchQuery.toLowerCase().trim());
+      const nameClean = removeAccents(cand.fullName || '').toLowerCase();
+      const skillClean = removeAccents(cand.skills || '').toLowerCase();
+      const majorClean = removeAccents(cand.major || '').toLowerCase();
+      
+      const nameMatch = nameClean.includes(queryClean);
+      const skillMatch = skillClean.includes(queryClean);
+      const majorMatch = majorClean.includes(queryClean);
       return nameMatch || skillMatch || majorMatch;
     }
     return true;

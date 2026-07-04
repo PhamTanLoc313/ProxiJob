@@ -14,7 +14,8 @@ import {
   rejectApplication,
   getJobPostsByBusiness,
   updateJobPostApi,
-  deleteJobPostApi
+  deleteJobPostApi,
+  cancelApplicationApi
 } from '../api/jobs';
 import {
   getEmployees,
@@ -65,6 +66,21 @@ const formatDateVN = (dateInput) => {
   }
 };
 
+const checkIsEmergency = (title, description) => {
+  const t = (title || '').toLowerCase();
+  const d = (description || '').toLowerCase();
+  return t.includes('khẩn cấp') || 
+         t.includes('khấn cấp') || 
+         t.includes('khần cấp') || 
+         t.includes('tuyển gấp') || 
+         t.includes('gấp') || 
+         d.includes('khẩn cấp') || 
+         d.includes('khấn cấp') || 
+         d.includes('khần cấp') || 
+         d.includes('tuyển gấp') || 
+         d.includes('gấp');
+};
+
 const jobShiftsCache = new Map(); // jobId -> { data, timestamp }
 const CACHE_TTL = 30000; // 30 seconds
 
@@ -89,10 +105,16 @@ const fetchJobShiftsWithCache = async (jobId) => {
 
 export const useShiftsQuery = (user, studentCoords) => {
   return useQuery({
-    queryKey: ['shifts', user?.id],
+    queryKey: ['shifts', user?.id, studentCoords?.latitude, studentCoords?.longitude],
     queryFn: async () => {
       try {
-        const res = await getPublishedJobs();
+        const res = await getPublishedJobs(
+          null,
+          1,
+          50,
+          studentCoords?.latitude,
+          studentCoords?.longitude
+        );
         const jobPosts = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : (res?.items || res?.Items || res?.data?.items || res?.data?.Items || []));
 
         // Fetch all job shifts in parallel instead of sequentially for much faster loading
@@ -104,9 +126,11 @@ export const useShiftsQuery = (user, studentCoords) => {
               return jobShifts.map(s => ({
                 id: s.id,
                 jobPostId: job.id,
+                businessId: job.businessId ?? job.BusinessId,
                 startTime: s.startTime,
                 endTime: s.endTime,
                 title: job.title,
+                categoryName: job.categoryName,
                 shopName: job.categoryName || 'Cửa hàng',
                 hourlyRate: s.salary,
                 latitude: job.latitude || job.location?.latitude || 0,
@@ -119,7 +143,7 @@ export const useShiftsQuery = (user, studentCoords) => {
                 rating: 5.0,
                 reviewsCount: 1,
                 status: s.remainingSlots <= 0 ? 'full' : 'available',
-                isEmergency: (job.title || '').toLowerCase().includes('khần cấp') || (job.title || '').toLowerCase().includes('khấn cấp') || (job.description || '').toLowerCase().includes('khần cấp') || (job.description || '').toLowerCase().includes('khấn cấp'),
+                isEmergency: checkIsEmergency(job.title, job.description),
                 createdAt: job.createdAt || job.CreatedAt || s.startTime,
                 auditFields: {
                   createdBy: job.createdBy,
@@ -253,10 +277,13 @@ export const useShiftsQuery = (user, studentCoords) => {
 
                 baseShifts.push({
                   id: `sched_${sId}`, // virtual id to avoid overlaps
+                  jobShiftId: sJobShiftId || null, // original job shift ID for application matching
                   jobPostId: null,
+                  businessId: sBusinessId,
                   startTime: sStartTime,
                   endTime: sEndTime,
                   title,
+                  categoryName: matchingJob ? matchingJob.categoryName : 'Cửa hàng',
                   shopName,
                   hourlyRate: sJobShiftSalary || 28000,
                   latitude,
@@ -345,7 +372,7 @@ export const useEmployerJobsQuery = (user) => {
                   const staffName = emp ? (emp.fullName || emp.name || emp.FullName) : `Sinh viên #${a.studentId}`;
                   const position = emp ? (emp.position || emp.role || emp.Position || 'Nhân viên') : 'Nhân viên';
 
-                  const reason = a.introduction || 'Yêu cầu hủy ca làm việc / xin nghỉ phép';
+                  const reason = a.cancelNote || a.introduction || 'Yêu cầu hủy ca làm việc / xin nghỉ phép';
                   const isSwap = reason.toLowerCase().includes('đổi') || reason.toLowerCase().includes('chuyển') || reason.toLowerCase().includes('sang') || reason.toLowerCase().includes('ca');
                   const requestType = isSwap ? 'swap' : 'leave';
                   const shiftTime = `${formatTimeVN(s.startTime)} - ${formatTimeVN(s.endTime)}`;
@@ -425,6 +452,7 @@ export const useEmployerJobsQuery = (user) => {
                 id: s.id,
                 jobPostId: job.id,
                 title: job.title,
+                categoryName: job.categoryName,
                 shopName: job.categoryName || 'Cửa hàng',
                 hourlyRate: s.salary,
                 latitude: job.latitude || job.location?.latitude || 0,
@@ -437,7 +465,7 @@ export const useEmployerJobsQuery = (user) => {
                 rating: 5.0,
                 reviewsCount: 0,
                 status: currentStatus,
-                isEmergency: (job.title || '').toLowerCase().includes('khẩn cấp') || (job.title || '').toLowerCase().includes('khấn cấp'),
+                isEmergency: checkIsEmergency(job.title, job.description),
                 applicantCount,
                 applicantName,
                 applicantSchool,
@@ -1271,6 +1299,27 @@ export const useConfirmReceiptPayrollMutation = (user, showToast) => {
     },
     onError: (err) => {
       showToast('Xác nhận lỗi: ' + err.message, 'error');
+    }
+  });
+};
+
+export const useCancelApplicationMutation = (user, showToast) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ applicationId, businessId, note, isSwap }) => {
+      if (!user) throw new Error('Vui lòng đăng nhập.');
+      const reasonPrefix = isSwap ? '[Yêu cầu Đổi ca] ' : '[Yêu cầu Xin nghỉ] ';
+      const finalNote = reasonPrefix + note;
+      return await cancelApplicationApi(applicationId, businessId, finalNote, 'Student');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
+      showToast('Gửi yêu cầu nghỉ ca thành công!', 'success');
+    },
+    onError: (err) => {
+      console.log('Error requesting leave:', err);
+      showToast('Yêu cầu thất bại: ' + (err.message || 'Thử lại sau.'), 'error');
     }
   });
 };

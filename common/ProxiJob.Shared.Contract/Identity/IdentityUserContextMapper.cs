@@ -20,6 +20,9 @@ public static class IdentityUserContextMapper
             ProfileStatus = string.IsNullOrEmpty(grpc.ProfileStatus) ? null : grpc.ProfileStatus,
             ReputationScore = grpc.ReputationScore,
             IsActive = grpc.IsActive,
-            Features = grpc.Features.ToList()
+            Features = grpc.Features.ToList(),
+            MaxEmployees = grpc.MaxEmployees,
+            MaxActiveQrs = grpc.MaxActiveQrs,
+            MaxSearchRadius = grpc.MaxSearchRadius
         };
 }
