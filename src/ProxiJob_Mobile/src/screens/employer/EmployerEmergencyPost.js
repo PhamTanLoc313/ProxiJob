@@ -149,6 +149,449 @@ const geocodeAddressWithFallback = async (queryText) => {
   return null;
 };
 
+const modalStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  calendarContainer: {
+    width: '100%',
+    maxWidth: 350,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  pickerContainer: {
+    width: '100%',
+    maxWidth: 300,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+  headerArrow: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+  },
+  headerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  daysHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  daysHeaderText: {
+    width: 38,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  dayCell: {
+    width: 38,
+    height: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 19,
+    marginBottom: 4,
+  },
+  dayCellEmpty: {
+    width: 38,
+    height: 38,
+    marginBottom: 4,
+  },
+  dayCellSelected: {
+    backgroundColor: '#FF6B00',
+  },
+  dayCellDisabled: {
+    opacity: 0.25,
+  },
+  dayCellText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  dayCellTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  dayCellTextDisabled: {
+    color: '#94A3B8',
+  },
+  pickerColumnsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  pickerColumnWrapper: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  columnLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  columnScrollView: {
+    height: 150,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  timeItem: {
+    paddingVertical: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  timeItemSelected: {
+    backgroundColor: '#FF6B00',
+  },
+  timeItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  timeItemTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  pickerSeparator: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#475569',
+    marginHorizontal: 12,
+    marginTop: 20,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: '#F1F5F9',
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  confirmBtn: {
+    backgroundColor: '#FF6B00',
+  },
+  confirmBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+});
+
+const CustomCalendarModal = ({ visible, value, onClose, onSelect }) => {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  
+  let initialDate = new Date();
+  if (value) {
+    const parts = value.split('-');
+    if (parts.length === 3) {
+      initialDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+  }
+
+  const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth());
+  const [currentYear, setCurrentYear] = useState(initialDate.getFullYear());
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+
+  useEffect(() => {
+    if (value) {
+      const parts = value.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        setSelectedDate(d);
+        setCurrentMonth(d.getMonth());
+        setCurrentYear(d.getFullYear());
+      }
+    }
+  }, [value, visible]);
+
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
+  
+  const daysHeader = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+  
+  const handlePrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(currentYear - 1);
+    } else {
+      setCurrentMonth(currentMonth - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(currentMonth + 1);
+    }
+  };
+
+  const handleDayPress = (day) => {
+    const d = new Date(currentYear, currentMonth, day);
+    if (d < today) return;
+    setSelectedDate(d);
+  };
+
+  const handleConfirm = () => {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const d = String(selectedDate.getDate()).padStart(2, '0');
+    onSelect(`${y}-${m}-${d}`);
+    onClose();
+  };
+
+  const monthNames = [
+    'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4',
+    'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8',
+    'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
+  ];
+
+  const cells = [];
+  for (let i = 0; i < firstDayIndex; i++) {
+    cells.push({ key: `empty-${i}`, day: null });
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    cells.push({ key: `day-${i}`, day: i });
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={modalStyles.modalOverlay}>
+        <View style={modalStyles.calendarContainer}>
+          <Text style={modalStyles.modalTitle}>Chọn ngày làm việc</Text>
+          
+          <View style={modalStyles.calendarHeader}>
+            <TouchableOpacity onPress={handlePrevMonth} style={modalStyles.headerArrow}>
+              <Ionicons name="chevron-back" size={20} color="#334155" />
+            </TouchableOpacity>
+            <Text style={modalStyles.headerTitle}>
+              {monthNames[currentMonth]}, {currentYear}
+            </Text>
+            <TouchableOpacity onPress={handleNextMonth} style={modalStyles.headerArrow}>
+              <Ionicons name="chevron-forward" size={20} color="#334155" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={modalStyles.daysHeaderRow}>
+            {daysHeader.map((h, i) => (
+              <Text key={i} style={modalStyles.daysHeaderText}>{h}</Text>
+            ))}
+          </View>
+
+          <View style={modalStyles.gridContainer}>
+            {cells.map((cell) => {
+              if (cell.day === null) {
+                return <View key={cell.key} style={modalStyles.dayCellEmpty} />;
+              }
+              const d = new Date(currentYear, currentMonth, cell.day);
+              const isPast = d < today;
+              const isSelected = selectedDate.getDate() === cell.day &&
+                                 selectedDate.getMonth() === currentMonth &&
+                                 selectedDate.getFullYear() === currentYear;
+
+              return (
+                <TouchableOpacity
+                  key={cell.key}
+                  style={[
+                    modalStyles.dayCell,
+                    isSelected && modalStyles.dayCellSelected,
+                    isPast && modalStyles.dayCellDisabled
+                  ]}
+                  disabled={isPast}
+                  onPress={() => handleDayPress(cell.day)}
+                >
+                  <Text style={[
+                    modalStyles.dayCellText,
+                    isSelected && modalStyles.dayCellTextSelected,
+                    isPast && modalStyles.dayCellTextDisabled
+                  ]}>
+                    {cell.day}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={modalStyles.actionsRow}>
+            <TouchableOpacity onPress={onClose} style={[modalStyles.actionBtn, modalStyles.cancelBtn]}>
+              <Text style={modalStyles.cancelBtnText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleConfirm} style={[modalStyles.actionBtn, modalStyles.confirmBtn]}>
+              <Text style={modalStyles.confirmBtnText}>Xác nhận</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const CustomTimePickerModal = ({ visible, value, onClose, onSelect, title }) => {
+  let initialHour = 8;
+  let initialMinute = 0;
+  if (value) {
+    const parts = value.split(':');
+    if (parts.length === 2) {
+      initialHour = parseInt(parts[0]);
+      initialMinute = parseInt(parts[1]);
+    }
+  }
+
+  const [selectedHour, setSelectedHour] = useState(initialHour);
+  const [selectedMinute, setSelectedMinute] = useState(initialMinute);
+
+  useEffect(() => {
+    if (value) {
+      const parts = value.split(':');
+      if (parts.length === 2) {
+        setSelectedHour(parseInt(parts[0]));
+        setSelectedMinute(parseInt(parts[1]));
+      }
+    }
+  }, [value, visible]);
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
+
+  const handleConfirm = () => {
+    const h = String(selectedHour).padStart(2, '0');
+    const m = String(selectedMinute).padStart(2, '0');
+    onSelect(`${h}:${m}`);
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={modalStyles.modalOverlay}>
+        <View style={modalStyles.pickerContainer}>
+          <Text style={modalStyles.modalTitle}>{title || 'Chọn thời gian'}</Text>
+          
+          <View style={modalStyles.pickerColumnsRow}>
+            <View style={modalStyles.pickerColumnWrapper}>
+              <Text style={modalStyles.columnLabel}>Giờ</Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={modalStyles.columnScrollView}>
+                {hours.map((h) => {
+                  const isSelected = selectedHour === h;
+                  return (
+                    <TouchableOpacity
+                      key={h}
+                      style={[modalStyles.timeItem, isSelected && modalStyles.timeItemSelected]}
+                      onPress={() => setSelectedHour(h)}
+                    >
+                      <Text style={[modalStyles.timeItemText, isSelected && modalStyles.timeItemTextSelected]}>
+                        {String(h).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <Text style={modalStyles.pickerSeparator}>:</Text>
+
+            <View style={modalStyles.pickerColumnWrapper}>
+              <Text style={modalStyles.columnLabel}>Phút</Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={modalStyles.columnScrollView}>
+                {minutes.map((m) => {
+                  const isSelected = selectedMinute === m;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      style={[modalStyles.timeItem, isSelected && modalStyles.timeItemSelected]}
+                      onPress={() => setSelectedMinute(m)}
+                    >
+                      <Text style={[modalStyles.timeItemText, isSelected && modalStyles.timeItemTextSelected]}>
+                        {String(m).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+
+          <View style={modalStyles.actionsRow}>
+            <TouchableOpacity onPress={onClose} style={[modalStyles.actionBtn, modalStyles.cancelBtn]}>
+              <Text style={modalStyles.cancelBtnText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleConfirm} style={[modalStyles.actionBtn, modalStyles.confirmBtn]}>
+              <Text style={modalStyles.confirmBtnText}>Xác nhận</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const STANDARD_SKILL_NAMES = [
+  'Giao tiếp',
+  'Pha chế',
+  'Xử lý tình huống',
+  'Tiếng Anh',
+  'Sử dụng máy POS',
+  'Làm việc nhóm',
+  'Bưng bê',
+  'Lái xe'
+];
+
 export default function EmployerEmergencyPost() {
   const { createJobPostWizard, showToast, navigateTo, user, goBack } = useContext(AppContext);
 
@@ -170,11 +613,16 @@ export default function EmployerEmergencyPost() {
 
   // Form states
   const [step, setStep] = useState(1);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [startTimeVisible, setStartTimeVisible] = useState(false);
+  const [endTimeVisible, setEndTimeVisible] = useState(false);
+  const [errors, setErrors] = useState({});
   const [title, setTitle] = useState('');
-  const [categoryId, setCategoryId] = useState('5'); // Default 'Phục vụ'
+  const [categoryId, setCategoryId] = useState(''); // Empty by default
   const [customCategory, setCustomCategory] = useState('');
   const [description, setDescription] = useState('');
   const [requirements, setRequirements] = useState('');
+  const [isAddressFocused, setIsAddressFocused] = useState(false);
 
   const [salary, setSalary] = useState('');
   const [selectedSkills, setSelectedSkills] = useState([]); // Default 'Giao tiếp'
@@ -549,7 +997,10 @@ export default function EmployerEmergencyPost() {
         const skillRes = await getSkillsApi();
         const skillList = Array.isArray(skillRes) ? skillRes : (Array.isArray(skillRes?.data) ? skillRes.data : (skillRes?.items || skillRes?.data?.items || []));
         if (skillList) {
-          setSkillsList([...skillList, { id: 'other_skill_trigger', name: 'Khác...' }]);
+          const filteredSkills = skillList.filter(s => 
+            STANDARD_SKILL_NAMES.map(n => n.toLowerCase()).includes((s.name || '').trim().toLowerCase())
+          );
+          setSkillsList([...filteredSkills, { id: 'other_skill_trigger', name: 'Khác...' }]);
         }
       } catch (err) {
         console.log('Error loading skills from API:', err);
@@ -627,36 +1078,55 @@ export default function EmployerEmergencyPost() {
   const toggleEmergency = (value) => {
     setIsEmergency(value);
     if (value) {
-      // Emergency gets +30% pay bonus automatically
-      const currentRate = parseFloat(salary) || 0;
-      const bonusRate = Math.round(currentRate * 1.3);
-      setSalary(bonusRate.toString());
       showToast('Đã kích hoạt chế độ TUYỂN GẤP: Tự động cộng thêm 30% lương đề xuất!', 'info');
-    } else {
-      // Revert rate
-      const currentRate = parseFloat(salary) || 0;
-      const baseRate = Math.round(currentRate / 1.3);
-      setSalary(baseRate.toString());
     }
   };
 
   const handleNextStep = () => {
+    const newErrors = {};
     if (step === 1) {
       if (!title.trim()) {
-        showToast('Vui lòng nhập tiêu đề công việc!', 'warning');
-        return;
+        newErrors.title = 'Vui lòng nhập tiêu đề công việc!';
+      } else if (title.trim().length < 5) {
+        newErrors.title = 'Tiêu đề công việc phải có ít nhất 5 ký tự!';
       }
+      
+      if (!categoryId) {
+        newErrors.categoryId = 'Vui lòng chọn danh mục công việc!';
+      }
+
       if (!description.trim()) {
-        showToast('Vui lòng nhập mô tả công việc!', 'warning');
+        newErrors.description = 'Vui lòng nhập mô tả công việc!';
+      } else if (description.trim().length < 15) {
+        newErrors.description = 'Mô tả công việc phải có ít nhất 15 ký tự để ứng viên nắm rõ thông tin!';
+      }
+
+      if (isOtherCategory && !customCategory.trim()) {
+        newErrors.customCategory = 'Vui lòng nhập tên danh mục khác!';
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        showToast('Vui lòng điền đầy đủ các thông tin bắt buộc!', 'warning');
         return;
       }
+      setErrors({});
       setStep(2);
     } else if (step === 2) {
       const parsedSalary = parseFloat(salary);
-      if (isNaN(parsedSalary) || parsedSalary <= 0) {
-        showToast('Mức lương phải lớn hơn 0!', 'warning');
+      if (isNaN(parsedSalary) || parsedSalary < 20000) {
+        newErrors.salary = 'Mức lương đề xuất tối thiểu là 20.000 đ/h!';
+      }
+      if (showCustomSkillInput && !customSkillInput.trim()) {
+        newErrors.customSkillInput = 'Vui lòng nhập ít nhất một kỹ năng khác hoặc bỏ chọn mục này!';
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        showToast('Vui lòng hoàn thiện thông tin còn thiếu ở Bước 2!', 'warning');
         return;
       }
+      setErrors({});
       setStep(3);
     }
   };
@@ -680,22 +1150,59 @@ export default function EmployerEmergencyPost() {
   };
 
   const handleSubmit = async () => {
+    const newErrors = {};
     if (isOtherCategory && !customCategory.trim()) {
-      showToast('Vui lòng nhập tên danh mục khác!', 'warning');
-      return;
+      newErrors.customCategory = 'Vui lòng nhập tên danh mục khác!';
     }
     if (!address.trim()) {
-      showToast('Vui lòng nhập địa chỉ làm việc hoặc nhấn nút GPS!', 'warning');
-      return;
+      newErrors.address = 'Vui lòng nhập địa chỉ làm việc hoặc nhấn nút GPS!';
     }
     if (!latitude || !longitude || parseFloat(latitude) === 0 || parseFloat(longitude) === 0) {
-      showToast('Vui lòng nhấn nút "Lấy vị trí GPS" để xác định tọa độ địa điểm làm việc!', 'warning');
+      newErrors.gps = 'Vui lòng định vị vị trí trên Bản đồ hoặc nhấn nút GPS Hiện tại!';
+    }
+    
+    // Validate date format YYYY-MM-DD
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!date.trim() || !dateRegex.test(date.trim())) {
+      newErrors.date = 'Ngày làm việc không đúng định dạng YYYY-MM-DD (ví dụ: 2026-06-09)!';
+    } else {
+      const parsedDate = new Date(date.trim());
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      if (isNaN(parsedDate.getTime()) || parsedDate < today) {
+        newErrors.date = 'Ngày làm việc không hợp lệ hoặc đã ở trong quá khứ!';
+      }
+    }
+
+    // Validate time format HH:MM
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    let hasTimeError = false;
+    if (!startTime.trim() || !timeRegex.test(startTime.trim())) {
+      newErrors.startTime = 'Giờ bắt đầu không đúng định dạng HH:MM (ví dụ: 08:00)!';
+      hasTimeError = true;
+    }
+    if (!endTime.trim() || !timeRegex.test(endTime.trim())) {
+      newErrors.endTime = 'Giờ kết thúc không đúng định dạng HH:MM (ví dụ: 17:00)!';
+      hasTimeError = true;
+    }
+
+    if (!hasTimeError) {
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+      const startTotalMinutes = startHour * 60 + startMin;
+      const endTotalMinutes = endHour * 60 + endMin;
+      if (endTotalMinutes <= startTotalMinutes) {
+        newErrors.endTime = 'Giờ kết thúc phải sau giờ bắt đầu!';
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      showToast('Vui lòng sửa các lỗi nhập liệu trước khi đăng tin!', 'warning');
       return;
     }
-    if (!date.trim() || !startTime.trim() || !endTime.trim()) {
-      showToast('Vui lòng nhập thời gian ca làm việc!', 'warning');
-      return;
-    }
+
+    setErrors({});
 
     // Map custom category safely to other category code
     let finalCategoryId = categoryId;
@@ -728,7 +1235,7 @@ export default function EmployerEmergencyPost() {
       description: finalDescription,
       requirements,
       categoryId: finalCategoryId,
-      salary,
+      salary: isEmergency ? Math.round((parseFloat(salary.replace(/,/g, '')) || 0) * 1.3).toString() : salary,
       skillNames: finalSelectedSkills,
       address,
       latitude,
@@ -828,6 +1335,7 @@ export default function EmployerEmergencyPost() {
                     value={title}
                     onChangeText={setTitle}
                   />
+                  {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
 
                   <Text style={styles.inputLabel}>Danh mục công việc</Text>
                   <View style={styles.categoryGrid}>
@@ -852,6 +1360,7 @@ export default function EmployerEmergencyPost() {
                       );
                     })}
                   </View>
+                  {errors.categoryId && <Text style={styles.errorText}>{errors.categoryId}</Text>}
 
                   {isOtherCategory && (
                     <View style={{ marginBottom: 16 }}>
@@ -863,6 +1372,7 @@ export default function EmployerEmergencyPost() {
                         value={customCategory}
                         onChangeText={setCustomCategory}
                       />
+                      {errors.customCategory && <Text style={styles.errorText}>{errors.customCategory}</Text>}
                     </View>
                   )}
 
@@ -876,6 +1386,7 @@ export default function EmployerEmergencyPost() {
                     value={description}
                     onChangeText={setDescription}
                   />
+                  {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
 
                   <Text style={styles.inputLabel}>Yêu cầu đối với ứng viên</Text>
                   <TextInput
@@ -895,6 +1406,23 @@ export default function EmployerEmergencyPost() {
                 <View style={styles.bentoCard}>
                   <Text style={styles.sectionHeader}>QUYỀN LỢI & KỸ NĂNG</Text>
 
+                  {/* Emergency Toggle Switch */}
+                  <View style={[styles.emergencyCard, { marginBottom: 20 }]}>
+                    <View style={styles.emergencyTextSection}>
+                      <Text style={styles.emergencyCardTitle}>🔥 CHẾ ĐỘ ĐĂNG CA GẤP (EMERGENCY)</Text>
+                      <Text style={styles.emergencyCardDesc}>
+                        Tự động nhân hệ số cấp bách (+30% lương cơ bản), đẩy tin tức thì qua thông báo tới các ứng viên trong bán kính 3km.
+                      </Text>
+                    </View>
+                    <Switch
+                      trackColor={{ false: '#767577', true: theme.colors.danger }}
+                      thumbColor={isEmergency ? '#FFFFFF' : '#f4f3f4'}
+                      ios_backgroundColor="#3e3e3e"
+                      onValueChange={toggleEmergency}
+                      value={isEmergency}
+                    />
+                  </View>
+
                   <Text style={styles.inputLabel}>Mức lương đề xuất (VND/giờ)</Text>
                   <View style={styles.salaryInputContainer}>
                     <TextInput
@@ -907,6 +1435,37 @@ export default function EmployerEmergencyPost() {
                     />
                     <Text style={styles.salaryCurrency}>VND</Text>
                   </View>
+                  {errors.salary && <Text style={styles.errorText}>{errors.salary}</Text>}
+
+                  {isEmergency && salary.trim() !== '' && (
+                    <View style={{ marginTop: 8, marginBottom: 16 }}>
+                      <Text style={[styles.inputLabel, { color: theme.colors.danger }]}>🔥 Mức lương thực tế ca gấp (+30%)</Text>
+                      <View style={[
+                        styles.premiumInput, 
+                        { 
+                          backgroundColor: '#FEF2F2', 
+                          borderColor: '#FCA5A5', 
+                          flexDirection: 'row', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between',
+                          paddingVertical: 14,
+                          marginBottom: 0
+                        }
+                      ]}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: '#EF4444' }}>
+                          {(() => {
+                            const base = parseFloat(salary.replace(/,/g, ''));
+                            if (isNaN(base) || base <= 0) return '';
+                            const emergencySal = Math.round(base * 1.3);
+                            return `${emergencySal.toLocaleString('vi-VN')} VND/giờ`;
+                          })()}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444', backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                          ĐÃ CỘNG 30%
+                        </Text>
+                      </View>
+                    </View>
+                  )}
 
                   <Text style={styles.inputLabel}>Kỹ năng cần thiết</Text>
                   <View style={styles.skillsContainer}>
@@ -941,6 +1500,7 @@ export default function EmployerEmergencyPost() {
                         value={customSkillInput}
                         onChangeText={setCustomSkillInput}
                       />
+                      {errors.customSkillInput && <Text style={styles.errorText}>{errors.customSkillInput}</Text>}
                     </View>
                   )}
 
@@ -957,31 +1517,15 @@ export default function EmployerEmergencyPost() {
                 <View style={styles.bentoCard}>
                   <Text style={styles.sectionHeader}>ĐỊA ĐIỂM & THỜI GIAN</Text>
 
-                  {/* Emergency Toggle Switch */}
-                  <View style={styles.emergencyCard}>
-                    <View style={styles.emergencyTextSection}>
-                      <Text style={styles.emergencyCardTitle}>🔥 CHẾ ĐỘ ĐĂNG CA GẤP (EMERGENCY)</Text>
-                      <Text style={styles.emergencyCardDesc}>
-                        Tự động nhân hệ số cấp bách (+30% lương cơ bản), đẩy tin tức thì qua thông báo tới các ứng viên trong bán kính 3km.
-                      </Text>
-                    </View>
-                    <Switch
-                      trackColor={{ false: '#767577', true: theme.colors.danger }}
-                      thumbColor={isEmergency ? '#FFFFFF' : '#f4f3f4'}
-                      ios_backgroundColor="#3e3e3e"
-                      onValueChange={toggleEmergency}
-                      value={isEmergency}
-                    />
-                  </View>
-
                   <Text style={styles.inputLabel}>Địa điểm làm việc</Text>
                   <View style={{ position: 'relative', marginBottom: 16, zIndex: 10 }}>
                     <TextInput
-                      style={[styles.premiumInput, { paddingRight: 105, marginBottom: 0 }]}
+                      style={[styles.premiumInput, { paddingRight: 105, marginBottom: 0, height: 64, textAlignVertical: 'top', paddingTop: 10, paddingBottom: 10 }]}
                       placeholder="Nhập địa chỉ hoặc nhấn nút GPS bên dưới..."
                       placeholderTextColor={theme.colors.textLight}
                       value={address}
                       onChangeText={handleAddressChange}
+                      multiline={true}
                     />
                     <TouchableOpacity
                       style={{
@@ -1037,6 +1581,7 @@ export default function EmployerEmergencyPost() {
                       </View>
                     )}
                   </View>
+                  {errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
 
                   {/* Location Buttons Row */}
                   <View style={styles.locationButtonsRow}>
@@ -1080,37 +1625,50 @@ export default function EmployerEmergencyPost() {
                       </View>
                     </View>
                   )}
+                  {errors.gps && <Text style={styles.errorText}>{errors.gps}</Text>}
 
                   {/* DateTime Inputs */}
                   <Text style={[styles.inputLabel, { marginTop: 12 }]}>Ngày làm việc (YYYY-MM-DD)</Text>
-                  <TextInput
-                    style={styles.premiumInput}
-                    placeholder="2026-06-09"
-                    placeholderTextColor={theme.colors.textLight}
-                    value={date}
-                    onChangeText={setDate}
-                  />
+                  <TouchableOpacity
+                    style={styles.pickerSelectorButton}
+                    onPress={() => setCalendarVisible(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="calendar-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                    <Text style={[styles.pickerSelectorText, date && styles.pickerSelectorTextFilled]}>
+                      {date || 'Chọn ngày làm việc...'}
+                    </Text>
+                  </TouchableOpacity>
+                  {errors.date && <Text style={styles.errorText}>{errors.date}</Text>}
 
                   <View style={styles.timeRow}>
                     <View style={{ flex: 1, marginRight: 8 }}>
                       <Text style={styles.inputLabel}>Giờ bắt đầu (HH:MM)</Text>
-                      <TextInput
-                        style={styles.premiumInput}
-                        placeholder="08:00"
-                        placeholderTextColor={theme.colors.textLight}
-                        value={startTime}
-                        onChangeText={setStartTime}
-                      />
+                      <TouchableOpacity
+                        style={styles.pickerSelectorButton}
+                        onPress={() => setStartTimeVisible(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="time-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                        <Text style={[styles.pickerSelectorText, startTime && styles.pickerSelectorTextFilled]}>
+                          {startTime || 'Chọn giờ...'}
+                        </Text>
+                      </TouchableOpacity>
+                      {errors.startTime && <Text style={styles.errorText}>{errors.startTime}</Text>}
                     </View>
                     <View style={{ flex: 1, marginLeft: 8 }}>
                       <Text style={styles.inputLabel}>Giờ kết thúc (HH:MM)</Text>
-                      <TextInput
-                        style={styles.premiumInput}
-                        placeholder="17:00"
-                        placeholderTextColor={theme.colors.textLight}
-                        value={endTime}
-                        onChangeText={setEndTime}
-                      />
+                      <TouchableOpacity
+                        style={styles.pickerSelectorButton}
+                        onPress={() => setEndTimeVisible(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="time-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                        <Text style={[styles.pickerSelectorText, endTime && styles.pickerSelectorTextFilled]}>
+                          {endTime || 'Chọn giờ...'}
+                        </Text>
+                      </TouchableOpacity>
+                      {errors.endTime && <Text style={styles.errorText}>{errors.endTime}</Text>}
                     </View>
                   </View>
                 </View>
@@ -1153,6 +1711,67 @@ export default function EmployerEmergencyPost() {
         </View>
       </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Date & Time Picker Modals */}
+      <CustomCalendarModal
+        visible={calendarVisible}
+        value={date}
+        onClose={() => setCalendarVisible(false)}
+        onSelect={(selectedDate) => {
+          setDate(selectedDate);
+          if (errors.date) {
+            setErrors(prev => ({ ...prev, date: null }));
+          }
+        }}
+      />
+
+      <CustomTimePickerModal
+        visible={startTimeVisible}
+        value={startTime}
+        title="Chọn giờ bắt đầu"
+        onClose={() => setStartTimeVisible(false)}
+        onSelect={(selectedTime) => {
+          setStartTime(selectedTime);
+          let newErrors = { ...errors };
+          delete newErrors.startTime;
+          if (endTime) {
+            const [startHour, startMin] = selectedTime.split(':').map(Number);
+            const [endHour, endMin] = endTime.split(':').map(Number);
+            const startTotalMinutes = startHour * 60 + startMin;
+            const endTotalMinutes = endHour * 60 + endMin;
+            if (endTotalMinutes <= startTotalMinutes) {
+              newErrors.startTime = 'Giờ bắt đầu phải trước giờ kết thúc!';
+            } else {
+              delete newErrors.endTime;
+            }
+          }
+          setErrors(newErrors);
+        }}
+      />
+
+      <CustomTimePickerModal
+        visible={endTimeVisible}
+        value={endTime}
+        title="Chọn giờ kết thúc"
+        onClose={() => setEndTimeVisible(false)}
+        onSelect={(selectedTime) => {
+          setEndTime(selectedTime);
+          let newErrors = { ...errors };
+          delete newErrors.endTime;
+          if (startTime) {
+            const [startHour, startMin] = startTime.split(':').map(Number);
+            const [endHour, endMin] = selectedTime.split(':').map(Number);
+            const startTotalMinutes = startHour * 60 + startMin;
+            const endTotalMinutes = endHour * 60 + endMin;
+            if (endTotalMinutes <= startTotalMinutes) {
+              newErrors.endTime = 'Giờ kết thúc phải sau giờ bắt đầu!';
+            } else {
+              delete newErrors.startTime;
+            }
+          }
+          setErrors(newErrors);
+        }}
+      />
 
       {/* Map Picker Modal */}
       <Modal
@@ -1426,6 +2045,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: -10,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  pickerSelectorButton: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  pickerSelectorText: {
+    fontSize: 14,
+    color: '#94A3B8',
+    fontFamily: FONT_REGULAR,
+  },
+  pickerSelectorTextFilled: {
+    color: '#0F172A',
+    fontWeight: '600',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1605,13 +2252,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 16,
+    paddingBottom: 12,
     fontSize: 14,
     color: '#0F172A',
     fontFamily: FONT_REGULAR,
     marginBottom: 16,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
+    includeFontPadding: false,
   },
   textArea: {
     height: 100,

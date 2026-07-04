@@ -25,25 +25,29 @@ import { translateError } from './useAuth';
 
 const formatTimeVN = (dateInput) => {
   if (!dateInput) return '';
-  const str = typeof dateInput === 'string' ? dateInput : new Date(dateInput).toISOString();
-  const parts = str.split('T');
-  if (parts.length === 2) {
-    return parts[1].substring(0, 5);
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return '';
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  } catch (e) {
+    return '';
   }
-  return '';
 };
 
 const formatDateVN = (dateInput) => {
   if (!dateInput) return '';
-  const str = typeof dateInput === 'string' ? dateInput : new Date(dateInput).toISOString();
-  const parts = str.split('T');
-  if (parts.length >= 1) {
-    const dateParts = parts[0].split('-');
-    if (dateParts.length === 3) {
-      return `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-    }
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return '';
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch (e) {
+    return '';
   }
-  return '';
 };
 
 const checkIsEmergency = (title, description) => {

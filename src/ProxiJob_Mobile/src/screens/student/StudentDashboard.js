@@ -22,10 +22,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { getStudentProfileApi, activateStudentProfileApi, deactivateStudentProfileApi } from '../../api/studentApi';
+import { getCategoriesApi } from '../../api/jobs';
 
 const getLeftBorderColorByCategory = (categoryName, shopName) => {
   const target = (categoryName || shopName || '').trim().toLowerCase();
-  
+
   if (target.includes('giao hàng') || target.includes('delivery') || target.includes('shipper')) {
     return '#EF4444'; // Red
   }
@@ -42,6 +43,57 @@ const getLeftBorderColorByCategory = (categoryName, shopName) => {
     return '#EC4899'; // Pink
   }
   return '#0D9488'; // Teal default
+};
+
+const getCategoryColors = (categoryName, shopName) => {
+  const target = (categoryName || shopName || '').trim().toLowerCase();
+
+  if (target.includes('giao hàng') || target.includes('delivery') || target.includes('shipper')) {
+    return {
+      primary: '#EF4444', // Red
+      bgLight: '#FEF2F2',
+      borderLight: '#FCA5A5',
+      borderUrgent: '#FCA5A5',
+    };
+  }
+  if (target.includes('gia sư') || target.includes('tutor') || target.includes('dạy') || target.includes('học')) {
+    return {
+      primary: '#2563EB', // Blue
+      bgLight: '#EFF6FF',
+      borderLight: '#BFDBFE',
+      borderUrgent: '#93C5FD',
+    };
+  }
+  if (target.includes('sửa chữa') || target.includes('repair') || target.includes('bảo trì') || target.includes('kỹ thuật')) {
+    return {
+      primary: '#F59E0B', // Amber
+      bgLight: '#FFFBEB',
+      borderLight: '#FDE68A',
+      borderUrgent: '#FCD34D',
+    };
+  }
+  if (target.includes('phục vụ') || target.includes('waiter') || target.includes('chạy bàn') || target.includes('phụ vụ')) {
+    return {
+      primary: '#8B5CF6', // Purple
+      bgLight: '#F5F3FF',
+      borderLight: '#DDD6FE',
+      borderUrgent: '#C084FC',
+    };
+  }
+  if (target.includes('thú cưng') || target.includes('pet')) {
+    return {
+      primary: '#EC4899', // Pink
+      bgLight: '#FDF2F8',
+      borderLight: '#FBCFE8',
+      borderUrgent: '#F472B6',
+    };
+  }
+  return {
+    primary: '#0D9488', // Teal
+    bgLight: '#F0FDFA',
+    borderLight: '#CCFBF1',
+    borderUrgent: '#5EEAD4',
+  };
 };
 
 const getShopBgColor = (shopName) => {
@@ -68,6 +120,15 @@ const getShopInitials = (shopName) => {
   return cleanName.substring(0, 2).toUpperCase();
 };
 
+const GOOGLE_MAPS_API_KEY = 'CvNapWs3C3Vt7ZTRZf0uZliN9v3q8TBJKxd2CEcW';
+
+const cleanAddress = (rawAddress) => {
+  if (!rawAddress) return '';
+  let cleaned = rawAddress.replace(/,\s*(Việt Nam|Vietnam)\s*$/i, '');
+  cleaned = cleaned.replace(/,\s*\d{5,6}\b/g, '');
+  return cleaned.trim();
+};
+
 const getDistrict = (address) => {
   if (!address) return '';
   const match = address.match(/(Quận \d+|Q\.\s*\d+|Quận [a-zA-ZÀ-ỹ\s]+|Bình Thạnh|Gò Vấp|Thủ Đức|Phú Nhuận|Tân Bình|Tân Phú|Bình Tân)/i);
@@ -76,6 +137,149 @@ const getDistrict = (address) => {
 
 // Module-level state to persist view mode (list/map) across unmounts
 let globalViewMode = 'list';
+
+const ShiftCard = React.memo(({ shift, navigateTo }) => {
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    let anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: false,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 900,
+          useNativeDriver: false,
+        })
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [pulseAnim]);
+
+  const isApplied = shift.status === 'applied';
+  const isApproved = shift.status === 'approved' || shift.status === 'checkin_active' || shift.status === 'completed';
+  const isEmergency = shift.isEmergency;
+  const leftBorderColor = getLeftBorderColorByCategory(shift.categoryName, shift.shopName);
+  const catColors = getCategoryColors(shift.categoryName, shift.shopName);
+
+  return (
+    <TouchableOpacity
+      style={styles.cardShadowContainer}
+      activeOpacity={0.95}
+      onPress={() => navigateTo('job_detail', { shiftId: shift.id })}
+    >
+      <Animated.View style={[
+        styles.cardContent,
+        { borderLeftColor: leftBorderColor, borderLeftWidth: 6 },
+        isEmergency && {
+          borderLeftWidth: 8,
+          backgroundColor: pulseAnim.interpolate({
+            inputRange: [0.3, 1],
+            outputRange: ['#FFFFFF', catColors.bgLight]
+          }),
+          borderColor: pulseAnim.interpolate({
+            inputRange: [0.3, 1],
+            outputRange: ['#F1F5F9', catColors.borderLight]
+          }),
+          borderWidth: 1.5,
+          shadowColor: catColors.primary,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: pulseAnim.interpolate({
+            inputRange: [0.3, 1],
+            outputRange: [0.05, 0.35]
+          }),
+          shadowRadius: 12,
+          elevation: 4
+        }
+      ]}>
+        <View style={styles.cardTopRow}>
+          <View style={styles.logoAndName}>
+            <View style={[styles.shopLogoCircle, { backgroundColor: getShopBgColor(shift.shopName) }]}>
+              <Text style={[styles.shopLogoText, { color: getShopTextColor(shift.shopName) }]}>
+                {getShopInitials(shift.shopName)}
+              </Text>
+            </View>
+            <View style={styles.shopRatingRow}>
+              <Ionicons name="star" size={12} color="#FFB000" style={{ marginRight: 2 }} />
+              <Text style={styles.shopRatingText}>{shift.rating || '5.0'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.tagRow}>
+            {isEmergency && (
+              <Animated.View style={[
+                styles.emergencyTag,
+                {
+                  backgroundColor: catColors.primary,
+                  borderColor: catColors.borderUrgent,
+                  opacity: pulseAnim,
+                  transform: [{
+                    scale: pulseAnim.interpolate({
+                      inputRange: [0.3, 1],
+                      outputRange: [0.96, 1.04]
+                    })
+                  }]
+                }
+              ]}>
+                <Text style={styles.emergencyTagText}>🔥 TUYỂN GẤP</Text>
+              </Animated.View>
+            )}
+            <View style={styles.jobTypeTag}>
+              <Text style={styles.jobTypeTagText}>Part-time</Text>
+            </View>
+            {isApplied && (
+              <View style={styles.appliedStatusTag}>
+                <Text style={styles.appliedStatusTagText}>Đang chờ duyệt</Text>
+              </View>
+            )}
+            {isApproved && (
+              <View style={styles.approvedStatusTag}>
+                <Text style={styles.approvedStatusTagText}>Đã duyệt</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <Text style={styles.jobTitleText} numberOfLines={2}>{shift.title}</Text>
+
+        <Text style={styles.shopSubtitleText} numberOfLines={1}>
+          {shift.shopName} • {getDistrict(shift.address) || 'TP.HCM'}
+        </Text>
+
+        <View style={styles.timeInfoRow}>
+          <Ionicons name="time-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
+          <Text style={styles.timeInfoText}>{shift.date} • {shift.time}</Text>
+        </View>
+
+        {shift.address ? (
+          <View style={styles.addressInfoRow}>
+            <Ionicons name="location-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
+            <Text style={styles.addressInfoText} numberOfLines={1} ellipsizeMode="tail">
+              {shift.address}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.cardFooterRow}>
+          <Text style={styles.salaryText}>
+            {(shift.hourlyRate).toLocaleString('vi-VN')} đ/h
+            <Text style={styles.distanceText}>
+              {shift.noGps ? '' : ` • ${shift.distanceKm} km`}
+            </Text>
+          </Text>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+});
+
+// Module-level state to persist current page across unmounts
+let globalCurrentPage = 1;
 
 export default function StudentDashboard() {
   const {
@@ -90,11 +294,30 @@ export default function StudentDashboard() {
 
   const { data: shifts = [], refetch: loadShifts } = useShiftsQuery(user, studentCoords);
 
-  const [viewMode, setViewModeState] = useState(globalViewMode);
-  const setViewMode = (mode) => {
-    globalViewMode = mode;
+  const [viewMode, setViewModeState] = useState('list');
+
+  const setViewMode = async (mode) => {
+    try {
+      await AsyncStorage.setItem('@student_view_mode', mode);
+    } catch (e) {
+      console.log('Error saving view mode:', e);
+    }
     setViewModeState(mode);
   };
+
+  useEffect(() => {
+    const loadViewMode = async () => {
+      try {
+        const savedMode = await AsyncStorage.getItem('@student_view_mode');
+        if (savedMode) {
+          setViewModeState(savedMode);
+        }
+      } catch (e) {
+        console.log('Error loading view mode:', e);
+      }
+    };
+    loadViewMode();
+  }, []);
 
   const [pulseAnim] = useState(new Animated.Value(0.3));
 
@@ -115,14 +338,61 @@ export default function StudentDashboard() {
     ).start();
   }, [pulseAnim]);
 
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState(null);
+  const [categories, setCategories] = useState([
+    { id: 1, name: 'Giao hàng' },
+    { id: 2, name: 'Dịch vụ thú cưng' },
+    { id: 3, name: 'Gia sư' },
+    { id: 4, name: 'Sửa chữa' },
+    { id: 5, name: 'Phục vụ' },
+    { id: 6, name: 'Khác' }
+  ]);
+
+  useEffect(() => {
+    getCategoriesApi().then(res => {
+      if (res && res.length > 0) setCategories(res);
+    }).catch(e => console.log('Error loading categories in StudentDashboard:', e));
+  }, []);
+
   const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [mapCenter, setMapCenter] = useState({
+    lat: studentCoords?.latitude || 10.7769,
+    lng: studentCoords?.longitude || 106.7009
+  });
+  const [tempCoords, setTempCoords] = useState({
+    lat: studentCoords?.latitude || 10.7769,
+    lng: studentCoords?.longitude || 106.7009
+  });
+  const [searchText, setSearchText] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
+  useEffect(() => {
+    if (locationModalVisible && studentCoords) {
+      setMapCenter({
+        lat: studentCoords.latitude,
+        lng: studentCoords.longitude
+      });
+      setTempCoords({
+        lat: studentCoords.latitude,
+        lng: studentCoords.longitude
+      });
+    }
+  }, [locationModalVisible, studentCoords]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
   const [radius, setRadius] = useState(999.0); // Default to 'Tất cả' (All)
   const [profileAddress, setProfileAddress] = useState('');
   const [gpsLoading, setGpsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPageState] = useState(globalCurrentPage);
+  const setCurrentPage = (page) => {
+    globalCurrentPage = typeof page === 'function' ? page(globalCurrentPage) : page;
+    setCurrentPageState(page);
+  };
+  const isInitialMount = useRef(true);
   const [isAvailable, setIsAvailable] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const toggleAnim = useRef(new Animated.Value(0)).current;
@@ -208,21 +478,42 @@ export default function StudentDashboard() {
 
   const handleMapSelectLocation = async (lat, lng) => {
     let addressName = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
-        headers: {
-          'User-Agent': 'ProxiJobApp/1.0'
+    let success = false;
+
+    if (GOOGLE_MAPS_API_KEY) {
+      try {
+        const response = await fetch(
+          `https://rsapi.goong.io/Geocode?latlng=${lat},${lng}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.results && data.results.length > 0) {
+            addressName = cleanAddress(data.results[0].formatted_address);
+            success = true;
+          }
         }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const displayName = data.display_name || '';
-        const addressVal = data.address?.road || data.address?.suburb || data.address?.quarter || data.address?.city_district || displayName.split(',')[0] || 'Vị trí bản đồ';
-        const cityVal = data.address?.city || data.address?.town || data.address?.state || '';
-        addressName = cityVal ? `${addressVal}, ${cityVal}` : addressVal;
+      } catch (e) {
+        console.log('[StudentDashboard] Goong reverse geocode error, falling back to OSM:', e);
       }
-    } catch (err) {
-      console.log('[StudentDashboard] reverse geocode error:', err);
+    }
+
+    if (!success) {
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+          headers: {
+            'User-Agent': 'ProxiJobApp/1.0'
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const displayName = data.display_name || '';
+          const addressVal = data.address?.road || data.address?.suburb || data.address?.quarter || data.address?.city_district || displayName.split(',')[0] || 'Vị trí bản đồ';
+          const cityVal = data.address?.city || data.address?.town || data.address?.state || '';
+          addressName = cityVal ? `${addressVal}, ${cityVal}` : addressVal;
+        }
+      } catch (err) {
+        console.log('[StudentDashboard] reverse geocode error:', err);
+      }
     }
 
     const coords = { latitude: lat, longitude: lng };
@@ -239,9 +530,134 @@ export default function StudentDashboard() {
       console.log('[StudentDashboard] Error saving map click selection:', err);
     }
 
+    setLocationModalVisible(false);
     await loadShifts(true);
     if (showToast) {
       showToast(`Đã cập nhật vị trí tìm việc: ${addressName}`, 'success');
+    }
+  };
+
+  const handleMapMessage = (event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.lat && data.lng) {
+        setTempCoords({ lat: data.lat, lng: data.lng });
+      }
+    } catch (e) {
+      console.log('[LocationModal Map Message Error]:', e);
+    }
+  };
+
+  const handleConfirmLocation = async () => {
+    await handleMapSelectLocation(tempCoords.lat, tempCoords.lng);
+  };
+
+  const handleSearchAddress = async () => {
+    if (!searchText.trim()) return;
+    try {
+      setSearchLoading(true);
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchText)}&format=json&limit=1`, {
+        headers: {
+          'User-Agent': 'ProxiJobApp/1.0'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lng = parseFloat(data[0].lon);
+          setMapCenter({ lat, lng });
+          setTempCoords({ lat, lng });
+        } else {
+          if (showToast) {
+            showToast('Không tìm thấy địa điểm này!', 'warning');
+          }
+        }
+      }
+    } catch (err) {
+      console.log('[Search Address Error]:', err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleSearchTextChange = async (text) => {
+    setSearchText(text);
+    if (text.length < 4) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      setSuggestionsLoading(true);
+      if (GOOGLE_MAPS_API_KEY) {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/AutoComplete?input=${encodeURIComponent(text)}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.predictions) {
+            const formatted = data.predictions.map(item => ({
+              display_name: item.description,
+              place_id: item.place_id,
+              isGoogle: true
+            }));
+            setAddressSuggestions(formatted);
+            setShowSuggestions(formatted.length > 0);
+          }
+        }
+      } else {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5`,
+          { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const formatted = data.map(item => ({
+            display_name: cleanAddress(item.display_name),
+            lat: parseFloat(item.lat),
+            lon: parseFloat(item.lon)
+          }));
+          setAddressSuggestions(formatted);
+          setShowSuggestions(formatted.length > 0);
+        }
+      }
+    } catch (e) {
+      console.log('Suggestions fetch error:', e);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  };
+
+  const handleSelectSuggestion = async (suggestion) => {
+    setSearchText(suggestion.display_name);
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
+
+    try {
+      if (suggestion.isGoogle && GOOGLE_MAPS_API_KEY) {
+        setSearchLoading(true);
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/Detail?place_id=${suggestion.place_id}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.result && data.result.geometry) {
+            const lat = data.result.geometry.location.lat;
+            const lng = data.result.geometry.location.lng;
+            setMapCenter({ lat, lng });
+            setTempCoords({ lat, lng });
+          }
+        }
+      } else if (suggestion.lat && suggestion.lon) {
+        setMapCenter({ lat: suggestion.lat, lng: suggestion.lon });
+        setTempCoords({ lat: suggestion.lat, lng: suggestion.lon });
+      }
+    } catch (err) {
+      console.log('Error fetching suggestion details:', err);
+    } finally {
+      setSearchLoading(false);
     }
   };
 
@@ -337,7 +753,7 @@ export default function StudentDashboard() {
 
   // Geocode coords back into a text label for initial load/Guest
   useEffect(() => {
-    const reverseGeocode = async () => {
+    const reverseGeocodeCoords = async () => {
       if (!studentCoords || !studentCoords.latitude || !studentCoords.longitude) return;
       if (isProfileAddressSetRef.current) return;
 
@@ -346,35 +762,59 @@ export default function StudentDashboard() {
         return;
       }
 
-      try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${studentCoords.latitude}&lon=${studentCoords.longitude}&format=json`, {
-          headers: {
-            'User-Agent': 'ProxiJobApp/1.0'
+      let addressName = `${studentCoords.latitude.toFixed(4)}, ${studentCoords.longitude.toFixed(4)}`;
+      let success = false;
+
+      if (GOOGLE_MAPS_API_KEY) {
+        try {
+          const response = await fetch(
+            `https://rsapi.goong.io/Geocode?latlng=${studentCoords.latitude},${studentCoords.longitude}&api_key=${GOOGLE_MAPS_API_KEY}`
+          );
+          if (response.ok) {
+            const data = await response.json();
+            if (data.status === 'OK' && data.results && data.results.length > 0) {
+              addressName = cleanAddress(data.results[0].formatted_address);
+              success = true;
+            }
           }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const displayName = data.display_name || '';
-          const addressVal = data.address?.road || data.address?.suburb || data.address?.quarter || data.address?.city_district || displayName.split(',')[0] || 'Vị trí hiện tại';
-          const cityVal = data.address?.city || data.address?.town || data.address?.state || '';
-          const fullLabel = cityVal ? `${addressVal}, ${cityVal}` : addressVal;
-          setProfileAddress(fullLabel);
-        } else {
-          setProfileAddress(`${studentCoords.latitude.toFixed(4)}, ${studentCoords.longitude.toFixed(4)}`);
+        } catch (e) {
+          console.log('[StudentDashboard] Initial load Goong reverse geocode error, falling back to OSM:', e);
         }
-      } catch (err) {
-        console.log('[StudentDashboard] Reverse geocode error:', err);
-        setProfileAddress(`${studentCoords.latitude.toFixed(4)}, ${studentCoords.longitude.toFixed(4)}`);
       }
+
+      if (!success) {
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${studentCoords.latitude}&lon=${studentCoords.longitude}&format=json`, {
+            headers: {
+              'User-Agent': 'ProxiJobApp/1.0'
+            }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            const displayName = data.display_name || '';
+            const addressVal = data.address?.road || data.address?.suburb || data.address?.quarter || data.address?.city_district || displayName.split(',')[0] || 'Vị trí hiện tại';
+            const cityVal = data.address?.city || data.address?.town || data.address?.state || '';
+            addressName = cityVal ? `${addressVal}, ${cityVal}` : addressVal;
+          }
+        } catch (err) {
+          console.log('[StudentDashboard] Initial load OSM geocode error:', err);
+        }
+      }
+
+      setProfileAddress(addressName);
     };
 
-    reverseGeocode();
+    reverseGeocodeCoords();
   }, [studentCoords]);
 
-  // Reset page when search query, radius or shifts change
+  // Reset page when search query or radius changes, skipping initial mount
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     setCurrentPage(1);
-  }, [searchQuery, radius, shifts.length]);
+  }, [searchQuery, radius]);
 
   // Distance processor
   const processedShifts = (shifts || []).map(shift => {
@@ -436,7 +876,13 @@ export default function StudentDashboard() {
         (shift.title || '').toLowerCase().includes(q) ||
         (shift.shopName || '').toLowerCase().includes(q);
 
-      return matchRadius && matchQuery;
+      let matchCategory = true;
+      if (selectedCategoryFilter) {
+        const categoryName = shift.categoryName || shift.shopName || '';
+        matchCategory = categoryName.trim().toLowerCase().includes(selectedCategoryFilter.toLowerCase());
+      }
+
+      return matchRadius && matchQuery && matchCategory;
     })
     .sort(compareShifts);
 
@@ -450,115 +896,6 @@ export default function StudentDashboard() {
     currentPage * ITEMS_PER_PAGE
   );
 
-  const renderShiftCard = (shift, index) => {
-    const isApplied = shift.status === 'applied';
-    const isApproved = shift.status === 'approved' || shift.status === 'checkin_active' || shift.status === 'completed';
-    const isEmergency = shift.isEmergency;
-    const leftBorderColor = getLeftBorderColorByCategory(shift.categoryName, shift.shopName);
-
-    return (
-      <TouchableOpacity
-        key={shift.id}
-        style={styles.cardShadowContainer}
-        activeOpacity={0.95}
-        onPress={() => navigateTo('job_detail', { shiftId: shift.id })}
-      >
-        <Animated.View style={[
-          styles.cardContent,
-          { borderLeftColor: leftBorderColor, borderLeftWidth: 6 },
-          isEmergency && {
-            borderLeftColor: pulseAnim.interpolate({
-              inputRange: [0.3, 1],
-              outputRange: ['#EF4444', '#F59E0B']
-            }),
-            borderLeftWidth: 8,
-            backgroundColor: pulseAnim.interpolate({
-              inputRange: [0.3, 1],
-              outputRange: ['#FFFFFF', '#FFF1F2']
-            }),
-            borderColor: pulseAnim.interpolate({
-              inputRange: [0.3, 1],
-              outputRange: ['#F1F5F9', '#FDA4AF']
-            }),
-            borderWidth: 1.5,
-            shadowColor: '#EF4444',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: pulseAnim.interpolate({
-              inputRange: [0.3, 1],
-              outputRange: [0.05, 0.35]
-            }),
-            shadowRadius: 12,
-            elevation: 4
-          }
-        ]}>
-          <View style={styles.cardTopRow}>
-            <View style={styles.logoAndName}>
-              <View style={[styles.shopLogoCircle, { backgroundColor: getShopBgColor(shift.shopName) }]}>
-                <Text style={[styles.shopLogoText, { color: getShopTextColor(shift.shopName) }]}>
-                  {getShopInitials(shift.shopName)}
-                </Text>
-              </View>
-              <View style={styles.shopRatingRow}>
-                <Ionicons name="star" size={12} color="#FFB000" style={{ marginRight: 2 }} />
-                <Text style={styles.shopRatingText}>{shift.rating || '5.0'}</Text>
-              </View>
-            </View>
-
-            <View style={styles.tagRow}>
-              {isEmergency && (
-                <Animated.View style={[styles.emergencyTag, { opacity: pulseAnim }]}>
-                  <Text style={styles.emergencyTagText}>Tuyển Gấp</Text>
-                </Animated.View>
-              )}
-              <View style={styles.jobTypeTag}>
-                <Text style={styles.jobTypeTagText}>Part-time</Text>
-              </View>
-              {isApplied && (
-                <View style={styles.appliedStatusTag}>
-                  <Text style={styles.appliedStatusTagText}>Đang chờ duyệt</Text>
-                </View>
-              )}
-              {isApproved && (
-                <View style={styles.approvedStatusTag}>
-                  <Text style={styles.approvedStatusTagText}>Đã duyệt</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          <Text style={styles.jobTitleText} numberOfLines={2}>{shift.title}</Text>
-
-          <Text style={styles.shopSubtitleText} numberOfLines={1}>
-            {shift.shopName} • {getDistrict(shift.address) || 'TP.HCM'}
-          </Text>
-
-          <View style={styles.timeInfoRow}>
-            <Ionicons name="time-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
-            <Text style={styles.timeInfoText}>{shift.date} • {shift.time}</Text>
-          </View>
-
-          {shift.address ? (
-            <View style={styles.addressInfoRow}>
-              <Ionicons name="location-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
-              <Text style={styles.addressInfoText} numberOfLines={1} ellipsizeMode="tail">
-                {shift.address}
-              </Text>
-            </View>
-          ) : null}
-
-          <View style={styles.cardFooterRow}>
-            <Text style={styles.salaryText}>
-              {(shift.hourlyRate).toLocaleString('vi-VN')} đ/h
-              <Text style={styles.distanceText}>
-                {shift.noGps ? '' : ` • ${shift.distanceKm} km`}
-              </Text>
-            </Text>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </View>
-        </Animated.View>
-      </TouchableOpacity>
-    );
-  };
 
   const renderMapView = () => {
     const lat = studentCoords?.latitude || 10.7769;
@@ -842,6 +1179,48 @@ export default function StudentDashboard() {
             </TouchableOpacity>
           </ScrollView>
         </View>
+
+        {/* Category Filter chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryFilterScroll}
+          contentContainerStyle={styles.categoryFilterContent}
+        >
+          <TouchableOpacity
+            style={[
+              styles.categoryChip,
+              !selectedCategoryFilter && styles.categoryChipActive
+            ]}
+            onPress={() => {
+              setSelectedCategoryFilter(null);
+              setCurrentPage(1);
+            }}
+          >
+            <Text style={[
+              styles.categoryChipText,
+              !selectedCategoryFilter && styles.categoryChipTextActive
+            ]}>Tất cả</Text>
+          </TouchableOpacity>
+          {categories.filter(c => c.id !== 9999).map((cat) => (
+            <TouchableOpacity
+              key={cat.id}
+              style={[
+                styles.categoryChip,
+                selectedCategoryFilter === cat.name && styles.categoryChipActive
+              ]}
+              onPress={() => {
+                setSelectedCategoryFilter(cat.name);
+                setCurrentPage(1);
+              }}
+            >
+              <Text style={[
+                styles.categoryChipText,
+                selectedCategoryFilter === cat.name && styles.categoryChipTextActive
+              ]}>{cat.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {viewMode === 'list' ? (
@@ -880,7 +1259,13 @@ export default function StudentDashboard() {
             </View>
           ) : (
             <>
-              {paginatedShifts.map(renderShiftCard)}
+              {paginatedShifts.map((shift) => (
+                <ShiftCard
+                  key={shift.id}
+                  shift={shift}
+                  navigateTo={navigateTo}
+                />
+              ))}
               {totalPages > 1 && (
                 <View style={styles.paginationContainer}>
                   <TouchableOpacity
@@ -923,117 +1308,196 @@ export default function StudentDashboard() {
         onRequestClose={() => setLocationModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { height: '80%' }]}>
+          <View style={[styles.modalContent, { height: '85%', paddingBottom: 20 }]}>
             <View style={styles.modalDragBar} />
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalShopName}>VỊ TRÍ TÌM VIỆC</Text>
-                <Text style={[styles.modalJobTitle, { fontSize: 18, marginBottom: 0 }]}>Chọn khu vực hyperlocal</Text>
+                <Text style={[styles.modalJobTitle, { fontSize: 18, marginBottom: 0 }]}>Chọn vị trí hiện tại của bạn</Text>
               </View>
               <TouchableOpacity onPress={() => setLocationModalVisible(false)} style={styles.closeBtn}>
                 <Text style={styles.closeBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalScroll}>
-              <Text style={[styles.descriptionBody, { marginBottom: 12 }]}>
-                Hệ thống ProxiJob tự động quét ca làm việc trong phạm vi bạn chọn. Vui lòng bấm chọn khu vực hoặc điểm định vị trên bản đồ radar để cập nhật danh sách việc làm gần nhất.
-              </Text>
-
-              {/* Radar Mockup Map */}
-              <View style={styles.mapContainer}>
-                <View style={styles.radarCircleBig}>
-                  <View style={styles.radarCircleMedium}>
-                    <View style={styles.radarCircleSmall}>
-                      <View style={styles.userDot}>
-                        <Text style={styles.userEmoji}>🎓</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Predefined mock pins around radar representing nearby shifts */}
-                  <TouchableOpacity
-                    style={[styles.pin, { top: 40, left: 60 }]}
-                    onPress={() => handleSelectLocation(10.7828, 106.6958, 'Q. 3, TP.HCM')}
-                  >
-                    <Text style={styles.pinIcon}>☕</Text>
-                    <View style={styles.pinLabel}>
-                      <Text style={styles.pinLabelText} numberOfLines={1}>Q. 3</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.pin, styles.emergencyPin, { top: 80, right: 40 }]}
-                    onPress={() => handleSelectLocation(10.8016, 106.7118, 'Q. Bình Thạnh, TP.HCM')}
-                  >
-                    <Text style={styles.pinIcon}>⚡</Text>
-                    <View style={styles.pinLabel}>
-                      <Text style={[styles.pinLabelText, { color: theme.colors.danger }]} numberOfLines={1}>B.Thạnh</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.pin, { bottom: 60, left: 50 }]}
-                    onPress={() => handleSelectLocation(10.8156, 106.6636, 'Q. Tân Bình, TP.HCM')}
-                  >
-                    <Text style={styles.pinIcon}>🛍️</Text>
-                    <View style={styles.pinLabel}>
-                      <Text style={styles.pinLabelText} numberOfLines={1}>T.Bình</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.pin, { bottom: 90, right: 60 }]}
-                    onPress={() => handleSelectLocation(10.8746, 106.8029, 'TP. Thủ Đức, TP.HCM')}
-                  >
-                    <Text style={styles.pinIcon}>🍽️</Text>
-                    <View style={styles.pinLabel}>
-                      <Text style={styles.pinLabelText} numberOfLines={1}>Thủ Đức</Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.radarTip}>Mẹo: Bấm vào biểu tượng các cửa hàng trên radar để di chuyển vị trí của bạn</Text>
+            {/* Modal search address input with suggestions overlay */}
+            <View style={{ zIndex: 9999, position: 'relative' }}>
+              <View style={styles.modalSearchRow}>
+                <TextInput
+                  placeholder="Nhập địa chỉ hoặc khu vực..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchText}
+                  onChangeText={handleSearchTextChange}
+                  style={styles.modalSearchInput}
+                  onSubmitEditing={handleSearchAddress}
+                />
+                <TouchableOpacity
+                  onPress={handleSearchAddress}
+                  style={styles.modalSearchBtn}
+                  disabled={searchLoading}
+                >
+                  {searchLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Ionicons name="search" size={16} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
               </View>
 
-              <Text style={styles.sectionHeader}>Chọn nhanh khu vực phổ biến</Text>
+              {showSuggestions && addressSuggestions.length > 0 && (
+                <View style={{
+                  position: 'absolute',
+                  top: 50,
+                  left: 16,
+                  right: 16,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 8,
+                  elevation: 5,
+                  maxHeight: 180,
+                  zIndex: 99999,
+                }}>
+                  <ScrollView keyboardShouldPersistTaps="always">
+                    {addressSuggestions.map((item, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={{
+                          paddingVertical: 12,
+                          paddingHorizontal: 16,
+                          borderBottomWidth: index === addressSuggestions.length - 1 ? 0 : 1,
+                          borderBottomColor: '#F1F5F9',
+                        }}
+                        onPress={() => handleSelectSuggestion(item)}
+                      >
+                        <Text style={{ fontSize: 13, color: '#334155', fontWeight: '500' }}>{item.display_name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
 
-              <View style={{ gap: 10, marginTop: 8 }}>
+            {/* Interactive Leaflet Map */}
+            <View style={styles.modalMapWrapper}>
+              <WebView
+                originWhitelist={['*']}
+                source={{
+                  html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                      <style>
+                        body { margin: 0; padding: 0; }
+                        #map { height: 100vh; width: 100vw; }
+                        .center-pin {
+                          position: absolute;
+                          top: 50%;
+                          left: 50%;
+                          transform: translate(-50%, -100%);
+                          z-index: 1000;
+                          pointer-events: none;
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      <div id="map"></div>
+                      <div class="center-pin">
+                        <img src="https://maps.google.com/mapfiles/ms/icons/red-dot.png" style="width: 32px; height: 32px;" />
+                      </div>
+                      <script>
+                        var map = L.map('map', { zoomControl: true, tap: false }).setView([${mapCenter.lat}, ${mapCenter.lng}], 15);
+                        L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { attribution: 'Google Maps' }).addTo(map);
+
+                        function sendCoords(lat, lng) {
+                          var payload = JSON.stringify({ lat: lat, lng: lng });
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(payload);
+                          } else {
+                            window.parent.postMessage(payload, '*');
+                          }
+                        }
+
+                        map.on('moveend', function() {
+                          var center = map.getCenter();
+                          sendCoords(center.lat, center.lng);
+                        });
+
+                        map.on('click', function(e) {
+                          map.panTo(e.latlng);
+                        });
+                      </script>
+                    </body>
+                    </html>
+                  `
+                }}
+                onMessage={handleMapMessage}
+                style={{ flex: 1 }}
+              />
+            </View>
+
+            {/* Confirm button */}
+            <View style={styles.modalMapFooter}>
+              <TouchableOpacity
+                onPress={handleConfirmLocation}
+                style={styles.modalConfirmBtn}
+              >
+                <Text style={styles.modalConfirmBtnText}>📍 Xác nhận vị trí này</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick selection scroll */}
+            <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
+              <Text style={styles.sectionHeaderInsideModal}>Chọn nhanh khu vực phổ biến</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.quickLocationScroll}
+                contentContainerStyle={styles.quickLocationContent}
+              >
                 <TouchableOpacity
-                  style={[styles.guestButton, studentCoords.latitude === 10.7769 && { borderColor: theme.colors.student }]}
+                  style={[styles.quickLocationChip, studentCoords.latitude === 10.7769 && styles.quickLocationChipActive]}
                   onPress={() => handleSelectLocation(10.7769, 106.7009, 'Q. 1, TP.HCM')}
                 >
-                  <Text style={styles.guestButtonText}>📍 Quận 1 (Trung tâm Sài Gòn)</Text>
+                  <Text style={[styles.quickLocationChipText, studentCoords.latitude === 10.7769 && styles.quickLocationChipTextActive]}>Quận 1</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.guestButton, studentCoords.latitude === 10.7828 && { borderColor: theme.colors.student }]}
-                  onPress={() => handleSelectLocation(10.7828, 106.6958, 'Q. 3, TP.HCM')}
+                  style={[styles.quickLocationChip, studentCoords.latitude === 10.7828 && styles.quickLocationChipActive]}
+                  onPress={() => handleSelectLocation(10.7828, 106.6958, 'Quận 3')}
                 >
-                  <Text style={styles.guestButtonText}>📍 Quận 3 (Hồ Con Rùa)</Text>
+                  <Text style={[styles.quickLocationChipText, studentCoords.latitude === 10.7828 && styles.quickLocationChipTextActive]}>Quận 3</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.guestButton, studentCoords.latitude === 10.8016 && { borderColor: theme.colors.student }]}
-                  onPress={() => handleSelectLocation(10.8016, 106.7118, 'Q. Bình Thạnh, TP.HCM')}
+                  style={[styles.quickLocationChip, studentCoords.latitude === 10.8016 && styles.quickLocationChipActive]}
+                  onPress={() => handleSelectLocation(10.8016, 106.7118, 'Bình Thạnh')}
                 >
-                  <Text style={styles.guestButtonText}>📍 Quận Bình Thạnh (Hàng Xanh)</Text>
+                  <Text style={[styles.quickLocationChipText, studentCoords.latitude === 10.8016 && styles.quickLocationChipTextActive]}>Bình Thạnh</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.guestButton, studentCoords.latitude === 10.8244 && { borderColor: theme.colors.student }]}
-                  onPress={() => handleSelectLocation(10.8244, 106.6631, 'Q. Gò Vấp, TP.HCM')}
+                  style={[styles.quickLocationChip, studentCoords.latitude === 10.8244 && styles.quickLocationChipActive]}
+                  onPress={() => handleSelectLocation(10.8244, 106.6631, 'Gò Vấp')}
                 >
-                  <Text style={styles.guestButtonText}>📍 Quận Gò Vấp (Quang Trung)</Text>
+                  <Text style={[styles.quickLocationChipText, studentCoords.latitude === 10.8244 && styles.quickLocationChipTextActive]}>Gò Vấp</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.guestButton, studentCoords.latitude === 10.8746 && { borderColor: theme.colors.student }]}
-                  onPress={() => handleSelectLocation(10.8746, 106.8029, 'TP. Thủ Đức, TP.HCM')}
+                  style={[styles.quickLocationChip, studentCoords.latitude === 10.8746 && styles.quickLocationChipActive]}
+                  onPress={() => handleSelectLocation(10.8746, 106.8029, 'Thủ Đức')}
                 >
-                  <Text style={styles.guestButtonText}>📍 TP. Thủ Đức (Làng Đại học)</Text>
+                  <Text style={[styles.quickLocationChipText, studentCoords.latitude === 10.8746 && styles.quickLocationChipTextActive]}>Thủ Đức</Text>
                 </TouchableOpacity>
-              </View>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1319,15 +1783,21 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   emergencyTag: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
+    backgroundColor: '#EF4444',
     paddingVertical: 4,
+    paddingHorizontal: 8,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emergencyTagText: {
     fontSize: 9,
-    fontWeight: '700',
-    color: '#EF4444',
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   appliedStatusTag: {
     backgroundColor: '#FEF3C7',
@@ -1720,7 +2190,7 @@ const styles = StyleSheet.create({
   gpsFloatingButton: {
     position: 'absolute',
     bottom: 20,
-    right: 20,
+    left: 20,
     backgroundColor: '#FF6B00',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1863,5 +2333,131 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#475569',
+  },
+  categoryFilterScroll: {
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  categoryFilterContent: {
+    paddingRight: 16,
+    gap: 8,
+    alignItems: 'center',
+  },
+  categoryChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    height: 30,
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  categoryChipActive: {
+    backgroundColor: '#FF6B0015',
+    borderColor: '#FF6B00',
+  },
+  categoryChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  categoryChipTextActive: {
+    color: '#FF6B00',
+    fontWeight: '700',
+  },
+  modalSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 10,
+    gap: 8,
+  },
+  modalSearchInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  modalSearchBtn: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#FF6B00',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalMapWrapper: {
+    flex: 1,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+  },
+  modalMapFooter: {
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+  modalConfirmBtn: {
+    height: 44,
+    backgroundColor: '#FF6B00',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FF6B00',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  modalConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  sectionHeaderInsideModal: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E293B',
+    marginBottom: 6,
+  },
+  quickLocationScroll: {
+    marginVertical: 4,
+  },
+  quickLocationContent: {
+    gap: 6,
+    alignItems: 'center',
+  },
+  quickLocationChip: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    marginRight: 6,
+    height: 28,
+    justifyContent: 'center',
+  },
+  quickLocationChipActive: {
+    backgroundColor: '#FF6B0015',
+    borderColor: '#FF6B00',
+  },
+  quickLocationChipText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  quickLocationChipTextActive: {
+    color: '#FF6B00',
+    fontWeight: '700',
   },
 });
