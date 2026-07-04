@@ -53,7 +53,7 @@ export const useNavigation = (isEnterprise, showToast, user) => {
       setNavigationParams(params);
       setNavigationStack(prev => [...prev, currentScreen]);
       setCurrentScreen('upgrade_package');
-      showToast('Vui lòng nâng cấp gói Enterprise (1.999.000đ) để sử dụng tính năng!', 'warning');
+      showToast('Vui lòng nâng cấp gói HRM Basic (199.000đ) hoặc Enterprise để sử dụng tính năng!', 'warning');
       return;
     }
 
