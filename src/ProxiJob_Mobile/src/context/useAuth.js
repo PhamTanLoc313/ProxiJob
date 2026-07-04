@@ -134,6 +134,7 @@ export const useAuth = ({
       console.log('[ProxiJob Login] Auth execution error:', error.message);
       const friendlyMsg = translateError(error);
       showToast(friendlyMsg, 'error');
+      throw new Error(friendlyMsg);
     } finally {
       setAuthLoading(false);
     }
