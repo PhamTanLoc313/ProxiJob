@@ -56,6 +56,7 @@ export default function PayrollSettlementScreen() {
   const [shiftFilter, setShiftFilter] = useState('all'); // 'all', 'morning', 'afternoon'
   const [customHours, setCustomHours] = useState('4');
   const [customAmount, setCustomAmount] = useState(140000);
+  const [excelFileCount, setExcelFileCount] = useState(0);
 
   // --- BỘ LỌC KHOẢNG NGÀY TÙY CHỈNH ---
   const [customStartDate, setCustomStartDate] = useState(null);
@@ -277,8 +278,10 @@ export default function PayrollSettlementScreen() {
   };
 
   const handleExportExcel = async () => {
-    if (user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') {
-      showToast('Nâng cấp gói Enterprise để sử dụng tính năng Xuất đối soát nâng cao ⚡', 'error');
+    const tier = user?.subscriptionTier?.toLowerCase() || '';
+    const hasExportAccess = tier === 'hrm basic' || tier === 'enterprise' || tier === 'standard' || tier === 'premium' || tier === 'trial';
+    if (!hasExportAccess) {
+      showToast('Vui lòng nâng cấp gói HRM Cơ bản hoặc Doanh nghiệp để sử dụng tính năng Xuất đối soát ⚡', 'error');
       return;
     }
     try {
@@ -306,6 +309,7 @@ export default function PayrollSettlementScreen() {
       });
       
       showToast('Xuất file đối soát thành công!', 'success');
+      setExcelFileCount(prev => prev + 1);
     } catch (error) {
       console.log('Error sharing CSV:', error);
       showToast('Không thể xuất tệp đối soát: ' + error.message, 'error');
@@ -498,22 +502,6 @@ export default function PayrollSettlementScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Top Export Button */}
-        <View style={styles.topExportContainer}>
-          <TouchableOpacity
-            style={[styles.wideExportBtn, (user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}
-            onPress={handleExportExcel}
-            activeOpacity={(user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') ? 1 : 0.7}
-          >
-            <Text style={[styles.wideExportBtnText, (user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') && { color: '#94A3B8' }]}>
-              📊 Xuất file Excel đối soát chi phí
-            </Text>
-            {(user?.subscriptionTier !== 'Enterprise' && user?.subscriptionTier !== 'Trial') && (
-              <BlurView intensity={25} style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} tint="light" />
-            )}
-          </TouchableOpacity>
-        </View>
-
         {/* Top Bento Cards Section */}
         <View style={styles.bentoContainer}>
           {/* Card 1: Monthly Total Disbursed */}
@@ -592,6 +580,100 @@ export default function PayrollSettlementScreen() {
                 </Svg>
               </View>
             </View>
+          </View>
+
+          {/* Custom Horizontal Excel Card Button */}
+          <View style={{ marginTop: 16 }}>
+            {(() => {
+              const tier = user?.subscriptionTier?.toLowerCase() || '';
+              const hasPremiumExport = tier === 'hrm basic' || tier === 'enterprise' || tier === 'standard' || tier === 'premium' || tier === 'trial';
+              return (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 16,
+                    borderRadius: 20,
+                    borderWidth: 1.5,
+                    backgroundColor: hasPremiumExport ? '#E8F5E9' : '#F8FAFC',
+                    borderColor: hasPremiumExport ? '#C8E6C9' : '#E2E8F0',
+                    shadowColor: hasPremiumExport ? '#2E7D32' : '#0F172A',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: hasPremiumExport ? 0.05 : 0.02,
+                    shadowRadius: 8,
+                    elevation: 2,
+                  }}
+                  onPress={handleExportExcel}
+                  activeOpacity={hasPremiumExport ? 0.75 : 1}
+                >
+                  {/* Left: Custom Excel Icon */}
+                  <View style={{
+                    width: 32,
+                    height: 38,
+                    backgroundColor: hasPremiumExport ? '#2E7D32' : '#94A3B8',
+                    borderRadius: 5,
+                    position: 'relative',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                    shadowColor: hasPremiumExport ? '#2E7D32' : 'transparent',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 3,
+                  }}>
+                    <View style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      width: 10,
+                      height: 10,
+                      backgroundColor: hasPremiumExport ? '#C8E6C9' : '#E2E8F0',
+                      borderBottomLeftRadius: 2,
+                    }} />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 13, marginTop: 4 }}>X</Text>
+                  </View>
+
+                  {/* Middle: Title & Subtitle */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '800',
+                      color: hasPremiumExport ? '#1B5E20' : '#475569',
+                      fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+                    }}>
+                      Tài liệu Excel Đối soát
+                    </Text>
+                    <Text style={{
+                      fontSize: 11,
+                      fontWeight: '600',
+                      color: hasPremiumExport ? '#2E7D32' : '#94A3B8',
+                      marginTop: 2,
+                      fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+                    }}>
+                      {hasPremiumExport 
+                        ? `Đã xuất ${excelFileCount} tệp • Bấm để tải về` 
+                        : 'Yêu cầu gói HRM Cơ bản / Doanh nghiệp'}
+                    </Text>
+                  </View>
+
+                  {/* Right: Icon Indicator */}
+                  <View style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: hasPremiumExport ? '#C8E6C950' : '#E2E8F050',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}>
+                    {hasPremiumExport ? (
+                      <Ionicons name="download-outline" size={16} color="#2E7D32" />
+                    ) : (
+                      <Ionicons name="lock-closed-outline" size={14} color="#94A3B8" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })()}
           </View>
         </View>
 
@@ -1126,6 +1208,7 @@ const styles = StyleSheet.create({
   bentoContainer: {
     paddingHorizontal: 20,
     gap: 16,
+    paddingTop: 16,
   },
   bentoTilePrimary: {
     position: 'relative',

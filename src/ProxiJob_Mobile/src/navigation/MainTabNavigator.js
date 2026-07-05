@@ -36,8 +36,8 @@ export default function MainTabNavigator({ isStudent }) {
   const { currentScreen, navigateTo, isChatRoomActive, user } = useContext(AppContext);
 
   const tier = user?.subscriptionTier?.toLowerCase() || '';
-  const hasPremium = tier === 'enterprise';
-  const hasStandard = tier === 'hrm basic' || tier === 'enterprise';
+  const hasPremium = tier === 'enterprise' || tier === 'premium';
+  const hasStandard = tier === 'hrm basic' || tier === 'enterprise' || tier === 'standard' || tier === 'premium';
 
   const hideTabBarScreens = [
     'employer_emergency_post',
@@ -235,7 +235,7 @@ export default function MainTabNavigator({ isStudent }) {
             ]}>Tin Tuyển</Text>
           </TouchableOpacity>
 
-          {hasPremium && (
+          {hasStandard && (
             <TouchableOpacity
               style={styles.tabItem}
               onPress={() => navigateTo('employer_hrm')}

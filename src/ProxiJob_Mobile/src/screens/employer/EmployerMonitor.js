@@ -43,7 +43,8 @@ export default function EmployerMonitor() {
     studentCoords,
     navigateTo,
     navigationParams,
-    setNavigationParams
+    setNavigationParams,
+    showToast
   } = useContext(AppContext);
 
   const { data: attendanceLogs = [], refetch: refetchAttendanceLogs } = useAttendanceLogsQuery(user);
@@ -219,11 +220,7 @@ export default function EmployerMonitor() {
       }
     } catch (err) {
       console.log('Error generating QR code:', err);
-      if (Platform.OS === 'web') {
-        alert('Lỗi tạo mã QR: ' + err.message);
-      } else {
-        Alert.alert('Thất bại', 'Lỗi tạo mã QR: ' + err.message);
-      }
+      showToast('Lỗi tạo mã QR: ' + err.message, 'error');
     } finally {
       setGeneratingQr(false);
     }
@@ -233,18 +230,10 @@ export default function EmployerMonitor() {
     try {
       await updateQrRadius(newRadius);
       setQrCodeData(prev => prev ? { ...prev, allowedRadiusMeters: newRadius } : null);
-      if (Platform.OS === 'web') {
-        alert(`Đã cập nhật bán kính điểm danh thành ${newRadius}m!`);
-      } else {
-        Alert.alert('Thành công', `Đã cập nhật bán kính điểm danh thành ${newRadius}m!`);
-      }
+      showToast(`Đã cập nhật bán kính điểm danh thành ${newRadius}m!`, 'success');
     } catch (err) {
       console.log('Error updating radius:', err);
-      if (Platform.OS === 'web') {
-        alert('Lỗi cập nhật bán kính: ' + err.message);
-      } else {
-        Alert.alert('Thất bại', 'Lỗi cập nhật bán kính: ' + err.message);
-      }
+      showToast('Lỗi cập nhật bán kính: ' + err.message, 'error');
     }
   };
 
@@ -753,6 +742,8 @@ export default function EmployerMonitor() {
                   ))}
                 </View>
               </View>
+
+
 
               {/* Action Buttons */}
               <TouchableOpacity

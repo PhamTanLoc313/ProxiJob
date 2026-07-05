@@ -19,9 +19,8 @@ namespace ProxiJob.Identity.Application.Features.Business.Commands.UpdateMyBusin
                 .MaximumLength(200).When(x => !string.IsNullOrWhiteSpace(x.BusinessName));
 
             RuleFor(x => x.BusinessType)
-                .Must(t => string.IsNullOrWhiteSpace(t) || BusinessTypes.All.Contains(t))
-                .When(x => x.BusinessType != null)
-                .WithMessage(ValidationMessages.BusinessTypeInvalid);
+                .MaximumLength(50).When(x => !string.IsNullOrWhiteSpace(x.BusinessType))
+                .WithMessage("Loại hình kinh doanh không được vượt quá 50 ký tự.");
 
             RuleFor(x => x.City)
                 .NotEmpty().When(x => x.City != null)
