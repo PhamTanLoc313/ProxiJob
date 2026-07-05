@@ -22,6 +22,19 @@ export async function getBusinessProfileApi() {
   }
 }
 
+const formatValidationErrors = (errors) => {
+  if (!errors) return '';
+  if (Array.isArray(errors)) {
+    return errors.join(', ');
+  }
+  if (typeof errors === 'object') {
+    return Object.values(errors)
+      .map(val => (Array.isArray(val) ? val.join(', ') : String(val)))
+      .join(', ');
+  }
+  return String(errors);
+};
+
 /**
  * Register business profile (first time)
  * @param {object} profileData 
@@ -37,7 +50,7 @@ export async function registerBusinessProfileApi(profileData) {
     });
     const resData = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || `Failed to register business profile: ${response.status}`;
+      const errorMsg = resData.message || formatValidationErrors(resData.errors) || `Failed to register business profile: ${response.status}`;
       throw new Error(errorMsg);
     }
     return resData.data || resData;
@@ -62,7 +75,7 @@ export async function updateBusinessProfileApi(profileData) {
     });
     const resData = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || `Failed to update business profile: ${response.status}`;
+      const errorMsg = resData.message || formatValidationErrors(resData.errors) || `Failed to update business profile: ${response.status}`;
       throw new Error(errorMsg);
     }
     return resData.data || resData;

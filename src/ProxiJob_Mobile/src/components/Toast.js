@@ -85,27 +85,31 @@ export default function Toast() {
     switch (type) {
       case 'success':
         return {
-          color: theme.colors.success,
-          icon: 'checkmark-circle-sharp',
+          color: '#10B981', // Emerald 500
+          bgColor: '#ECFDF5', // Emerald 50
+          iconName: 'checkmark',
           title: 'Thành công'
         };
       case 'error':
         return {
-          color: theme.colors.danger,
-          icon: 'close-circle-sharp',
+          color: '#EF4444', // Red 500
+          bgColor: '#FEF2F2', // Red 50
+          iconName: 'alert',
           title: 'Thất bại'
         };
       case 'warning':
         return {
-          color: theme.colors.warning,
-          icon: 'warning-sharp',
+          color: '#F59E0B', // Amber 500
+          bgColor: '#FFFBEB', // Amber 50
+          iconName: 'warning',
           title: 'Cảnh báo'
         };
       case 'info':
       default:
         return {
-          color: theme.colors.primary,
-          icon: 'information-circle-sharp',
+          color: '#3B82F6', // Blue 500
+          bgColor: '#EFF6FF', // Blue 50
+          iconName: 'information',
           title: 'Thông báo'
         };
     }
@@ -120,7 +124,6 @@ export default function Toast() {
         {
           transform: [{ translateY: slideAnim }],
           opacity: fadeAnim,
-          borderLeftColor: config.color,
         },
       ]}
     >
@@ -130,18 +133,20 @@ export default function Toast() {
         activeOpacity={0.9}
       >
         <View style={styles.contentRow}>
-          {/* Badge Icon */}
-          <View style={[styles.iconContainer, { backgroundColor: config.color + '12' }]}>
-            <Ionicons name={config.icon} size={20} color={config.color} />
+          {/* Badge Icon (Light background capsule containing solid color circle) */}
+          <View style={[styles.iconBadge, { backgroundColor: config.bgColor }]}>
+            <View style={[styles.iconCircle, { backgroundColor: config.color }]}>
+              <Ionicons name={config.iconName} size={13} color="#FFFFFF" />
+            </View>
           </View>
           
           {/* Details */}
           <View style={styles.textContainer}>
-            <Text style={[styles.statusTitle, { color: config.color }]}>
-              {config.title}
-            </Text>
             <Text numberOfLines={2} style={styles.messageText}>
               {message}
+            </Text>
+            <Text style={[styles.statusActionText, { color: config.color }]}>
+              {config.title}
             </Text>
           </View>
 
@@ -158,55 +163,62 @@ export default function Toast() {
 const styles = StyleSheet.create({
   toastContainer: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: 20,
+    right: 20,
     zIndex: 99999,
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderRadius: 16,
-    borderLeftWidth: 5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999, // Pill shape capsule
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#F1F5F9',
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
   },
   touchArea: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  iconContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  iconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
+  iconCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   textContainer: {
     flex: 1,
-  },
-  statusTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    justifyContent: 'center',
+    paddingRight: 6,
   },
   messageText: {
     fontSize: 13,
-    color: '#334155', // Slate-700
-    lineHeight: 18,
+    fontWeight: '700',
+    color: '#1E293B', // Slate-800
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    lineHeight: 16,
+  },
+  statusActionText: {
+    fontSize: 11,
+    fontWeight: '750',
+    marginTop: 2,
     fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
   },
   closeBtnContainer: {
-    padding: 4,
-    marginLeft: 8,
+    padding: 6,
+    marginRight: 6,
   },
 });

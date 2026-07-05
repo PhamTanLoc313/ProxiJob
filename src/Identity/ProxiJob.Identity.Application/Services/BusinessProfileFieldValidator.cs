@@ -24,8 +24,8 @@ namespace ProxiJob.Identity.Application.Services
 
             if (string.IsNullOrWhiteSpace(profile.BusinessType))
                 errors.Add(ValidationMessages.BusinessTypeRequired);
-            else if (!BusinessTypes.All.Contains(profile.BusinessType))
-                errors.Add(ValidationMessages.BusinessTypeInvalid);
+            else if (profile.BusinessType.Length > 50)
+                errors.Add("Loại hình kinh doanh không được vượt quá 50 ký tự.");
 
             if (string.IsNullOrWhiteSpace(profile.City))
                 errors.Add(ValidationMessages.CityRequired);

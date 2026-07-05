@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -27,6 +27,183 @@ import {
   updateBusinessProfileApi,
   activateBusinessProfileApi
 } from '../../api/businessApi';
+
+const GOOGLE_MAPS_API_KEY = 'CvNapWs3C3Vt7ZTRZf0uZliN9v3q8TBJKxd2CEcW';
+
+const cleanAddress = (rawAddress) => {
+  if (!rawAddress) return '';
+  let cleaned = rawAddress.replace(/,\s*(Việt Nam|Vietnam)\s*$/i, '');
+  cleaned = cleaned.replace(/,\s*\d{5,6}\b/g, '');
+  return cleaned.trim();
+};
+
+const reverseGeocode = async (lat, lng) => {
+  let addressVal = '';
+  let cityVal = 'Thành phố Hồ Chí Minh';
+  let success = false;
+
+  const hasRoadOrNumber = (addr) => {
+    if (!addr) return false;
+    const lower = addr.toLowerCase();
+    return lower.includes('đường') || lower.includes('số') || lower.includes('hẻm') || lower.includes('ngõ') || lower.includes('kiệt') || lower.includes('phố') || /^\d+/.test(addr);
+  };
+
+  if (GOOGLE_MAPS_API_KEY) {
+    try {
+      const response = await fetch(
+        `https://rsapi.goong.io/Geocode?latlng=${lat},${lng}&api_key=${GOOGLE_MAPS_API_KEY}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+          // Find the most detailed result containing a road or house number
+          let chosenResult = data.results[0];
+          for (let i = 0; i < data.results.length; i++) {
+            const resItem = data.results[i];
+            if (hasRoadOrNumber(resItem.formatted_address)) {
+              chosenResult = resItem;
+              break;
+            }
+          }
+
+          addressVal = cleanAddress(chosenResult.formatted_address);
+
+          if (chosenResult.address_components) {
+            const cityComponent = chosenResult.address_components.find(comp =>
+              comp.types && (comp.types.includes('administrative_area_level_1') || comp.types.includes('city'))
+            );
+            if (cityComponent) {
+              cityVal = cityComponent.long_name;
+            }
+          }
+          success = true;
+        }
+      }
+    } catch (e) {
+      console.log('Goong reverse geocoding error:', e);
+    }
+  }
+
+  // Fallback to OSM Nominatim
+  if (!success || !hasRoadOrNumber(addressVal)) {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        let osmAddr = '';
+        if (data.display_name) {
+          osmAddr = cleanAddress(data.display_name);
+        } else {
+          const road = data.address?.road || '';
+          const suburb = data.address?.suburb || data.address?.quarter || '';
+          const city = data.address?.city || data.address?.town || data.address?.state || '';
+          osmAddr = [road, suburb, city].filter(Boolean).join(', ');
+        }
+
+        // If OSM is indeed more detailed (or if we didn't succeed with Goong at all), use it
+        if (!success || hasRoadOrNumber(osmAddr)) {
+          addressVal = osmAddr;
+          cityVal = data.address?.city || data.address?.town || data.address?.state || 'TP. Hồ Chí Minh';
+          success = true;
+        }
+      }
+    } catch (e) {
+      console.log('OSM reverse geocoding error:', e);
+    }
+  }
+
+  if (success) {
+    if (addressVal && cityVal) {
+      const escapedCity = cityVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const regexCity = new RegExp(`,\\s*(${escapedCity}|Ho Chi Minh|Hồ Chí Minh|HCM|Hanoi|Hà Nội|Da Nang|Đà Nẵng)\\s*$`, 'i');
+      addressVal = addressVal.replace(regexCity, '').trim();
+      addressVal = addressVal.replace(/,\s*,/g, ',').replace(/,\s*$/g, '').trim();
+    }
+    return { address: addressVal, city: cityVal };
+  }
+
+  return {
+    address: `Tọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+    city: 'TP. Hồ Chí Minh'
+  };
+};
+
+const geocodeAddress = async (addressText, cityText) => {
+  const query = `${addressText}${cityText ? ', ' + cityText : ''}`;
+
+  if (GOOGLE_MAPS_API_KEY) {
+    try {
+      const url = `https://rsapi.goong.io/Geocode?address=${encodeURIComponent(query)}&api_key=${GOOGLE_MAPS_API_KEY}`;
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+          const loc = data.results[0].geometry.location;
+          return {
+            latitude: loc.lat,
+            longitude: loc.lng
+          };
+        }
+      }
+    } catch (e) {
+      console.log('Goong geocoding API error:', e);
+    }
+  }
+
+  try {
+    let cleaned = addressText.trim();
+    cleaned = cleaned.replace(/^\d+([/.-]\d+)*[a-zA-Z]?\s+/, '');
+    cleaned = cleaned.replace(/^(hẻm|ngõ|kiệt)\s+\d+([/.-]\d+)*[a-zA-Z]?\s+/, '');
+
+    const fallbackQuery = `${cleaned}${cityText ? ', ' + cityText : ''}, Viet Nam`;
+    let response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallbackQuery)}&format=json&limit=1`, {
+      headers: {
+        'User-Agent': 'ProxiJobApp/1.0'
+      }
+    });
+    let data = await response.json().catch(() => []);
+    if (data && data.length > 0) {
+      return {
+        latitude: parseFloat(data[0].lat),
+        longitude: parseFloat(data[0].lon)
+      };
+    }
+
+    const lower = addressText.toLowerCase();
+    let fallbackQuery2 = '';
+    if (lower.includes('trường thọ')) {
+      fallbackQuery2 = 'Trường Thọ, Thủ Đức, Viet Nam';
+    } else if (lower.includes('thủ đức')) {
+      fallbackQuery2 = 'Thủ Đức, Viet Nam';
+    } else {
+      const parts = addressText.split(/[,.-]/);
+      if (parts.length > 1) {
+        fallbackQuery2 = `${parts[parts.length - 2].trim()}, ${parts[parts.length - 1].trim()}, Viet Nam`;
+      }
+    }
+
+    if (fallbackQuery2) {
+      response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallbackQuery2)}&format=json&limit=1`, {
+        headers: {
+          'User-Agent': 'ProxiJobApp/1.0'
+        }
+      });
+      data = await response.json().catch(() => []);
+      if (data && data.length > 0) {
+        return {
+          latitude: parseFloat(data[0].lat),
+          longitude: parseFloat(data[0].lon)
+        };
+      }
+    }
+  } catch (err) {
+    console.log('OSM geocoding error:', err);
+  }
+  return null;
+};
 
 const BUSINESS_TYPES = [
   { label: 'Cà phê (Cafe)', value: 'Cafe', icon: 'cafe-outline' },
@@ -75,6 +252,46 @@ const decodeBase64ToArrayBuffer = (base64String) => {
   return arrayBuffer;
 };
 
+const LeafletMap = React.memo(({ mapHtml, handleMapMessage, isGeocoding, showMap, webviewRef }) => {
+  if (!showMap) return null;
+  return (
+    <View style={[styles.mapContainerOuter, { marginBottom: 16 }]}>
+      <View style={styles.mapWrapper}>
+        {Platform.OS === 'web' ? (
+          <iframe
+            srcDoc={mapHtml}
+            style={styles.webMap}
+            title="Google Maps Location Picker"
+          />
+        ) : (
+          <WebView
+            ref={webviewRef}
+            originWhitelist={['*']}
+            source={{ html: mapHtml }}
+            style={styles.mobileMap}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            onMessage={handleMapMessage}
+          />
+        )}
+
+        {isGeocoding && (
+          <View style={styles.mapLoadingOverlay}>
+            <ActivityIndicator size="small" color="#FFFFFF" />
+            <Text style={styles.mapLoadingText}>Đang xử lý vị trí...</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.mapHtml === nextProps.mapHtml &&
+    prevProps.isGeocoding === nextProps.isGeocoding &&
+    prevProps.showMap === nextProps.showMap
+  );
+});
+
 export default function EmployerProfileScreen() {
   const { goBack, showToast, user, setUser } = useContext(AppContext);
   const insets = useSafeAreaInsets();
@@ -90,10 +307,11 @@ export default function EmployerProfileScreen() {
   const [businessName, setBusinessName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [businessType, setBusinessType] = useState('Cafe');
+  const [customBusinessType, setCustomBusinessType] = useState('');
+  const [description, setDescription] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [taxCode, setTaxCode] = useState('');
-  const [description, setDescription] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
 
   // Dropdown state
@@ -103,6 +321,12 @@ export default function EmployerProfileScreen() {
   const [avatarMenuVisible, setAvatarMenuVisible] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const webviewRef = useRef(null);
+  const suggestionTimeoutRef = useRef(null);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [showMap, setShowMap] = useState(true);
+  const [errors, setErrors] = useState({});
 
   // Map states: mapInitCoords controls the initial coordinate center of WebView map HTML.
   // We only update this state on mount or when clicking "Get current location" to prevent map reload/flicker.
@@ -120,17 +344,32 @@ export default function EmployerProfileScreen() {
   // Load existing profile on mount
   useEffect(() => {
     async function loadProfile() {
+      let coordsLoaded = false;
       try {
         const profile = await getBusinessProfileApi();
         if (profile) {
           setBusinessName(profile.businessName || '');
           setPhoneNumber(profile.phoneNumber || '');
-          setBusinessType(profile.businessType || 'Cafe');
+          
+          const isPredefined = BUSINESS_TYPES.some(t => t.value === profile.businessType && t.value !== 'Khac');
+          if (profile.businessType) {
+            if (isPredefined) {
+              setBusinessType(profile.businessType);
+              setCustomBusinessType('');
+            } else {
+              setBusinessType('Khac');
+              setCustomBusinessType(profile.businessType);
+            }
+          } else {
+            setBusinessType('Cafe');
+            setCustomBusinessType('');
+          }
+
           setCity(profile.city || '');
           setAddress(profile.address || '');
           setTaxCode(profile.taxCode || '');
-          setDescription(profile.description || '');
           setAvatarUrl(profile.avatarUrl || '');
+          setDescription(profile.description || '');
           setIsRegistered(true);
           setIsActive(profile.isActive || false);
 
@@ -148,6 +387,7 @@ export default function EmployerProfileScreen() {
                   const lon = parseFloat(geoData[0].lon);
                   setMapInitCoords({ latitude: lat, longitude: lon });
                   setSelectedCoords({ latitude: lat, longitude: lon });
+                  coordsLoaded = true;
                 }
               }
             } catch (err) {
@@ -158,16 +398,20 @@ export default function EmployerProfileScreen() {
       } catch (error) {
         console.log('Profile loading failed (possibly not registered):', error.message);
         setIsRegistered(false);
-        // Attempt to pre-fill coordinates with device's initial location
-        try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === 'granted') {
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
-            setMapInitCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-            setSelectedCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-          }
-        } catch (e) { }
       } finally {
+        // If we didn't load any coordinates from the profile address, request current GPS location
+        if (!coordsLoaded) {
+          try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+              const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+              setMapInitCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+              setSelectedCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+            }
+          } catch (e) {
+            console.log('Error requesting initial location:', e);
+          }
+        }
         setLoading(false);
       }
     }
@@ -178,20 +422,10 @@ export default function EmployerProfileScreen() {
   const geocodeLatLng = async (lat, lng) => {
     setIsGeocoding(true);
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-        { headers: { 'User-Agent': 'ProxiJob-App' } }
-      );
-      if (response.ok) {
-        const res = await response.json();
-        if (res && res.display_name) {
-          let cleanAddr = res.display_name;
-          const addr = res.address || {};
-          const cityValue = addr.city || addr.state || addr.town || addr.municipality || '';
-          setAddress(cleanAddr);
-          setCity(cityValue);
-        }
-      }
+      const { address: addressVal, city: cityVal } = await reverseGeocode(lat, lng);
+      setAddress(addressVal);
+      setCity(cityVal);
+      setErrors(prev => ({ ...prev, address: null, city: null }));
     } catch (e) {
       console.log('Error reverse geocoding:', e);
     } finally {
@@ -246,6 +480,199 @@ export default function EmployerProfileScreen() {
     } catch (err) {
       console.log('Error getting location:', err);
       showToast('Không thể lấy vị trí hiện tại!', 'error');
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  const handleAddressChange = (text) => {
+    setAddress(text);
+    if (errors.address) setErrors(prev => ({ ...prev, address: null }));
+
+    if (text.length < 4) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    if (suggestionTimeoutRef.current) {
+      clearTimeout(suggestionTimeoutRef.current);
+    }
+
+    suggestionTimeoutRef.current = setTimeout(async () => {
+      try {
+        setSuggestionsLoading(true);
+        if (GOOGLE_MAPS_API_KEY) {
+          const response = await fetch(
+            `https://rsapi.goong.io/Place/AutoComplete?input=${encodeURIComponent(text)}&api_key=${GOOGLE_MAPS_API_KEY}`
+          );
+          if (response.ok) {
+            const data = await response.json();
+            if (data.status === 'OK' && data.predictions) {
+              const formatted = data.predictions.map(item => ({
+                display_name: item.description,
+                place_id: item.place_id,
+                isGoogle: true
+              }));
+              setAddressSuggestions(formatted);
+              setShowSuggestions(formatted.length > 0);
+            }
+          }
+        } else {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5`,
+            { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+          );
+          if (response.ok) {
+            const data = await response.json();
+            const formatted = data.map(item => ({
+              display_name: cleanAddress(item.display_name),
+              lat: parseFloat(item.lat),
+              lon: parseFloat(item.lon),
+              isGoogle: false
+            }));
+            setAddressSuggestions(formatted);
+            setShowSuggestions(formatted.length > 0);
+          }
+        }
+      } catch (e) {
+        console.log('Suggestions fetch error:', e);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 500);
+  };
+
+  const handleSelectSuggestion = async (suggestion) => {
+    setAddress(suggestion.display_name);
+    setShowSuggestions(false);
+    setErrors(prev => ({ ...prev, address: null, city: null }));
+
+    try {
+      setIsGeocoding(true);
+      let lat = 0;
+      let lon = 0;
+      if (suggestion.isGoogle) {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/Detail?place_id=${suggestion.place_id}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.result?.geometry?.location) {
+            lat = data.result.geometry.location.lat;
+            lon = data.result.geometry.location.lng;
+          }
+        }
+      } else {
+        lat = suggestion.lat;
+        lon = suggestion.lon;
+      }
+
+      if (lat && lon) {
+        setMapInitCoords({ latitude: lat, longitude: lon });
+        setSelectedCoords({ latitude: lat, longitude: lon });
+
+        // Update city dynamically if matched
+        const lowerAddr = suggestion.display_name.toLowerCase();
+        if (lowerAddr.includes('hồ chí minh') || lowerAddr.includes('hcm')) {
+          setCity('Thành phố Hồ Chí Minh');
+        } else if (lowerAddr.includes('hà nội')) {
+          setCity('Thành phố Hà Nội');
+        } else if (lowerAddr.includes('đà nẵng')) {
+          setCity('Thành phố Đà Nẵng');
+        } else if (lowerAddr.includes('thủ đức')) {
+          setCity('Thành phố Thủ Đức');
+        }
+
+        // Move marker and map center in WebView immediately
+        const jsCode = `
+          if (typeof map !== 'undefined' && typeof marker !== 'undefined') {
+            map.setView([${lat}, ${lon}], 15);
+            marker.setLatLng([${lat}, ${lon}]);
+          }
+          true;
+        `;
+        if (webviewRef.current) {
+          webviewRef.current.injectJavaScript(jsCode);
+        }
+
+        if (Platform.OS === 'web') {
+          const iframe = document.querySelector('iframe');
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage(JSON.stringify({
+              type: 'update_center',
+              latitude: lat,
+              longitude: lon
+            }), '*');
+          }
+        }
+
+        showToast('Đã chọn địa chỉ & định vị tọa độ thành công!', 'success');
+      } else {
+        showToast('Không lấy được tọa độ cho vị trí này.', 'warning');
+      }
+    } catch (err) {
+      console.log('Select suggestion error:', err);
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  const handleSearchAddress = async () => {
+    if (!address) {
+      showToast('Vui lòng nhập địa chỉ trước!', 'warning');
+      return;
+    }
+
+    try {
+      setIsGeocoding(true);
+      showToast('Đang tìm tọa độ cho địa chỉ này...', 'info');
+      
+      const queryStr = `${address} ${city}`;
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}&limit=1`,
+        { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          
+          setMapInitCoords({ latitude: lat, longitude: lon });
+          setSelectedCoords({ latitude: lat, longitude: lon });
+
+          const jsCode = `
+            if (typeof map !== 'undefined' && typeof marker !== 'undefined') {
+              map.setView([${lat}, ${lon}], 15);
+              marker.setLatLng([${lat}, ${lon}]);
+            }
+            true;
+          `;
+          if (webviewRef.current) {
+            webviewRef.current.injectJavaScript(jsCode);
+          }
+
+          if (Platform.OS === 'web') {
+            const iframe = document.querySelector('iframe');
+            if (iframe && iframe.contentWindow) {
+              iframe.contentWindow.postMessage(JSON.stringify({
+                type: 'update_center',
+                latitude: lat,
+                longitude: lon
+              }), '*');
+            }
+          }
+
+          showToast('Định vị địa chỉ thành công!', 'success');
+        } else {
+          showToast('Không tìm thấy tọa độ cho địa chỉ này. Hãy thử nhập chi tiết hơn.', 'error');
+        }
+      }
+    } catch (err) {
+      console.log('Error geocoding typed address:', err);
+      showToast('Lỗi khi định vị địa chỉ!', 'error');
     } finally {
       setIsGeocoding(false);
     }
@@ -355,48 +782,51 @@ export default function EmployerProfileScreen() {
     }
   };
 
-  const validateForm = () => {
+  const handleSubmit = async () => {
+    // Clear previous errors
+    setErrors({});
+
+    let localErrors = {};
     if (!businessName.trim()) {
-      showToast('Tên quán không được để trống!', 'warning');
-      return false;
+      localErrors.businessName = 'Tên quán không được để trống!';
     }
-    if (!phoneNumber.trim() || !/^0\d{9}$/.test(phoneNumber)) {
-      showToast('Số điện thoại không hợp lệ (phải bắt đầu bằng số 0 và có 10 chữ số)!', 'warning');
-      return false;
+    if (businessType === 'Khac' && !customBusinessType.trim()) {
+      localErrors.customBusinessType = 'Vui lòng nhập loại hình kinh doanh khác!';
     }
-    if (!city.trim()) {
-      showToast('Vui lòng nhập Thành phố!', 'warning');
-      return false;
+    if (!phoneNumber.trim()) {
+      localErrors.phoneNumber = 'Số điện thoại không được để trống!';
+    } else if (!/^0\d{9}$/.test(phoneNumber.trim())) {
+      localErrors.phoneNumber = 'Số điện thoại phải bắt đầu bằng số 0 và có 10 chữ số!';
     }
     if (!address.trim()) {
-      showToast('Vui lòng nhập hoặc chọn Địa chỉ trên bản đồ!', 'warning');
-      return false;
+      localErrors.address = 'Địa chỉ không được để trống!';
     }
-    if (taxCode.trim() && !/^\d{10}(-\d{3})?$/.test(taxCode)) {
-      showToast('Mã số thuế không đúng định dạng (10 số hoặc 13 số nối bởi dấu gạch)!', 'warning');
-      return false;
+    if (!city.trim()) {
+      localErrors.city = 'Thành phố không được để trống!';
     }
-    if (!description.trim() || description.trim().length < 20) {
-      showToast('Mô tả phải có tối thiểu 20 ký tự!', 'warning');
-      return false;
+    if (!description.trim()) {
+      localErrors.description = 'Giới thiệu về quán không được để trống!';
+    } else if (description.trim().length < 20) {
+      localErrors.description = 'Giới thiệu về quán phải có tối thiểu 20 ký tự!';
     }
-    return true;
-  };
 
-  const handleSaveProfile = async () => {
-    if (!validateForm()) return;
+    if (Object.keys(localErrors).length > 0) {
+      setErrors(localErrors);
+      showToast('Vui lòng kiểm tra lại thông tin bị lỗi!', 'warning');
+      return;
+    }
+
     setSubmitting(true);
-
     try {
       const payload = {
-        phoneNumber,
+        phoneNumber: phoneNumber.trim(),
         avatarUrl: avatarUrl.trim() || null,
-        businessName,
-        businessType,
-        address,
-        city,
+        businessName: businessName.trim(),
+        businessType: businessType === 'Khac' ? customBusinessType.trim() : businessType,
+        address: address.trim(),
+        city: city.trim(),
         taxCode: taxCode.trim() || null,
-        description
+        description: description.trim()
       };
 
       if (isRegistered) {
@@ -448,64 +878,66 @@ export default function EmployerProfileScreen() {
   };
 
   // Google Maps Leaflet template
-  const mapHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-      <style>
-        body { margin: 0; padding: 0; }
-        #map { height: 100vh; width: 100vw; }
-        .leaflet-control-attribution { display: none !important; }
-      </style>
-    </head>
-    <body>
-      <div id="map"></div>
-      <script>
-        var map = L.map('map', { 
-          zoomControl: true,
-          dragging: true,
-          touchZoom: true,
-          scrollWheelZoom: true
-        }).setView([${mapInitCoords.latitude}, ${mapInitCoords.longitude}], 15);
-        
-        L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-          maxZoom: 19
-        }).addTo(map);
+  const mapHtml = useMemo(() => {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          body { margin: 0; padding: 0; }
+          #map { height: 100vh; width: 100vw; }
+          .leaflet-control-attribution { display: none !important; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          var map = L.map('map', { 
+            zoomControl: true,
+            dragging: true,
+            touchZoom: true,
+            scrollWheelZoom: true
+          }).setView([${mapInitCoords.latitude}, ${mapInitCoords.longitude}], 15);
+          
+          L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            maxZoom: 20
+          }).addTo(map);
 
-        var marker = L.marker([${mapInitCoords.latitude}, ${mapInitCoords.longitude}], {
-          draggable: true
-        }).addTo(map);
+          var marker = L.marker([${mapInitCoords.latitude}, ${mapInitCoords.longitude}], {
+            draggable: true
+          }).addTo(map);
 
-        function sendLocation(lat, lng) {
-          var payload = JSON.stringify({
-            type: 'location_selected',
-            latitude: lat,
-            longitude: lng
-          });
-          if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(payload);
-          } else {
-            window.parent.postMessage(payload, '*');
+          function sendLocation(lat, lng) {
+            var payload = JSON.stringify({
+              type: 'location_selected',
+              latitude: lat,
+              longitude: lng
+            });
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(payload);
+            } else {
+              window.parent.postMessage(payload, '*');
+            }
           }
-        }
 
-        map.on('click', function(e) {
-          var coords = e.latlng;
-          marker.setLatLng(coords);
-          sendLocation(coords.lat, coords.lng);
-        });
+          map.on('click', function(e) {
+            var coords = e.latlng;
+            marker.setLatLng(coords);
+            sendLocation(coords.lat, coords.lng);
+          });
 
-        marker.on('dragend', function(e) {
-          var coords = marker.getLatLng();
-          sendLocation(coords.lat, coords.lng);
-        });
-      </script>
-    </body>
-    </html>
-  `;
+          marker.on('dragend', function(e) {
+            var coords = marker.getLatLng();
+            sendLocation(coords.lat, coords.lng);
+          });
+        </script>
+      </body>
+      </html>
+    `;
+  }, [mapInitCoords.latitude, mapInitCoords.longitude]);
 
   if (loading) {
     return (
@@ -560,9 +992,6 @@ export default function EmployerProfileScreen() {
                       {isActive ? 'Đã hoạt động' : 'Chờ kích hoạt'}
                     </Text>
                   </View>
-                  {/* <Text style={styles.bentoStoreType}>
-                    • {BUSINESS_TYPES.find(t => t.value === businessType)?.label.split(' ')[0]}
-                  </Text> */}
                 </View>
               </View>
             </View>
@@ -578,23 +1007,27 @@ export default function EmployerProfileScreen() {
             {/* Input: Business Name */}
             <View style={styles.bentoInputGroup}>
               <Text style={styles.bentoLabel}>Tên Quán / Doanh Nghiệp <Text style={styles.required}>*</Text></Text>
-              <View style={styles.bentoInputWrapper}>
-                <Ionicons name="storefront-outline" size={18} color="#94A3B8" style={styles.inputIcon} />
+              <View style={[styles.bentoInputWrapper, errors.businessName && { borderColor: '#EF4444' }]}>
+                <Ionicons name="storefront-outline" size={18} color={errors.businessName ? '#EF4444' : '#94A3B8'} style={styles.inputIcon} />
                 <TextInput
                   style={styles.bentoInput}
                   value={businessName}
-                  onChangeText={setBusinessName}
+                  onChangeText={(val) => {
+                    setBusinessName(val);
+                    if (errors.businessName) setErrors(prev => ({ ...prev, businessName: null }));
+                  }}
                   placeholder="Highlands Coffee Nam Cao"
                   placeholderTextColor="#94A3B8"
                 />
               </View>
+              {errors.businessName && <Text style={styles.errorText}>{errors.businessName}</Text>}
             </View>
 
             {/* Selector: Business Type */}
             <View style={styles.bentoInputGroup}>
               <Text style={styles.bentoLabel}>Loại Hình Kinh Doanh <Text style={styles.required}>*</Text></Text>
               <TouchableOpacity
-                style={styles.bentoDropdownBtn}
+                style={[styles.bentoDropdownBtn, errors.customBusinessType && { borderColor: '#EF4444' }]}
                 onPress={() => setShowTypeDropdown(!showTypeDropdown)}
                 activeOpacity={0.7}
               >
@@ -606,7 +1039,7 @@ export default function EmployerProfileScreen() {
                     style={styles.inputIcon}
                   />
                   <Text style={styles.bentoDropdownText}>
-                    {BUSINESS_TYPES.find(t => t.value === businessType)?.label || 'Chọn loại hình'}
+                    {businessType === 'Khac' && customBusinessType ? customBusinessType : (BUSINESS_TYPES.find(t => t.value === businessType)?.label || 'Chọn loại hình')}
                   </Text>
                 </View>
                 <Ionicons name={showTypeDropdown ? 'chevron-up' : 'chevron-down'} size={18} color="#64748B" />
@@ -621,6 +1054,10 @@ export default function EmployerProfileScreen() {
                       onPress={() => {
                         setBusinessType(type.value);
                         setShowTypeDropdown(false);
+                        if (type.value !== 'Khac') {
+                          setCustomBusinessType('');
+                        }
+                        setErrors(prev => ({ ...prev, customBusinessType: null }));
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -636,23 +1073,44 @@ export default function EmployerProfileScreen() {
                   ))}
                 </View>
               )}
+
+              {businessType === 'Khac' && (
+                <View style={[styles.bentoInputWrapper, { marginTop: 10 }, errors.customBusinessType && { borderColor: '#EF4444' }]}>
+                  <Ionicons name="create-outline" size={18} color={errors.customBusinessType ? '#EF4444' : '#94A3B8'} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.bentoInput}
+                    value={customBusinessType}
+                    onChangeText={(val) => {
+                      setCustomBusinessType(val);
+                      if (errors.customBusinessType) setErrors(prev => ({ ...prev, customBusinessType: null }));
+                    }}
+                    placeholder="Nhập loại hình khác (Ví dụ: Tiệm quần áo)..."
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              )}
+              {errors.customBusinessType && <Text style={styles.errorText}>{errors.customBusinessType}</Text>}
             </View>
 
             {/* Input: Phone & Tax Code */}
             <View style={styles.twoColumnRow}>
               <View style={[styles.bentoInputGroup, { flex: 1.2, marginRight: 10 }]}>
                 <Text style={styles.bentoLabel}>Số Điện Thoại <Text style={styles.required}>*</Text></Text>
-                <View style={styles.bentoInputWrapper}>
-                  <Ionicons name="call-outline" size={18} color="#94A3B8" style={styles.inputIcon} />
+                <View style={[styles.bentoInputWrapper, errors.phoneNumber && { borderColor: '#EF4444' }]}>
+                  <Ionicons name="call-outline" size={18} color={errors.phoneNumber ? '#EF4444' : '#94A3B8'} style={styles.inputIcon} />
                   <TextInput
                     style={styles.bentoInput}
                     value={phoneNumber}
-                    onChangeText={setPhoneNumber}
+                    onChangeText={(val) => {
+                      setPhoneNumber(val);
+                      if (errors.phoneNumber) setErrors(prev => ({ ...prev, phoneNumber: null }));
+                    }}
                     keyboardType="phone-pad"
                     placeholder="0912345678"
                     placeholderTextColor="#94A3B8"
                   />
                 </View>
+                {errors.phoneNumber && <Text style={styles.errorText}>{errors.phoneNumber}</Text>}
               </View>
 
               <View style={[styles.bentoInputGroup, { flex: 1 }]}>
@@ -681,14 +1139,18 @@ export default function EmployerProfileScreen() {
             <View style={styles.bentoInputGroup}>
               <Text style={styles.bentoLabel}>Giới thiệu về quán <Text style={styles.required}>* (Tối thiểu 20 ký tự)</Text></Text>
               <TextInput
-                style={styles.bentoTextArea}
+                style={[styles.bentoTextArea, errors.description && { borderColor: '#EF4444' }]}
                 value={description}
-                onChangeText={setDescription}
+                onChangeText={(val) => {
+                  setDescription(val);
+                  if (errors.description) setErrors(prev => ({ ...prev, description: null }));
+                }}
                 placeholder="Môi trường làm việc năng động, sạch sẽ. Thân thiện với sinh viên..."
                 placeholderTextColor="#94A3B8"
                 multiline={true}
                 numberOfLines={4}
               />
+              {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
               <Text style={styles.charCount}>
                 Đã nhập: {description.trim().length} ký tự
               </Text>
@@ -702,81 +1164,210 @@ export default function EmployerProfileScreen() {
               <Text style={styles.bentoSectionTitle}>Định vị địa chỉ (Google Maps)</Text>
             </View>
 
-            {/* Map Container */}
-            <View style={styles.mapContainerOuter}>
-              <View style={styles.mapWrapper}>
-                {Platform.OS === 'web' ? (
-                  <iframe
-                    srcDoc={mapHtml}
-                    style={styles.webMap}
-                    title="Google Maps Location Picker"
-                  />
-                ) : (
-                  <WebView
-                    ref={webviewRef}
-                    originWhitelist={['*']}
-                    source={{ html: mapHtml }}
-                    style={styles.mobileMap}
-                    javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                    onMessage={handleMapMessage}
-                  />
-                )}
+            {/* 1. Input: Address */}
+            <View style={styles.bentoInputGroup}>
+              <Text style={styles.bentoLabel}>ĐỊA CHỈ <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.bentoInputWrapper, { position: 'relative', zIndex: 9999 }, errors.address && { borderColor: '#EF4444' }]}>
+                <Ionicons name="location-outline" size={18} color={errors.address ? '#EF4444' : '#94A3B8'} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.bentoInput, { paddingRight: 100 }]}
+                  value={address}
+                  onChangeText={(val) => {
+                    handleAddressChange(val);
+                    if (errors.address) setErrors(prev => ({ ...prev, address: null }));
+                  }}
+                  placeholder="Nhập địa chỉ của quán..."
+                  placeholderTextColor="#94A3B8"
+                />
 
-                {isGeocoding && (
-                  <View style={styles.mapLoadingOverlay}>
+                {suggestionsLoading ? (
+                  <ActivityIndicator size="small" color="#0A58CA" style={{ position: 'absolute', right: 90, top: 15 }} />
+                ) : null}
+
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: 8,
+                    backgroundColor: '#64748B',
+                    borderRadius: 10,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    height: 34,
+                    justifyContent: 'center',
+                  }}
+                  disabled={isGeocoding}
+                  onPress={handleSearchAddress}
+                >
+                  {isGeocoding ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text style={styles.mapLoadingText}>Đang xử lý vị trí...</Text>
+                  ) : (
+                    <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>Tìm Tọa Độ</Text>
+                  )}
+                </TouchableOpacity>
+
+                {showSuggestions && addressSuggestions.length > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    top: 52,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 8,
+                    elevation: 4,
+                    maxHeight: 200,
+                    zIndex: 99999,
+                  }}>
+                    <ScrollView keyboardShouldPersistTaps="always">
+                      {addressSuggestions.map((item, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={{
+                            paddingVertical: 12,
+                            paddingHorizontal: 16,
+                            borderBottomWidth: index === addressSuggestions.length - 1 ? 0 : 1,
+                            borderBottomColor: '#F1F5F9',
+                          }}
+                          onPress={() => handleSelectSuggestion(item)}
+                        >
+                          <Text style={{ fontSize: 13, color: '#334155', fontWeight: '500' }}>{item.display_name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
                   </View>
                 )}
               </View>
+              {errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
+            </View>
 
-              {/* Floating location fetcher button */}
+            {/* 2. GPS & Map Buttons Row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
               <TouchableOpacity
-                style={styles.gpsFloatingBtn}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#10B981',
+                  paddingVertical: 12,
+                  borderRadius: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 10,
+                  shadowColor: '#10B981',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 6,
+                  elevation: 2,
+                }}
                 onPress={handleGetCurrentLocation}
+                disabled={isGeocoding}
                 activeOpacity={0.8}
               >
-                <Ionicons name="locate" size={20} color="#0A58CA" />
-                <Text style={styles.gpsFloatingBtnText}>Định vị của tôi</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>📍 GPS Hiện Tại</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#FF6B00',
+                  paddingVertical: 12,
+                  borderRadius: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#FF6B00',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 6,
+                  elevation: 2,
+                }}
+                onPress={() => setShowMap(!showMap)}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>🗺️ Bản Đồ</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Input: City */}
+            {/* 3. Coordinates Badges Row */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 }}>
+              <View style={{
+                backgroundColor: '#F1F5F9',
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 99,
+                marginRight: 8,
+                marginBottom: 8,
+              }}>
+                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#64748B' }}>
+                  Lat: {selectedCoords.latitude.toFixed(6)}
+                </Text>
+              </View>
+              <View style={{
+                backgroundColor: '#F1F5F9',
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 99,
+                marginRight: 8,
+                marginBottom: 8,
+              }}>
+                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#64748B' }}>
+                  Long: {selectedCoords.longitude.toFixed(6)}
+                </Text>
+              </View>
+              <View style={{
+                backgroundColor: '#E6F4EA',
+                borderColor: '#137333',
+                borderWidth: 1,
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 99,
+                marginRight: 8,
+                marginBottom: 8,
+              }}>
+                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#137333' }}>
+                  ✓ GPS Đã kết nối
+                </Text>
+              </View>
+            </View>
+
+            {/* 4. Map Container (Conditional) - Isolated with React.memo */}
+            <LeafletMap
+              mapHtml={mapHtml}
+              handleMapMessage={handleMapMessage}
+              isGeocoding={isGeocoding}
+              showMap={showMap}
+              webviewRef={webviewRef}
+            />
+
+            {/* 5. Input: City */}
             <View style={styles.bentoInputGroup}>
-              <Text style={styles.bentoLabel}>Thành Phố / Tỉnh <Text style={styles.required}>*</Text></Text>
-              <View style={styles.bentoInputWrapper}>
-                <Ionicons name="map-outline" size={18} color="#94A3B8" style={styles.inputIcon} />
+              <Text style={styles.bentoLabel}>THÀNH PHỐ <Text style={styles.required}>*</Text></Text>
+              <View style={[styles.bentoInputWrapper, errors.city && { borderColor: '#EF4444' }]}>
+                <Ionicons name="map-outline" size={18} color={errors.city ? '#EF4444' : '#94A3B8'} style={styles.inputIcon} />
                 <TextInput
                   style={styles.bentoInput}
                   value={city}
-                  onChangeText={setCity}
-                  placeholder="Thành phố Hồ Chí Minh"
+                  onChangeText={(val) => {
+                    setCity(val);
+                    if (errors.city) setErrors(prev => ({ ...prev, city: null }));
+                  }}
+                  placeholder="TP. Hồ Chí Minh"
                   placeholderTextColor="#94A3B8"
                 />
               </View>
-            </View>
-
-            {/* Input: Address */}
-            <View style={styles.bentoInputGroup}>
-              <Text style={styles.bentoLabel}>Địa Chỉ Chi Tiết <Text style={styles.required}>*</Text></Text>
-              <View style={styles.bentoInputWrapper}>
-                <Ionicons name="location-outline" size={18} color="#94A3B8" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.bentoInput}
-                  value={address}
-                  onChangeText={setAddress}
-                  placeholder="84/10 Nam Cao, Phường Tân Phú"
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
+              {errors.city && <Text style={styles.errorText}>{errors.city}</Text>}
             </View>
           </View>
-
+ 
           {/* Submit Button */}
           <TouchableOpacity
             style={styles.saveBtn}
-            onPress={handleSaveProfile}
+            onPress={handleSubmit}
             disabled={submitting}
             activeOpacity={0.85}
           >
@@ -1240,5 +1831,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94A3B8',
     fontWeight: '400',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 6,
+    marginLeft: 4,
+    fontWeight: '600',
   }
 });

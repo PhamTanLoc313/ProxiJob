@@ -52,6 +52,9 @@ function MainAppShell() {
   const toggleAvatarMenu = async () => {
     const nextState = !avatarMenuOpen;
     setAvatarMenuOpen(nextState);
+    if (nextState) {
+      setNotifModalVisible(false); // Close notification dropdown if open
+    }
     if (nextState && user && user.role !== "student") {
       try {
         const q = await getJobPostQuotaApi();
@@ -93,7 +96,7 @@ function MainAppShell() {
   const isStudent = !user || user.role === "student";
 
   const tier = user?.subscriptionTier?.toLowerCase() || '';
-  const hasStandard = tier === 'standard' || tier === 'premium' || tier === 'enterprise';
+  const hasStandard = tier === 'hrm basic' || tier === 'enterprise' || tier === 'standard' || tier === 'premium';
 
   const hideHeaderScreens = ["candidate_list", "payment_qr", "upgrade_package", "employer_emergency_post"];
   const showHeader = !hideHeaderScreens.includes(currentScreen) && !isChatRoomActive;
@@ -101,11 +104,14 @@ function MainAppShell() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <StatusBar style="dark" />
-      {avatarMenuOpen && (
+      {(avatarMenuOpen || notifModalVisible) && (
         <TouchableOpacity
           style={styles.backdrop}
           activeOpacity={1}
-          onPress={() => setAvatarMenuOpen(false)}
+          onPress={() => {
+            setAvatarMenuOpen(false);
+            setNotifModalVisible(false);
+          }}
         />
       )}
       {showHeader && (
@@ -149,7 +155,10 @@ function MainAppShell() {
                   {/* Notification Button */}
                   <TouchableOpacity
                     style={styles.bellButton}
-                    onPress={() => setNotifModalVisible(true)}
+                    onPress={() => {
+                      setNotifModalVisible(!notifModalVisible);
+                      setAvatarMenuOpen(false); // Close avatar dropdown if open
+                    }}
                     activeOpacity={0.7}
                   >
                     <Ionicons name={unreadNotifsCount > 0 ? "notifications" : "notifications-outline"} size={22} color="#F59E0B" />
@@ -159,7 +168,7 @@ function MainAppShell() {
                       </View>
                     )}
                   </TouchableOpacity>
-
+ 
                   {/* Avatar Button */}
                   <TouchableOpacity
                     style={[styles.avatarTouch, isStudent ? styles.studentAvatarRing : styles.employerAvatarRing]}
@@ -193,6 +202,22 @@ function MainAppShell() {
           {/* Avatar Dropdown Menu */}
           {avatarMenuOpen && (
             <View style={styles.dropdownMenu}>
+              {/* Caret pointing up to Avatar */}
+              <View style={{
+                position: 'absolute',
+                top: -8,
+                right: 22,
+                width: 0,
+                height: 0,
+                backgroundColor: 'transparent',
+                borderStyle: 'solid',
+                borderLeftWidth: 8,
+                borderRightWidth: 8,
+                borderBottomWidth: 8,
+                borderLeftColor: 'transparent',
+                borderRightColor: 'transparent',
+                borderBottomColor: '#FFFFFF',
+              }} />
               {/* Close Button */}
               <TouchableOpacity
                 style={styles.closeDropdownBtn}
@@ -219,9 +244,9 @@ function MainAppShell() {
                       ? styles.studentPill 
                       : (!user?.subscriptionTier || user.subscriptionTier === 'None' || user.subscriptionTier === '')
                         ? { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
-                        : user.subscriptionTier.toLowerCase() === 'standard'
+                        : (user.subscriptionTier.toLowerCase() === 'recruit' || user.subscriptionTier.toLowerCase() === 'pershift')
                           ? { backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
-                          : user.subscriptionTier.toLowerCase() === 'premium'
+                          : (user.subscriptionTier.toLowerCase() === 'hrm basic' || user.subscriptionTier.toLowerCase() === 'standard')
                             ? { backgroundColor: '#FAF5FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
                             : styles.enterprisePill
                   }>
@@ -230,27 +255,43 @@ function MainAppShell() {
                         ? styles.studentPillText 
                         : (!user?.subscriptionTier || user.subscriptionTier === 'None' || user.subscriptionTier === '')
                           ? { color: '#64748B', fontSize: 11, fontWeight: '800' }
-                          : user.subscriptionTier.toLowerCase() === 'standard'
+                          : (user.subscriptionTier.toLowerCase() === 'recruit' || user.subscriptionTier.toLowerCase() === 'pershift')
                             ? { color: '#059669', fontSize: 11, fontWeight: '800' }
-                            : user.subscriptionTier.toLowerCase() === 'premium'
+                            : (user.subscriptionTier.toLowerCase() === 'hrm basic' || user.subscriptionTier.toLowerCase() === 'standard')
                               ? { color: '#7C3AED', fontSize: 11, fontWeight: '800' }
                               : styles.enterprisePillText
                     }>
                       {(() => {
-                        if (isStudent) return "Student";
+                        if (isStudent) return "Sinh viên";
                         const tierName = user?.subscriptionTier || "None";
-                        if (tierName === 'None' || tierName === '') return "Chưa đăng ký";
+                        const lowerTier = tierName.toLowerCase();
+                        if (lowerTier === 'none' || lowerTier === 'free' || lowerTier === '') {
+                          return "Chưa đăng ký";
+                        }
                         
                         const remaining = quota 
                           ? quota.jobPostsRemaining 
                           : (user?.jobPostLimit !== undefined && user?.jobPostsUsed !== undefined)
                             ? Math.max(0, user.jobPostLimit - user.jobPostsUsed)
-                            : (tierName.toLowerCase() === 'pershift' ? 1 : tierName.toLowerCase() === 'basic' ? 15 : 999);
+                            : (lowerTier === 'pershift' ? 1 : lowerTier === 'recruit' || lowerTier === 'basic' ? 30 : 999);
                         
-                        if (tierName.toLowerCase() === 'pershift') {
-                          return `Còn ${remaining} lượt`;
+                        let vietnameseName = tierName;
+                        if (lowerTier === 'pershift') {
+                          vietnameseName = 'Gói đăng ca lẻ';
+                        } else if (lowerTier === 'recruit') {
+                          vietnameseName = 'Tuyển dụng';
+                        } else if (lowerTier === 'hrm basic' || lowerTier === 'standard') {
+                          vietnameseName = 'HRM Cơ bản';
+                        } else if (lowerTier === 'enterprise' || lowerTier === 'premium') {
+                          vietnameseName = 'Doanh nghiệp';
+                        } else if (lowerTier === 'trial') {
+                          vietnameseName = 'Dùng thử';
                         }
-                        return `${tierName} (Còn ${remaining} lượt)`;
+                        
+                        if (lowerTier === 'pershift') {
+                          return `Đăng ca lẻ (Còn ${remaining} lượt)`;
+                        }
+                        return `${vietnameseName} (Còn ${remaining} lượt)`;
                       })()}
                     </Text>
                   </View>
@@ -303,56 +344,80 @@ function MainAppShell() {
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Notification Dropdown Menu */}
+          {notifModalVisible && (
+            <View style={[styles.dropdownMenu, { width: 290 }]}>
+              {/* Caret pointing up to Bell */}
+              <View style={{
+                position: 'absolute',
+                top: -8,
+                right: 67, // Points directly to the center of the bell button
+                width: 0,
+                height: 0,
+                backgroundColor: 'transparent',
+                borderStyle: 'solid',
+                borderLeftWidth: 8,
+                borderRightWidth: 8,
+                borderBottomWidth: 8,
+                borderLeftColor: 'transparent',
+                borderRightColor: 'transparent',
+                borderBottomColor: '#FFFFFF',
+              }} />
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderColor: '#E2E8F0', paddingBottom: 8, marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="notifications-outline" size={16} color="#1E293B" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E293B' }}>
+                    Thông báo Hệ thống
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setNotifModalVisible(false)}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    backgroundColor: '#F1F5F9',
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Ionicons name="close" size={12} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Notification List inside ScrollView */}
+              <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+                {notifications.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                    <Text style={{ color: '#94A3B8', fontSize: 12 }}>
+                      Không có thông báo mới.
+                    </Text>
+                  </View>
+                ) : (
+                  notifications.map((notif) => (
+                    <View key={notif.id} style={{ flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 8, backgroundColor: '#F8FAFC', borderRadius: 12, marginBottom: 6, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                      <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#FF6B001A', justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+                        <Ionicons name="notifications-outline" size={14} color="#FF6B00" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E293B' }}>{notif.title}</Text>
+                          <Text style={{ fontSize: 9, color: '#94A3B8', fontWeight: '600' }}>{notif.time}</Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#475569', lineHeight: 14, marginTop: 2 }}>{notif.content}</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          )}
         </SafeAreaView>
       )}
       {/* Main Content Area using MainTabNavigator */}
       <MainTabNavigator isStudent={isStudent} />
-
-      {/* Notification Drawer Modal */}
-      <Modal
-        visible={notifModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setNotifModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Thông báo Hệ thống (RabbitMQ)
-              </Text>
-              <TouchableOpacity onPress={() => setNotifModalVisible(false)}>
-                <Text style={styles.closeText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.notifList}>
-              {notifications.length === 0 ? (
-                <View style={styles.emptyNotif}>
-                  <Text style={styles.emptyNotifText}>
-                    Không có thông báo mới.
-                  </Text>
-                </View>
-              ) : (
-                notifications.map((notif) => (
-                  <View key={notif.id} style={styles.notifCard}>
-                    <View style={styles.notifBadgeCircle}>
-                      <Text style={{ fontSize: 12 }}>🔔</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.notifTitleRow}>
-                        <Text style={styles.notifTitle}>{notif.title}</Text>
-                        <Text style={styles.notifTime}>{notif.time}</Text>
-                      </View>
-                      <Text style={styles.notifBody}>{notif.content}</Text>
-                    </View>
-                  </View>
-                ))
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -496,58 +561,71 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    backgroundColor: "rgba(15, 23, 42, 0.3)", // slate-900 with elegant overlay transparency
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: theme.colors.white,
-    borderTopLeftRadius: theme.borderRadius.lg,
-    borderTopRightRadius: theme.borderRadius.lg,
-    paddingBottom: 30,
-    maxHeight: "75%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24, // Fully rounded floating container
+    marginHorizontal: 16,
+    marginBottom: Platform.OS === "ios" ? 34 : 20, // Float elegantly above screen bottom
+    paddingBottom: 16,
+    maxHeight: "60%", // Compact modal height
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: theme.spacing.lg,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: "#F1F5F9",
   },
   modalTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#1E293B",
   },
   closeText: {
     fontSize: 18,
-    color: theme.colors.textMuted,
+    color: "#64748B",
   },
   notifList: {
-    padding: theme.spacing.md,
+    padding: 12,
   },
   emptyNotif: {
     alignItems: "center",
-    paddingVertical: 40,
+    paddingVertical: 30,
   },
   emptyNotifText: {
-    color: theme.colors.textLight,
+    color: "#94A3B8",
     fontSize: 13,
   },
   notifCard: {
     flexDirection: "row",
-    paddingVertical: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: "#F8FAFC", // Sleek grey background card
+    borderRadius: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
   notifBadgeCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.colors.primary + "1A",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#FF6B001A", // Light orange tint container
     justifyContent: "center",
     alignItems: "center",
-    marginRight: theme.spacing.sm,
+    marginRight: 10,
   },
   notifTitleRow: {
     flexDirection: "row",
@@ -556,39 +634,35 @@ const styles = StyleSheet.create({
   },
   notifTitle: {
     fontSize: 13,
-    fontWeight: "bold",
-    color: theme.colors.text,
+    fontWeight: "800",
+    color: "#1E293B",
   },
   notifTime: {
     fontSize: 10,
-    color: theme.colors.textLight,
+    color: "#94A3B8",
+    fontWeight: "600",
   },
   notifBody: {
     fontSize: 12,
-    color: theme.colors.textMuted,
+    color: "#475569",
     lineHeight: 16,
-    marginTop: 2,
+    marginTop: 3,
   },
   dropdownMenu: {
     position: "absolute",
-    top: 64,
+    top: Platform.OS === "ios" ? 104 : 95, // Account for status bar and header height
     right: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.96)",
-    borderRadius: 24, // rounded-3xl
+    backgroundColor: "#FFFFFF", // Solid white for high contrast
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.6)",
-    padding: 18, // p-4.5
-    width: 272, // w-68
-    ...Platform.select({
-      web: {
-        backdropFilter: "blur(20px)",
-      },
-    }),
-    shadowColor: "rgba(0, 0, 0, 0.1)",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 1,
-    shadowRadius: 40,
-    elevation: 8,
+    borderColor: "#E2E8F0", // Clean slate border
+    padding: 16,
+    width: 272,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15, // Increased shadow opacity for maximum contrast
+    shadowRadius: 30, // Softer, wider shadow glow
+    elevation: 10, // Higher elevation to rise above all maps and components on Android
     zIndex: 99999,
   },
   dropdownSection1: {

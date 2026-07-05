@@ -354,9 +354,21 @@ export default function EmployerScheduling() {
     }
   }, [schedulesList]);
 
-  const filteredStaff = (staffList || []).filter(s =>
-    !s.isExternal && s.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const removeAccents = (str) => {
+    if (!str) return '';
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D');
+  };
+
+  const filteredStaff = (staffList || []).filter(s => {
+    if (s.isExternal) return false;
+    const normalizedName = removeAccents(s.name.toLowerCase());
+    const normalizedQuery = removeAccents(searchQuery.toLowerCase());
+    return normalizedName.includes(normalizedQuery);
+  });
 
   const openAssignModal = (slotId) => {
     setAssigningShift({ slotId });
@@ -988,17 +1000,15 @@ export default function EmployerScheduling() {
         </View>
       </ScrollView>
 
-      {/* Staff Selector Modal (Bottom Sheet style) */}
+      {/* Staff Selector Modal (Centered style) */}
       <Modal
         visible={modalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-
+        <View style={styles.centeredModalOverlay}>
+          <View style={styles.centeredModalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 Gán nhân sự vào {assigningShift ? (shiftSlots.find(s => s.id === assigningShift.slotId)?.name || 'ca làm') : 'ca làm'}
