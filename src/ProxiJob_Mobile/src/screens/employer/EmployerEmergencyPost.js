@@ -616,6 +616,7 @@ export default function EmployerEmergencyPost() {
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [startTimeVisible, setStartTimeVisible] = useState(false);
   const [endTimeVisible, setEndTimeVisible] = useState(false);
+  const [quotaModalVisible, setQuotaModalVisible] = useState(false);
   const [errors, setErrors] = useState({});
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState(''); // Empty by default
@@ -1230,26 +1231,35 @@ export default function EmployerEmergencyPost() {
     }
 
     setLoading(true);
-    const success = await createJobPostWizard({
-      title: finalTitle,
-      description: finalDescription,
-      requirements,
-      categoryId: finalCategoryId,
-      salary: isEmergency ? Math.round((parseFloat(salary.replace(/,/g, '')) || 0) * 1.3).toString() : salary,
-      skillNames: finalSelectedSkills,
-      address,
-      latitude,
-      longitude,
-      date,
-      startTime,
-      endTime,
-      isEmergency
-    });
-    setLoading(false);
+    try {
+      const success = await createJobPostWizard({
+        title: finalTitle,
+        description: finalDescription,
+        requirements,
+        categoryId: finalCategoryId,
+        salary: isEmergency ? Math.round((parseFloat(salary.replace(/,/g, '')) || 0) * 1.3).toString() : salary,
+        skillNames: finalSelectedSkills,
+        address,
+        latitude,
+        longitude,
+        date,
+        startTime,
+        endTime,
+        isEmergency
+      });
+      setLoading(false);
 
-    if (success) {
-      showToast('Đăng tin tuyển dụng thành công!', 'success');
-      navigateTo('employer_approvals');
+      if (success) {
+        showToast('Đăng tin tuyển dụng thành công!', 'success');
+        navigateTo('employer_approvals');
+      }
+    } catch (err) {
+      setLoading(false);
+      if (err.message === 'QUOTA_EXCEEDED') {
+        setQuotaModalVisible(true);
+      } else {
+        console.log('Error creating job post:', err);
+      }
     }
   };
 
@@ -2031,6 +2041,120 @@ export default function EmployerEmergencyPost() {
             </View>
           </View>
         </SafeAreaView>
+      </Modal>
+
+      {/* Custom Quota Limit Modal */}
+      <Modal
+        visible={quotaModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setQuotaModalVisible(false)}
+      >
+        <View style={modalStyles.modalOverlay}>
+          <View style={[modalStyles.pickerContainer, { padding: 24, maxWidth: 340, alignItems: 'center' }]}>
+            {/* Header Icon */}
+            <View style={{
+              width: 72,
+              height: 72,
+              borderRadius: 36,
+              backgroundColor: '#FFF7ED',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 20,
+              borderWidth: 1.5,
+              borderColor: '#FFEDD5',
+              shadowColor: '#FF6B00',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.1,
+              shadowRadius: 10,
+              elevation: 2
+            }}>
+              <Ionicons name="rocket" size={36} color="#FF6B00" />
+            </View>
+
+            {/* Title */}
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '800',
+              color: '#0F172A',
+              textAlign: 'center',
+              marginBottom: 10,
+              fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold'
+            }}>
+              Hết lượt đăng tin
+            </Text>
+
+            {/* Description */}
+            <Text style={{
+              fontSize: 14,
+              color: '#64748B',
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 24,
+              fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular'
+            }}>
+              Bạn đã dùng hết lượt đăng tin miễn phí. Vui lòng nâng cấp gói dịch vụ để tiếp tục đăng tuyển dụng không giới hạn!
+            </Text>
+
+            {/* Premium Features List */}
+            <View style={{ width: '100%', marginBottom: 24, backgroundColor: '#F8FAFC', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#F1F5F9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="sparkles" size={14} color="#FF6B00" style={{ marginRight: 8 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Đăng tin không giới hạn</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="notifications" size={14} color="#FF6B00" style={{ marginRight: 8 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Đẩy tin tức thì đến ứng viên</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="checkmark-circle" size={14} color="#FF6B00" style={{ marginRight: 8 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Tăng tỷ lệ duyệt hồ sơ 2.5x</Text>
+              </View>
+            </View>
+
+            {/* Buttons Row */}
+            <View style={{ flexDirection: 'row', width: '100%', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setQuotaModalVisible(false)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 16,
+                  backgroundColor: '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0'
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569', fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold' }}>Để sau</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setQuotaModalVisible(false);
+                  navigateTo('upgrade_package');
+                }}
+                style={{
+                  flex: 1.4,
+                  paddingVertical: 14,
+                  borderRadius: 16,
+                  backgroundColor: '#FF6B00',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#FF6B00',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF', fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold' }}>Nâng cấp ngay ⚡</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

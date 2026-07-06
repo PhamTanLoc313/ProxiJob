@@ -17,4 +17,5 @@ public class PayrollDto
     public int? EmployerRating { get; set; }
     public string? EmployerComments { get; set; }
     public string? ShopName { get; set; }
+    public string? AdjustmentNote { get; set; }
 }

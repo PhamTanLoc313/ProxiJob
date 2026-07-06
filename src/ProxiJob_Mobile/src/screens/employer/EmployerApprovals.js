@@ -2163,11 +2163,12 @@ const styles = StyleSheet.create({
   },
   segmentText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: '#5A4136',
   },
   segmentTextActive: {
     color: '#FF6B00', // Active brand neon orange
+    fontWeight: '800',
   },
   cardsWrapper: {
     width: '100%',

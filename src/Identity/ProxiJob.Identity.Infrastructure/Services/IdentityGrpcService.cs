@@ -16,6 +16,8 @@ namespace ProxiJob.Identity.Infrastructure.Services
         private readonly IUserContextService _userContextService;
         private readonly IConfiguration _configuration;
         private readonly IdentityDbContext _dbContext;
+        private readonly IJobPostQuotaService _jobPostQuotaService;
+        private readonly IRoleRepository _roleRepository;
 
         public IdentityGrpcServiceImpl(
             IStudentProfileRepository studentProfileRepository,
@@ -23,7 +25,9 @@ namespace ProxiJob.Identity.Infrastructure.Services
             IUnitOfWork unitOfWork,
             IUserContextService userContextService,
             IConfiguration configuration,
-            IdentityDbContext dbContext)
+            IdentityDbContext dbContext,
+            IJobPostQuotaService jobPostQuotaService,
+            IRoleRepository roleRepository)
         {
             _studentProfileRepository = studentProfileRepository;
             _businessProfileRepository = businessProfileRepository;
@@ -31,6 +35,8 @@ namespace ProxiJob.Identity.Infrastructure.Services
             _userContextService = userContextService;
             _configuration = configuration;
             _dbContext = dbContext;
+            _jobPostQuotaService = jobPostQuotaService;
+            _roleRepository = roleRepository;
         }
 
         public override async Task<GetUserContextResponse> GetUserContext(
@@ -181,6 +187,73 @@ namespace ProxiJob.Identity.Infrastructure.Services
             await _unitOfWork.SaveChangesAsync(context.CancellationToken);
 
             return new UpdateBusinessReputationResponse { Success = true };
+        }
+
+        public override async Task<CheckJobPostQuotaResponse> CheckJobPostQuota(
+            CheckJobPostQuotaRequest request,
+            ServerCallContext context)
+        {
+            if (request.UserId <= 0)
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "user_id is required."));
+
+            try
+            {
+                var role = await _roleRepository.GetUserRoleNameAsync(request.UserId, context.CancellationToken)
+                    ?? "Business";
+                var quota = await _jobPostQuotaService.GetQuotaAsync(request.UserId, role, context.CancellationToken);
+
+                return new CheckJobPostQuotaResponse
+                {
+                    CanPostJob = quota.CanPostJob,
+                    JobPostLimit = quota.JobPostLimit,
+                    JobPostsUsed = quota.JobPostsUsed,
+                    JobPostsRemaining = quota.JobPostsRemaining,
+                    SubscriptionTier = quota.SubscriptionTier ?? string.Empty,
+                    MustPurchasePlan = quota.MustPurchasePlan,
+                    Message = quota.CanPostJob
+                        ? $"Còn {quota.JobPostsRemaining} lượt đăng tin."
+                        : quota.MustPurchasePlan
+                            ? "Bạn đã hết lượt đăng tin miễn phí. Vui lòng mua gói dịch vụ để tiếp tục."
+                            : "Bạn đã đạt giới hạn đăng tin của gói hiện tại. Vui lòng nâng cấp gói."
+                };
+            }
+            catch (Exception ex)
+            {
+                throw new RpcException(new Status(StatusCode.Internal, ex.Message));
+            }
+        }
+
+        public override async Task<ConsumeJobPostQuotaResponse> ConsumeJobPostQuota(
+            ConsumeJobPostQuotaRequest request,
+            ServerCallContext context)
+        {
+            if (request.UserId <= 0)
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "user_id is required."));
+
+            try
+            {
+                var result = await _jobPostQuotaService.ConsumeOnePostAsync(request.UserId, context.CancellationToken);
+
+                return new ConsumeJobPostQuotaResponse
+                {
+                    Success = true,
+                    JobPostsRemaining = result.JobPostsRemaining,
+                    Message = $"Đã trừ 1 lượt. Còn lại {result.JobPostsRemaining} lượt đăng tin."
+                };
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new ConsumeJobPostQuotaResponse
+                {
+                    Success = false,
+                    JobPostsRemaining = 0,
+                    Message = ex.Message
+                };
+            }
+            catch (Exception ex)
+            {
+                throw new RpcException(new Status(StatusCode.Internal, ex.Message));
+            }
         }
     }
 }

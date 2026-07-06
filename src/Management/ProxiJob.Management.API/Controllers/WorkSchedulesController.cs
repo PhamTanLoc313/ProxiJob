@@ -127,6 +127,7 @@ public class WorkSchedulesController : ApiControllerBase
         try
         {
             var userId = GetUserId();
+            await ProxiJob.Management.Application.Features.Timekeepings.TimekeepingHelper.AutoCheckoutStaleRecordsAsync(_context);
             
             var employeeIds = await _context.Employees
                 .Where(e => e.UserId == userId)

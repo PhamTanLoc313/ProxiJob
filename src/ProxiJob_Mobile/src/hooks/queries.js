@@ -589,6 +589,8 @@ export const useAttendanceLogsQuery = (user) => {
           shiftName: log.shiftName,
           checkInTime: log.checkInTime ? new Date(log.checkInTime).toLocaleTimeString('vi-VN') : null,
           checkOutTime: log.checkOutTime ? new Date(log.checkOutTime).toLocaleTimeString('vi-VN') : null,
+          rawCheckInTime: log.checkInTime,
+          rawCheckOutTime: log.checkOutTime,
           status: log.status === 'Suspicious' ? 'suspicious' :
             log.status === 'NotCheckedIn' ? 'not_checked_in' :
               log.status === 'Absent' ? 'absent' :
@@ -596,7 +598,14 @@ export const useAttendanceLogsQuery = (user) => {
           date: log.date || new Date().toLocaleDateString('vi-VN'),
           photo: log.checkInPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
           gpsStatus: log.status === 'Suspicious' ? 'Nghi vấn GPS' : 'Hợp lệ',
-          studentPhone: log.studentPhone
+          studentPhone: log.studentPhone,
+          inLatitude: log.inLatitude,
+          inLongitude: log.inLongitude,
+          outLatitude: log.outLatitude,
+          outLongitude: log.outLongitude,
+          note: log.note,
+          scheduledStartTime: log.scheduledStartTime || null,
+          scheduledEndTime: log.scheduledEndTime || null
         }));
       } catch (err) {
         console.log('Error loading attendance logs query:', err);

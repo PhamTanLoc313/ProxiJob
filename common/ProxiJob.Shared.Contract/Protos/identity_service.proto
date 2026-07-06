@@ -20,6 +20,12 @@ service IdentityGrpcService {
 
   // Cập nhật reputation cho chủ quán
   rpc UpdateBusinessReputation (UpdateBusinessReputationRequest) returns (UpdateBusinessReputationResponse);
+
+  // Job Service: kiểm tra hạn mức đăng tin của chủ quán
+  rpc CheckJobPostQuota (CheckJobPostQuotaRequest) returns (CheckJobPostQuotaResponse);
+
+  // Job Service: trừ 1 lượt đăng tin sau khi tạo bài thành công
+  rpc ConsumeJobPostQuota (ConsumeJobPostQuotaRequest) returns (ConsumeJobPostQuotaResponse);
 }
 
 message GetStudentCvForApplicationRequest {
@@ -100,4 +106,28 @@ message UpdateBusinessReputationRequest {
 
 message UpdateBusinessReputationResponse {
   bool success = 1;
+}
+
+message CheckJobPostQuotaRequest {
+  int32 user_id = 1;
+}
+
+message CheckJobPostQuotaResponse {
+  bool can_post_job = 1;
+  int32 job_post_limit = 2;
+  int32 job_posts_used = 3;
+  int32 job_posts_remaining = 4;
+  string subscription_tier = 5;
+  bool must_purchase_plan = 6;
+  string message = 7;
+}
+
+message ConsumeJobPostQuotaRequest {
+  int32 user_id = 1;
+}
+
+message ConsumeJobPostQuotaResponse {
+  bool success = 1;
+  int32 job_posts_remaining = 2;
+  string message = 3;
 }

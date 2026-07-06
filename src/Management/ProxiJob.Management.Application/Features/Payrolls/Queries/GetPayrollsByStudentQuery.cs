@@ -79,7 +79,8 @@ public class GetPayrollsByStudentQueryHandler : IRequestHandler<GetPayrollsByStu
             Comments = p.Comments,
             EmployerRating = p.EmployerRating,
             EmployerComments = p.EmployerComments,
-            ShopName = shopNames.TryGetValue(p.Employee.BusinessId, out var name) ? name : "Cửa hàng ProxiJob"
+            ShopName = shopNames.TryGetValue(p.Employee.BusinessId, out var name) ? name : "Cửa hàng ProxiJob",
+            AdjustmentNote = p.AdjustmentNote
         }).ToList();
     }
 }

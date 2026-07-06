@@ -30,6 +30,8 @@ public class GetTimekeepingByBusinessQueryHandler : IRequestHandler<GetTimekeepi
 
     public async Task<List<TimekeepingDto>> Handle(GetTimekeepingByBusinessQuery request, CancellationToken cancellationToken)
     {
+        await ProxiJob.Management.Application.Features.Timekeepings.TimekeepingHelper.AutoCheckoutStaleRecordsAsync(_context, cancellationToken);
+
         var schedules = await _context.WorkSchedules
             .Include(ws => ws.Employee)
             .Include(ws => ws.Timekeeping)
@@ -89,7 +91,9 @@ public class GetTimekeepingByBusinessQueryHandler : IRequestHandler<GetTimekeepi
                 EmployeeName = ws.Employee.FullName,
                 Position = ws.Employee.Position,
                 ShiftName = ws.Note,
-                StudentPhone = phone
+                StudentPhone = phone,
+                ScheduledStartTime = ws.StartTime,
+                ScheduledEndTime = ws.EndTime
             };
         }).ToList();
 

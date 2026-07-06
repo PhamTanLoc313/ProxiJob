@@ -514,3 +514,27 @@ export async function getJobPostQuotaApi() {
   }
 }
 
+/**
+ * Consume 1 job post quota after successful post creation
+ * @returns {Promise<object|null>}
+ */
+export async function consumeJobPostQuotaApi() {
+  try {
+    const token = await getStoredToken();
+    if (!token) return null;
+    const response = await fetch(`${API_BASE_URL}/plans/job-posts/consume`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const resData = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob API] consumeJobPostQuotaApi failed:', error.message);
+    return null;
+  }
+}
+

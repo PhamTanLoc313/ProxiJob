@@ -53,7 +53,8 @@ public class GetPayrollsByBusinessQueryHandler : IRequestHandler<GetPayrollsByBu
                 Rating = p.Rating,
                 Comments = p.Comments,
                 EmployerRating = p.EmployerRating,
-                EmployerComments = p.EmployerComments
+                EmployerComments = p.EmployerComments,
+                AdjustmentNote = p.AdjustmentNote
             })
             .ToListAsync(cancellationToken);
     }

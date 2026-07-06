@@ -49,6 +49,7 @@ export const AppProvider = ({ children }) => {
     STUDENT_MOCK_GPS: locationState.STUDENT_MOCK_GPS,
     showToast: toastState.showToast,
     addNotification: toastState.addNotification,
+    navigateTo: navigationState.navigateTo,
   });
   shiftsStateRef.current = shiftsState;
 

@@ -53,6 +53,7 @@ export default function EmployerMonitor() {
   const employerShifts = employerData?.shifts || [];
 
   const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [expandedStaffId, setExpandedStaffId] = useState(null);
 
   // Shift slots states (for mapping note/slotId to shift details)
   const [shiftSlots, setShiftSlots] = useState([
@@ -113,6 +114,68 @@ export default function EmployerMonitor() {
     if (shiftKey === 'afternoon') return 13 * 60;
     if (shiftKey === 'evening') return 18 * 60;
     return 24 * 60; // other/custom shifts go last
+  };
+
+  const getPunctualityStatus = (person) => {
+    if (!person.rawCheckInTime || !person.scheduledStartTime) {
+      return null;
+    }
+    try {
+      const actual = new Date(person.rawCheckInTime);
+      const scheduled = new Date(person.scheduledStartTime);
+      
+      const diffMs = actual.getTime() - scheduled.getTime();
+      const diffMins = Math.round(diffMs / 60000);
+      
+      if (diffMins <= 5) {
+        return {
+          status: 'on_time',
+          text: 'Đúng giờ',
+          color: '#10B981',
+          bg: '#D1FAE5'
+        };
+      } else {
+        return {
+          status: 'late',
+          text: `Trễ ${diffMins}ph`,
+          color: '#EF4444',
+          bg: '#FEE2E2'
+        };
+      }
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const getCheckOutPunctuality = (person) => {
+    if (!person.rawCheckOutTime || !person.scheduledEndTime) {
+      return null;
+    }
+    try {
+      const actual = new Date(person.rawCheckOutTime);
+      const scheduled = new Date(person.scheduledEndTime);
+      
+      const diffMs = scheduled.getTime() - actual.getTime(); // positive means left early
+      const diffMins = Math.round(diffMs / 60000);
+      
+      if (diffMins > 5) {
+        return {
+          status: 'early',
+          text: `Sớm ${diffMins}ph`,
+          color: '#F59E0B',
+          bg: '#FEF3C7'
+        };
+      } else {
+        return {
+          status: 'on_time',
+          text: 'Đúng giờ ra ca',
+          color: '#10B981',
+          bg: '#D1FAE5'
+        };
+      }
+    } catch (e) {
+      return null;
+    }
   };
 
   const [shopLat, setShopLat] = useState(10.857461); // 84/10 Nam Cao, Quận 9, TP.HCM
@@ -281,6 +344,14 @@ export default function EmployerMonitor() {
       const distance = isGpsActive ? calculateHaversineDistance(lat, lng, targetLat, targetLng) : null;
       const isSuspicious = log.status === 'suspicious' || (distance && distance > 100);
 
+      const checkInDistance = (log.inLatitude && log.inLongitude)
+        ? calculateHaversineDistance(log.inLatitude, log.inLongitude, targetLat, targetLng)
+        : null;
+
+      const checkOutDistance = (log.outLatitude && log.outLongitude)
+        ? calculateHaversineDistance(log.outLatitude, log.outLongitude, targetLat, targetLng)
+        : null;
+
       return {
         id: log.id || `ws_${log.shiftId}`,
         employeeId: log.employeeId || null,
@@ -300,7 +371,19 @@ export default function EmployerMonitor() {
         isExternal: isExternal,
         targetLat,
         targetLng,
-        targetAddress
+        targetAddress,
+        studentPhone: log.studentPhone,
+        inLatitude: log.inLatitude,
+        inLongitude: log.inLongitude,
+        outLatitude: log.outLatitude,
+        outLongitude: log.outLongitude,
+        checkInDistance: checkInDistance,
+        checkOutDistance: checkOutDistance,
+        rawCheckInTime: log.rawCheckInTime,
+        rawCheckOutTime: log.rawCheckOutTime,
+        scheduledStartTime: log.scheduledStartTime,
+        scheduledEndTime: log.scheduledEndTime,
+        note: log.note
       };
     });
 
@@ -613,82 +696,246 @@ export default function EmployerMonitor() {
               statusText = '✓ ĐÃ RA CA';
             }
 
+            const isExpanded = expandedStaffId === person.id;
+
             return (
-              <View
+              <TouchableOpacity
                 key={person.id}
+                activeOpacity={0.9}
+                onPress={() => setExpandedStaffId(prev => prev === person.id ? null : person.id)}
                 style={[
                   styles.premiumStaffCard,
-                  cardStatusStyle
+                  cardStatusStyle,
+                  { flexDirection: 'column', alignItems: 'stretch' }
                 ]}
               >
-                {/* Left: Square-rounded avatar */}
-                <Image
-                  source={getAvatarSource(person.photo, null, person.name)}
-                  style={styles.staffAvatar}
-                />
+                {/* Horizontal Header Row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                  {/* Left: Square-rounded avatar */}
+                  <Image
+                    source={getAvatarSource(person.photo, null, person.name)}
+                    style={styles.staffAvatar}
+                  />
 
-                {/* Center: Info */}
-                <View style={styles.staffInfoContainer}>
-                  <Text style={styles.staffName}>{person.name}</Text>
-                  <View style={styles.staffStatusRow}>
-                    <View style={[
-                      styles.statusIndicatorDot,
-                      { backgroundColor: statusColor }
-                    ]} />
-                    <Text style={[
-                      styles.staffStatusText,
-                      { color: statusColor }
-                    ]}>
-                      {statusText}
+                  {/* Center: Info */}
+                  <View style={styles.staffInfoContainer}>
+                     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                       <Text style={styles.staffName}>{person.name}</Text>
+                       {(() => {
+                         const punct = getPunctualityStatus(person);
+                         if (!punct) return null;
+                         return (
+                           <View style={{
+                             backgroundColor: punct.bg,
+                             paddingHorizontal: 6,
+                             paddingVertical: 2,
+                             borderRadius: 6,
+                           }}>
+                             <Text style={{ fontSize: 9, fontWeight: '800', color: punct.color }}>
+                               {punct.text.toUpperCase()}
+                             </Text>
+                           </View>
+                         );
+                       })()}
+                       <Ionicons
+                         name={isExpanded ? "chevron-up" : "chevron-down"}
+                         size={14}
+                         color="#94A3B8"
+                       />
+                     </View>
+                    <View style={styles.staffStatusRow}>
+                      <View style={[
+                        styles.statusIndicatorDot,
+                        { backgroundColor: statusColor }
+                      ]} />
+                      <Text style={[
+                        styles.staffStatusText,
+                        { color: statusColor }
+                      ]}>
+                        {statusText}
+                      </Text>
+                    </View>
+                    <Text style={styles.staffRole} numberOfLines={1} ellipsizeMode="tail">
+                      {person.role} • {formatShiftName(person.shiftName)}
                     </Text>
                   </View>
-                  <Text style={styles.staffRole} numberOfLines={1} ellipsizeMode="tail">
-                    {person.role} • {formatShiftName(person.shiftName)}
-                  </Text>
+
+                  {/* Right: Actions & Timestamp */}
+                  <View style={styles.staffRightContainer}>
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity
+                        style={[styles.actionIconButton, styles.chatButton]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          const staffMember = staffList.find(s => s.id === person.employeeId || s.name === person.name);
+                          if (staffMember && staffMember.userId) {
+                            navigationParams.partnerId = staffMember.userId;
+                            navigationParams.partnerName = staffMember.name;
+                            navigationParams.partnerAvatar = staffMember.avatarUrl;
+                            navigationParams.partnerPhone = person.studentPhone || staffMember.phone;
+                            setNavigationParams({ ...navigationParams });
+                            navigateTo('employer_chat');
+                          } else {
+                            Alert.alert('Không thể nhắn tin', 'Không tìm thấy tài khoản liên kết với nhân sự này.');
+                          }
+                        }}
+                      >
+                        <Ionicons name="chatbubble-ellipses" size={16} color="#FF6B00" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionIconButton, styles.callButton]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          const staffMember = staffList.find(s => s.id === person.employeeId || s.name === person.name);
+                          const phone = person.studentPhone || staffMember?.phone || '0901234567';
+                          handleCallUser(phone);
+                        }}
+                      >
+                        <Ionicons name="call" size={15} color="#0A58CA" />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.checkInTimeText}>
+                      {isNotCheckedIn ? 'Chưa Điểm Danh' :
+                       isAbsent ? 'Vắng Mặt' :
+                       isCompleted ? `Ra ca: ${person.checkOutTime}` :
+                       `Check-in: ${person.checkInTime}`}
+                    </Text>
+                  </View>
                 </View>
 
-                {/* Right: Actions & Timestamp */}
-                <View style={styles.staffRightContainer}>
-                  <View style={styles.actionsRow}>
-                    <TouchableOpacity
-                      style={[styles.actionIconButton, styles.chatButton]}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        const staffMember = staffList.find(s => s.id === person.employeeId || s.name === person.name);
-                        if (staffMember && staffMember.userId) {
-                          navigationParams.partnerId = staffMember.userId;
-                          navigationParams.partnerName = staffMember.name;
-                          navigationParams.partnerAvatar = staffMember.avatarUrl;
-                          navigationParams.partnerPhone = staffMember.phone;
-                          setNavigationParams({ ...navigationParams });
-                          navigateTo('employer_chat');
-                        } else {
-                          Alert.alert('Không thể nhắn tin', 'Không tìm thấy tài khoản liên kết với nhân sự này.');
-                        }
-                      }}
-                    >
-                      <Ionicons name="chatbubble-ellipses" size={16} color="#FF6B00" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionIconButton, styles.callButton]}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        const staffMember = staffList.find(s => s.id === person.employeeId || s.name === person.name);
-                        const phone = staffMember?.phone || '0901234567';
-                        handleCallUser(phone);
-                      }}
-                    >
-                      <Ionicons name="call" size={15} color="#0A58CA" />
-                    </TouchableOpacity>
+                {/* Collapsible details box */}
+                {isExpanded && (
+                  <View style={styles.expandedDetailBox}>
+                    <View style={styles.detailDivider} />
+
+                    {/* Contact Info */}
+                    <View style={styles.infoBlock}>
+                      <Text style={styles.infoBlockLabel}>THÔNG TIN LIÊN HỆ</Text>
+                      <Text style={styles.infoBlockValue}>📞 {person.studentPhone || 'Chưa cập nhật'}</Text>
+                    </View>
+
+                    {/* System notes (early checkout/late/absent) */}
+                    {person.note && (
+                      <View style={[styles.infoBlock, styles.warningNoteBox]}>
+                        <Text style={styles.warningNoteLabel}>⚠️ Ghi chú điểm danh:</Text>
+                        <Text style={styles.warningNoteText}>{person.note}</Text>
+                      </View>
+                    )}
+
+                    {/* Check In info */}
+                    <View style={styles.logDetailSection}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <View style={styles.logStepNumber}><Text style={styles.logStepText}>1</Text></View>
+                        <Text style={styles.logSectionTitle}>CHI TIẾT CHECK-IN</Text>
+                      </View>
+                      
+                      {person.rawStatus === 'not_checked_in' || person.rawStatus === 'absent' ? (
+                        <Text style={styles.logEmptyText}>Chưa thực hiện check-in</Text>
+                      ) : (
+                        <View style={styles.logDetailsBox}>
+                          <View style={styles.logDetailRow}>
+                            <Text style={styles.logDetailLabel}>⏰ Giờ Check-in:</Text>
+                            <Text style={styles.logDetailVal}>{person.checkInTime}</Text>
+                          </View>
+                          {person.inLatitude && (
+                            <View style={styles.logDetailRow}>
+                              <Text style={styles.logDetailLabel}>📍 Tọa độ GPS:</Text>
+                              <Text style={styles.logDetailVal}>
+                                {person.inLatitude.toFixed(6)}, {person.inLongitude?.toFixed(6)}
+                              </Text>
+                            </View>
+                          )}
+                          <View style={styles.logDetailRow}>
+                            <Text style={styles.logDetailLabel}>📏 Khoảng cách:</Text>
+                            <Text style={styles.logDetailVal}>
+                              {person.checkInDistance !== null ? `Cách quán ${person.checkInDistance}m` : 'N/A'}
+                            </Text>
+                          </View>
+                          {(() => {
+                            const punct = getPunctualityStatus(person);
+                            if (!punct) return null;
+                            return (
+                              <View style={styles.logDetailRow}>
+                                <Text style={styles.logDetailLabel}>⏱️ Trạng thái:</Text>
+                                <View style={{
+                                  backgroundColor: punct.bg,
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 2,
+                                  borderRadius: 6,
+                                  alignSelf: 'flex-start'
+                                }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: punct.color }}>
+                                    {punct.text.toUpperCase()}
+                                  </Text>
+                                </View>
+                              </View>
+                            );
+                          })()}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Check Out info */}
+                    <View style={[styles.logDetailSection, { marginTop: 12 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <View style={[styles.logStepNumber, { backgroundColor: '#3B82F6' }]}><Text style={styles.logStepText}>2</Text></View>
+                        <Text style={styles.logSectionTitle}>CHI TIẾT CHECK-OUT</Text>
+                      </View>
+
+                      {person.rawStatus === 'completed' ? (
+                        <View style={styles.logDetailsBox}>
+                          <View style={styles.logDetailRow}>
+                            <Text style={styles.logDetailLabel}>⏰ Giờ Check-out:</Text>
+                            <Text style={styles.logDetailVal}>{person.checkOutTime}</Text>
+                          </View>
+                          {person.outLatitude && (
+                            <View style={styles.logDetailRow}>
+                              <Text style={styles.logDetailLabel}>📍 Tọa độ GPS:</Text>
+                              <Text style={styles.logDetailVal}>
+                                {person.outLatitude.toFixed(6)}, {person.outLongitude?.toFixed(6)}
+                              </Text>
+                            </View>
+                          )}
+                          {person.checkOutDistance !== null && (
+                            <View style={styles.logDetailRow}>
+                              <Text style={styles.logDetailLabel}>📏 Khoảng cách:</Text>
+                              <Text style={styles.logDetailVal}>
+                                Cách quán {person.checkOutDistance}m
+                              </Text>
+                            </View>
+                          )}
+                          {(() => {
+                            const punct = getCheckOutPunctuality(person);
+                            if (!punct) return null;
+                            return (
+                              <View style={styles.logDetailRow}>
+                                <Text style={styles.logDetailLabel}>⏱️ Trạng thái:</Text>
+                                <View style={{
+                                  backgroundColor: punct.bg,
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 2,
+                                  borderRadius: 6,
+                                  alignSelf: 'flex-start'
+                                }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: punct.color }}>
+                                    {punct.text.toUpperCase()}
+                                  </Text>
+                                </View>
+                              </View>
+                            );
+                          })()}
+                        </View>
+                      ) : (
+                        <Text style={styles.logEmptyText}>
+                          {person.rawStatus === 'working' || person.rawStatus === 'suspicious'
+                            ? 'Đang làm việc (Chưa check-out)'
+                            : 'Chưa thực hiện check-out'}
+                        </Text>
+                      )}
+                    </View>
                   </View>
-                  <Text style={styles.checkInTimeText}>
-                    {isNotCheckedIn ? 'Chưa Điểm Danh' :
-                     isAbsent ? 'Vắng Mặt' :
-                     isCompleted ? `Ra ca: ${person.checkOutTime}` :
-                     `Check-in: ${person.checkInTime}`}
-                  </Text>
-                </View>
-              </View>
+                )}
+              </TouchableOpacity>
             );
           })
         )}
@@ -1218,5 +1465,100 @@ const styles = StyleSheet.create({
   },
   shiftTabTextActive: {
     color: '#FFFFFF',
+  },
+  expandedDetailBox: {
+    width: '100%',
+    marginTop: 10,
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
+  },
+  infoBlock: {
+    marginBottom: 8,
+  },
+  infoBlockLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+  },
+  infoBlockValue: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  warningNoteBox: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 4,
+  },
+  warningNoteLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  warningNoteText: {
+    fontSize: 11,
+    color: '#DC2626',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  logDetailSection: {
+    marginBottom: 8,
+  },
+  logStepNumber: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  logStepText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  logSectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.5,
+  },
+  logEmptyText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    marginLeft: 28,
+  },
+  logDetailsBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    marginLeft: 28,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  logDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  logDetailLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  logDetailVal: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '700',
   },
 });
