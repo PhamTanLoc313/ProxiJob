@@ -8,3 +8,14 @@
 **/out
 **/dist
 **/.env
+**/docs
+**/images
+**/*.md
+**/stitch_proxijob_hyperlocal_employment_suite*
+**/DbSequenceFixTemp
+**/src/ProxiJob_Mobile
+**/src/ProxiJob_Client
+**/package.json
+**/package-lock.json
+**/run_backend.ps1
+**/.agents
