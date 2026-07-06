@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ProxiJob_Mobile",
-    "slug": "ProxiJob_Mobile",
+    "slug": "proxijob-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,13 +10,20 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.team04.proxijob",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -30,6 +37,12 @@
         }
       ],
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b670a2a5-ddd7-4aab-ac0e-ef5bb8b63bbd"
+      }
+    },
+    "owner": "proxijob-team"
   }
 }

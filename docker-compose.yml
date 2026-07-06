@@ -6,7 +6,7 @@ services:
     container_name: proxijob-rabbitmq
     ports:
       - "5672:5672"   # AMQP protocol port
-      - "15672:15672" # Management UI
+      - "15672:15672" # Management UI (accessible internally only)
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
@@ -14,6 +14,22 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - proxijob-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   identity-api:
     build:
@@ -24,16 +40,36 @@ services:
       - "5231:5231" # REST API & Swagger / SignalR
       - "5232:5232" # gRPC HTTP/2 port
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ConnectionStrings__DefaultConnection=${SUPABASE_CONNECTION_STRING}
       - Kestrel__EndpointDefaults__Protocols=Http1AndHttp2
       - RabbitMQ__Host=rabbitmq
       - RabbitMQ__Username=${RABBITMQ_DEFAULT_USER}
       - RabbitMQ__Password=${RABBITMQ_DEFAULT_PASS}
+      - JwtSettings__SecretKey=${JWT_SECRET_KEY}
+      - PaymentSettings__PublicBaseUrl=${PUBLIC_BASE_URL}
+      - Identity__PublicBaseUrl=${PUBLIC_BASE_URL}
     networks:
       - proxijob-network
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5231/swagger/index.html || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   job-api:
     build:
@@ -43,7 +79,7 @@ services:
     ports:
       - "5021:5021"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:5021
       - ConnectionStrings__DefaultConnection=${SUPABASE_CONNECTION_STRING}
       - GrpcServices__Identity=http://identity-api:5232
@@ -54,8 +90,26 @@ services:
     networks:
       - proxijob-network
     depends_on:
-      - rabbitmq
-      - identity-api
+      rabbitmq:
+        condition: service_healthy
+      identity-api:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5021/swagger/index.html || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   management-api:
     build:
@@ -65,7 +119,7 @@ services:
     ports:
       - "5057:5057"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:5057
       - ConnectionStrings__DefaultConnection=${SUPABASE_CONNECTION_STRING}
       - GrpcServices__Identity=http://identity-api:5232
@@ -75,8 +129,26 @@ services:
     networks:
       - proxijob-network
     depends_on:
-      - rabbitmq
-      - identity-api
+      rabbitmq:
+        condition: service_healthy
+      identity-api:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5057/swagger/index.html || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   rabbitmq_data:
