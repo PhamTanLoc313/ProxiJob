@@ -122,4 +122,22 @@ Dưới đây là tài liệu hóa chi tiết toàn bộ các chỉnh sửa, nâ
 * **Đóng gói biến môi trường vào EAS Build:** Thêm khối cấu hình `"env"` trực tiếp vào profile `"preview"` trong file **[eas.json](file:///d:/ProxiJob/src/ProxiJob_Mobile/eas.json)** để tự động nhúng cứng các biến Supabase và API URL vào APK lúc biên dịch.
 * **Xử lý an toàn tại tầng khởi tạo:** Cập nhật **[dbConfig.js](file:///d:/ProxiJob/src/ProxiJob_Mobile/src/db/dbConfig.js)** bằng cấu trúc `try/catch` và kiểm tra giá trị. Nếu biến môi trường bị thiếu, client sẽ trả về `null` kèm cảnh báo thay vì làm sập toàn bộ ứng dụng khi khởi chạy.
 
+---
+
+## 🔒 10. Kích Hoạt Bảo Mật RLS Cho Toàn Bộ Bảng Dữ Liệu (Supabase Database RLS Security Fix)
+
+### 📌 Vấn đề trước đó:
+* **Cảnh báo bảo mật từ Supabase:** Nhận thông báo nguy cơ rò rỉ dữ liệu cực kỳ nghiêm trọng (`rls_disabled_in_public` và `sensitive_columns_exposed`). 
+* **Nguyên nhân:** Do các service C# Backend sử dụng Entity Framework Core tạo bảng trực tiếp trong schema mặc định `public`. Khi các bảng này được tạo ra nhưng chưa được bật bảo mật **Row-Level Security (RLS)**, cổng API HTTP (PostgREST) công khai của Supabase sẽ tự động phơi bày toàn bộ 28 bảng dữ liệu ra internet. Bất kỳ ai có Anon Key và URL dự án đều có thể đọc/ghi/xóa dữ liệu trực tiếp qua REST API.
+
+### 🛠️ Các chỉnh sửa đã thực hiện:
+* **Viết script tự động kích hoạt bảo mật:** Tạo tệp script NodeJS chuyên dụng **[enable_rls_all_tables.js](file:///d:/ProxiJob/src/ProxiJob_Mobile/db_check/enable_rls_all_tables.js)** sử dụng thư viện `pg` để kết nối trực tiếp vào PostgreSQL của Supabase.
+* **Kích hoạt RLS cho toàn bộ 28 bảng:** Truy vấn danh sách toàn bộ các bảng do người dùng tạo trong schema `public` và chạy lệnh SQL `ALTER TABLE public."<tên_bảng>" ENABLE ROW LEVEL SECURITY;`.
+* **Đảm bảo không ảnh hưởng đến Backend:** 
+  * Cơ chế RLS chỉ áp dụng cho truy cập HTTP qua cổng API công khai (anon/authenticated). 
+  * Các Microservices backend (.NET) kết nối trực tiếp bằng Connection String qua quyền Superuser (`postgres.jjruquhoqcwcmogpfvhf`) nên mặc định bỏ qua RLS và truy cập đọc ghi bình thường.
+  * Ứng dụng di động chỉ sử dụng duy nhất tính năng Supabase Storage (đã được cấu hình các RLS policies cho tệp tin cụ thể ở `apply_rls.js`) nên cũng không bị ảnh hưởng.
+* **Kết quả:** Đã khóa bảo mật thành công 28/28 bảng dữ liệu quan trọng của hệ thống ProxiJob khỏi nguy cơ truy cập trái phép.
+
+
 
