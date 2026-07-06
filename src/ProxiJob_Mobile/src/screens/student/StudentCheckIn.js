@@ -8,7 +8,8 @@ import {
   Platform,
   ActivityIndicator,
   Animated,
-  Modal
+  Modal,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -376,32 +377,62 @@ export default function StudentCheckIn() {
         setShowSuccessCard(true);
       }
     } else {
-      // Check-Out
-      const success = await checkOutShift(
-        selectedShiftForCheckIn.id,
-        lat,
-        lng,
-        ''
-      );
-      if (success) {
-        setSuccessInfo({
-          type: 'CHECK-OUT',
-          title: 'CHECK-OUT THÀNH CÔNG 🎉',
-          timestamp: timeStr,
-          status: 'Hoàn Thành',
-          statusColor: '#0052CC',
-          shopName: selectedShiftForCheckIn.shopName,
-          shiftTitle: selectedShiftForCheckIn.title
-        });
-        
-        // Reset coordinates to far away after a small delay
-        setTimeout(() => {
-          const farCoords = { latitude: 10.8550, longitude: 106.6300 };
-          setStudentCoords(farCoords);
-        }, 800);
+      // Check-Out with early check alert
+      const triggerCheckOut = async () => {
+        const success = await checkOutShift(
+          selectedShiftForCheckIn.id,
+          lat,
+          lng,
+          ''
+        );
+        if (success) {
+          setSuccessInfo({
+            type: 'CHECK-OUT',
+            title: 'CHECK-OUT THÀNH CÔNG 🎉',
+            timestamp: timeStr,
+            status: 'Hoàn Thành',
+            statusColor: '#0052CC',
+            shopName: selectedShiftForCheckIn.shopName,
+            shiftTitle: selectedShiftForCheckIn.title
+          });
+          
+          // Reset coordinates to far away after a small delay
+          setTimeout(() => {
+            const farCoords = { latitude: 10.8550, longitude: 106.6300 };
+            setStudentCoords(farCoords);
+          }, 800);
 
-        setShowSuccessCard(true);
+          setShowSuccessCard(true);
+        }
+      };
+
+      if (selectedShiftForCheckIn && selectedShiftForCheckIn.endTime) {
+        const now = new Date();
+        const schedEnd = new Date(selectedShiftForCheckIn.endTime);
+        // Early threshold: more than 5 minutes before scheduled end
+        if (now < new Date(schedEnd.getTime() - 5 * 60 * 1000)) {
+          const timeEndStr = schedEnd.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+          if (Platform.OS === 'web') {
+            const confirmLeave = window.confirm(`⚠️ Cảnh báo ra sớm!\nBạn đang check-out sớm hơn giờ kết thúc ca làm việc dự kiến (${timeEndStr}). Bạn có chắc chắn muốn kết thúc ca làm sớm không?`);
+            if (confirmLeave) {
+              triggerCheckOut();
+            }
+          } else {
+            Alert.alert(
+              "Cảnh Báo Ra Sớm ⏰",
+              `Bạn đang thực hiện ra ca sớm hơn giờ kết thúc ca làm việc dự kiến (${timeEndStr}). Bạn có chắc chắn muốn kết thúc ca làm sớm không?`,
+              [
+                { text: "Hủy bỏ", style: "cancel" },
+                { text: "Xác nhận ra sớm", onPress: triggerCheckOut }
+              ]
+            );
+          }
+          return;
+        }
       }
+
+      // If not early, just run checkout
+      triggerCheckOut();
     }
   };
 

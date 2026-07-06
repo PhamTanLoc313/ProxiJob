@@ -295,7 +295,7 @@ export default function JobDetailScreen() {
               </Animated.View>
             ) : (
               <View style={styles.jobTypeTagContainer}>
-                <Text style={styles.jobTypeTagText}>TOÀN THỜI GIAN</Text>
+                <Text style={styles.jobTypeTagText}>BÁN THỜI GIAN</Text>
               </View>
             )}
           </View>

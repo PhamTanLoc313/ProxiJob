@@ -23,4 +23,6 @@ public class TimekeepingDto
     public string Status { get; set; } = default!;
     public bool IsManual { get; set; }
     public string? Note { get; set; }
+    public DateTime? ScheduledStartTime { get; set; }
+    public DateTime? ScheduledEndTime { get; set; }
 }

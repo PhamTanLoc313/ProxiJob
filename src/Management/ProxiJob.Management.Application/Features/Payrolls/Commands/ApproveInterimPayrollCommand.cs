@@ -74,7 +74,8 @@ public class ApproveInterimPayrollCommandHandler : IRequestHandler<ApproveInteri
                     CreatedBy = request.UpdatedBy,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedBy = request.UpdatedBy,
-                    UpdatedAt = DateTime.UtcNow
+                    UpdatedAt = DateTime.UtcNow,
+                    AdjustmentNote = $"TimekeepingId:{timekeeping.Id}"
                 };
 
                 _context.Payrolls.Add(payroll);

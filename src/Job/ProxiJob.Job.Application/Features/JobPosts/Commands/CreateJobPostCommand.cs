@@ -21,14 +21,26 @@ namespace ProxiJob.Job.Application.Features.JobPosts.Commands
     public class CreateJobPostCommandHandler : IRequestHandler<CreateJobPostCommand, int>
     {
         private readonly IJobDbContext _context;
+        private readonly IIdentityGrpcClient _identityGrpcClient;
 
-        public CreateJobPostCommandHandler(IJobDbContext context)
+        public CreateJobPostCommandHandler(IJobDbContext context, IIdentityGrpcClient identityGrpcClient)
         {
             _context = context;
+            _identityGrpcClient = identityGrpcClient;
         }
 
         public async Task<int> Handle(CreateJobPostCommand request, CancellationToken cancellationToken)
         {
+            // ═══ KIỂM TRA HẠN MỨC ĐĂNG TIN ═══
+            var quotaCheck = await _identityGrpcClient.CheckJobPostQuotaAsync(request.BusinessId, cancellationToken);
+            if (!quotaCheck.CanPostJob)
+            {
+                throw new InvalidOperationException(
+                    quotaCheck.MustPurchasePlan
+                        ? "Bạn đã hết lượt đăng tin miễn phí. Vui lòng mua gói dịch vụ để tiếp tục đăng tin."
+                        : "Bạn đã đạt giới hạn đăng tin của gói hiện tại. Vui lòng nâng cấp gói để đăng thêm.");
+            }
+
             // Validate category
             var categoryExists = await _context.JobCategories.AnyAsync(c => c.Id == request.CategoryId, cancellationToken);
             if (!categoryExists) throw new Exception("Category does not exist.");
@@ -96,6 +108,9 @@ namespace ProxiJob.Job.Application.Features.JobPosts.Commands
 
             _context.JobPosts.Add(jobPost);
             await _context.SaveChangesAsync(cancellationToken);
+
+            // ═══ TRỪ 1 LƯỢT ĐĂNG TIN ═══
+            await _identityGrpcClient.ConsumeJobPostQuotaAsync(request.BusinessId, cancellationToken);
 
             return jobPost.Id;
         }

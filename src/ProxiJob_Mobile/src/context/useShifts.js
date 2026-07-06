@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -21,6 +22,7 @@ import {
   checkOutShiftApi,
   getEmployees
 } from '../api/management';
+import { getJobPostQuotaApi } from '../api/auth';
 import { translateError } from './useAuth';
 
 const formatTimeVN = (dateInput) => {
@@ -73,7 +75,8 @@ export const useShifts = ({
   STUDENT_MOCK_GPS,
   showToast,
   addNotification,
-  loadStaffListRef
+  loadStaffListRef,
+  navigateTo
 }) => {
   const queryClient = useQueryClient();
   const [shifts, setShifts] = useState(INITIAL_SHIFTS);
@@ -595,6 +598,12 @@ export const useShifts = ({
     try {
       if (!user) throw new Error('Vui lòng đăng nhập.');
 
+      // ═══ KIỂM TRA HẠN MỨC ĐĂNG TIN PROACTIVE ═══
+      const quota = await getJobPostQuotaApi();
+      if (quota && !quota.canPostJob) {
+        throw new Error('QUOTA_EXCEEDED');
+      }
+
       const {
         title,
         description,
@@ -671,10 +680,13 @@ export const useShifts = ({
       return true;
     } catch (err) {
       console.log('Error creating job post via wizard:', err.message);
+      if (err.message === 'QUOTA_EXCEEDED') {
+        throw err;
+      }
       showToast('Đăng bài thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, mockLat, mockLng, showToast, addNotification, loadEmployerJobs, queryClient]);
+  }, [user, mockLat, mockLng, showToast, addNotification, loadEmployerJobs, queryClient, navigateTo]);
 
   const updateJobPostWizard = useCallback(async (jobPostId, data) => {
     try {

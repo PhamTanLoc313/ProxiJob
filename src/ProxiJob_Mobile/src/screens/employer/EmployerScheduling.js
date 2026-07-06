@@ -834,7 +834,7 @@ export default function EmployerScheduling() {
                                 }}
                                 style={styles.unassignRowBtn}
                               >
-                                <Text style={styles.unassignRowBtnText}>🗑️</Text>
+                                <Ionicons name="trash-outline" size={16} color="#EF4444" />
                               </TouchableOpacity>
                             </View>
                           );
@@ -919,10 +919,10 @@ export default function EmployerScheduling() {
                         const avatarSource = getAvatarSource(staff?.avatarUrl, staff?.gender, assignedStaffName);
                         
                         let rate = '28.000 đ/h';
-                        if (staff && staff.hourlyRate) {
-                          rate = `${Number(staff.hourlyRate).toLocaleString('vi-VN')} đ/h`;
-                        } else if (schedule.jobShiftSalary) {
+                        if (schedule.jobShiftSalary) {
                           rate = `${Number(schedule.jobShiftSalary).toLocaleString('vi-VN')} đ/h`;
+                        } else if (staff && staff.hourlyRate) {
+                          rate = `${Number(staff.hourlyRate).toLocaleString('vi-VN')} đ/h`;
                         }
 
                         // Parse start/end times safely
@@ -966,7 +966,7 @@ export default function EmployerScheduling() {
                               }}
                               style={styles.unassignRowBtn}
                             >
-                              <Text style={styles.unassignRowBtnText}>🗑️</Text>
+                              <Ionicons name="trash-outline" size={16} color="#EF4444" />
                             </TouchableOpacity>
                           </View>
                         );

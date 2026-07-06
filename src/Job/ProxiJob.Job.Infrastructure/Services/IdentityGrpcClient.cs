@@ -112,5 +112,44 @@ public class IdentityGrpcClient : IIdentityGrpcClient, IDisposable
         }
     }
 
+    public async Task<CheckJobPostQuotaResponse> CheckJobPostQuotaAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _client.CheckJobPostQuotaAsync(
+                new CheckJobPostQuotaRequest { UserId = userId },
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "CheckJobPostQuota gRPC failed for user {UserId}", userId);
+            // Return a restrictive default — fail closed
+            return new CheckJobPostQuotaResponse
+            {
+                CanPostJob = false,
+                Message = "Không thể kiểm tra hạn mức đăng tin. Vui lòng thử lại."
+            };
+        }
+    }
+
+    public async Task<ConsumeJobPostQuotaResponse> ConsumeJobPostQuotaAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _client.ConsumeJobPostQuotaAsync(
+                new ConsumeJobPostQuotaRequest { UserId = userId },
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ConsumeJobPostQuota gRPC failed for user {UserId}", userId);
+            return new ConsumeJobPostQuotaResponse
+            {
+                Success = false,
+                Message = "Không thể trừ lượt đăng tin. Vui lòng thử lại."
+            };
+        }
+    }
+
     public void Dispose() => _channel.Dispose();
 }

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { AppContext } from '../../context/AppContext';
 import * as Font from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
 import { getAvatarSource } from '../../utils/avatarHelper';
 import { handleCallUser } from '../../utils/callHelper';
 import { useStaffListQuery, useAddStaffMemberMutation, useRemoveStaffMemberMutation, useUpdateStaffMemberMutation } from '../../hooks/queries';
@@ -490,7 +491,10 @@ export default function EmployerHRM() {
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.editBtnText}>✏️ Chỉnh sửa</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="pencil-outline" size={13} color="#5B00DF" style={{ marginRight: 4 }} />
+                    <Text style={styles.editBtnText}>Chỉnh sửa</Text>
+                  </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -505,7 +509,10 @@ export default function EmployerHRM() {
                   {isDeleting ? (
                     <ActivityIndicator size="small" color="#BA1A1A" />
                   ) : (
-                    <Text style={styles.deleteBtnText}>🗑️ Xóa</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="trash-outline" size={13} color="#BA1A1A" style={{ marginRight: 4 }} />
+                      <Text style={styles.deleteBtnText}>Xóa</Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>

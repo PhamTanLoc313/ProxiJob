@@ -108,6 +108,7 @@ export default function StudentCalendar() {
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
   const [selectedShiftForRequest, setSelectedShiftForRequest] = useState(null);
   const [isSwapRequest, setIsSwapRequest] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState('day'); // 'day', 'week', 'month'
   const [requestReason, setRequestReason] = useState('');
 
   const handleOpenConfirmModal = (payroll) => {
@@ -230,23 +231,36 @@ export default function StudentCalendar() {
 
   const selectedDay = weekDays[selectedDayIndex];
 
-  // Filter approved/active/applied shifts globally
-  const upcomingShiftsGlobal = shifts.filter(
-    (s) => s.status === 'approved' || s.status === 'checkin_active' || s.status === 'applied'
+  const now = new Date();
+
+  // Filter completed shifts globally (or shifts that are in the past)
+  const completedShiftsGlobal = shifts.filter(
+    (s) => s.status === 'completed' || s.status === 'absent' || new Date(s.endTime) < now
   );
 
-  // Filter completed shifts globally
-  const completedShiftsGlobal = shifts.filter((s) => s.status === 'completed');
+  // Filter approved/active/applied shifts globally (which are in the future)
+  const upcomingShiftsGlobal = shifts.filter(
+    (s) => !completedShiftsGlobal.some(cs => cs.id === s.id) && (s.status === 'approved' || s.status === 'checkin_active' || s.status === 'applied')
+  );
 
   // Filter approved/active/applied shifts by selected day
   const upcomingShifts = upcomingShiftsGlobal.filter(s =>
     selectedDay ? isSameDate(s.startTime, selectedDay.apiDateStr) : true
   );
 
-  // Filter completed shifts by selected day
-  const completedShifts = completedShiftsGlobal.filter(s =>
-    selectedDay ? isSameDate(s.startTime, selectedDay.apiDateStr) : true
-  );
+  // Filter completed shifts based on historyFilter selection, sorted by start time desc
+  const completedShifts = completedShiftsGlobal.filter(s => {
+    if (!selectedDay) return true;
+    const sDate = new Date(s.startTime);
+    if (historyFilter === 'day') {
+      return isSameDate(s.startTime, selectedDay.apiDateStr);
+    } else if (historyFilter === 'week') {
+      return weekDays.some(wd => isSameDate(s.startTime, wd.apiDateStr));
+    } else if (historyFilter === 'month') {
+      return (sDate.getMonth() + 1) === selectedDay.month && sDate.getFullYear() === selectedDay.fullYear;
+    }
+    return true;
+  }).sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
 
   const getShiftHours = (shift) => {
     if (!shift.startTime || !shift.endTime) return 4;
@@ -259,10 +273,34 @@ export default function StudentCalendar() {
     }
   };
 
-  // Calculate monthly earnings
-  const completedEarnings = completedShiftsGlobal.reduce((sum, s) => sum + s.hourlyRate * getShiftHours(s), 0);
-  const projectedEarnings = upcomingShiftsGlobal.filter(s => s.status !== 'applied').reduce((sum, s) => sum + s.hourlyRate * getShiftHours(s), 0);
-  const totalEarnings = completedEarnings + projectedEarnings + 3250000; // seed static baseline earnings
+  const currentMonth = selectedDay ? selectedDay.month : (new Date().getMonth() + 1);
+  const currentYear = selectedDay ? selectedDay.fullYear : new Date().getFullYear();
+
+  // Calculate monthly earnings using real payroll data combined with shifts in the current month to avoid missing completed-but-unpaid shifts
+  const completedPayrollEarnings = (payrolls || [])
+    .filter(p => p.status === 'Paid' || p.Status === 'Paid' || p.status === 2 || p.Status === 2)
+    .reduce((sum, p) => sum + (p.finalAmount || p.FinalAmount || 0), 0);
+
+  const completedShiftsValue = completedShiftsGlobal
+    .filter(s => {
+      const d = new Date(s.startTime);
+      return (d.getMonth() + 1) === currentMonth && d.getFullYear() === currentYear;
+    })
+    .reduce((sum, s) => sum + s.hourlyRate * getShiftHours(s), 0);
+
+  const upcomingShiftsValue = upcomingShiftsGlobal
+    .filter(s => {
+      const d = new Date(s.startTime);
+      return s.status !== 'applied' && (d.getMonth() + 1) === currentMonth && d.getFullYear() === currentYear;
+    })
+    .reduce((sum, s) => sum + s.hourlyRate * getShiftHours(s), 0);
+  
+  // Total value is all worked shifts + all upcoming approved shifts in this month
+  const totalValue = completedShiftsValue + upcomingShiftsValue;
+
+  const completedEarnings = completedPayrollEarnings;
+  const projectedEarnings = Math.max(0, totalValue - completedEarnings);
+  const totalEarnings = completedEarnings + projectedEarnings;
 
   const getTimelineLabel = () => {
     if (!selectedDay) return 'Tuần này';
@@ -271,21 +309,26 @@ export default function StudentCalendar() {
 
   const getDaySummaryTitle = () => {
     if (!selectedDay) return 'Lịch trình';
+    if (activeTab === 'completed') {
+      if (historyFilter === 'week') return 'Lịch sử tuần này';
+      if (historyFilter === 'month') return `Lịch sử tháng ${selectedDay.month}`;
+    }
     const dayName = selectedDay.name === 'CN' ? 'Chủ Nhật' : `Thứ ${selectedDay.name.slice(1)}`;
     return `${dayName}, ${selectedDay.date.split('/')[0]} tháng ${selectedDay.month}`;
   };
 
   const renderShiftItem = (shift) => {
-    const isWorking = shift.status === 'checkin_active' || 
+    const isPast = new Date(shift.endTime) < now;
+    const isWorking = (shift.status === 'checkin_active' || 
                       (activeShift && (
                         activeShift.id === shift.id || 
                         activeShift.jobShiftId === shift.id ||
                         `sched_${activeShift.id}` === shift.id ||
                         activeShift.id === `sched_${shift.id}`
-                      ));
+                      ))) && !isPast;
     const isCompleted = shift.status === 'completed';
-    const isApplied = shift.status === 'applied';
-    const isApproved = shift.status === 'approved' && !isWorking;
+    const isApplied = shift.status === 'applied' && !isPast;
+    const isApproved = shift.status === 'approved' && !isWorking && !isPast;
 
     // Left indicator border and visual colors
     let statusColor = '#94A3B8';
@@ -293,7 +336,19 @@ export default function StudentCalendar() {
     let badgeBg = '#F1F5F9';
     let badgeText = '#475569';
 
-    if (isWorking) {
+    if (isPast) {
+      if (isCompleted) {
+        statusColor = '#64748B';
+        statusText = 'HOÀN THÀNH';
+        badgeBg = '#F8FAFC';
+        badgeText = '#64748B';
+      } else {
+        statusColor = '#EF4444';
+        statusText = 'VẮNG MẶT';
+        badgeBg = '#FEF2F2';
+        badgeText = '#EF4444';
+      }
+    } else if (isWorking) {
       statusColor = '#10B981';
       statusText = 'ĐANG LÀM VIỆC';
       badgeBg = '#ECFDF5';
@@ -554,12 +609,44 @@ export default function StudentCalendar() {
         {/* List Header title */}
         <View style={styles.listHeaderRow}>
           <Text style={styles.listHeaderTitle}>{getDaySummaryTitle()}</Text>
-          {selectedDay?.isToday && (
+          {selectedDay?.isToday && activeTab === 'upcoming' && (
             <View style={styles.todayPillBadge}>
               <Text style={styles.todayPillText}>Hôm nay</Text>
             </View>
           )}
         </View>
+
+        {activeTab === 'completed' && (
+          <View style={styles.historyFilterContainer}>
+            <TouchableOpacity 
+              style={[styles.historyFilterBtn, historyFilter === 'day' && styles.historyFilterBtnActive]}
+              activeOpacity={0.8}
+              onPress={() => setHistoryFilter('day')}
+            >
+              <Text style={[styles.historyFilterBtnText, historyFilter === 'day' && styles.historyFilterBtnTextActive]}>
+                Ngày
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.historyFilterBtn, historyFilter === 'week' && styles.historyFilterBtnActive]}
+              activeOpacity={0.8}
+              onPress={() => setHistoryFilter('week')}
+            >
+              <Text style={[styles.historyFilterBtnText, historyFilter === 'week' && styles.historyFilterBtnTextActive]}>
+                Tuần
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.historyFilterBtn, historyFilter === 'month' && styles.historyFilterBtnActive]}
+              activeOpacity={0.8}
+              onPress={() => setHistoryFilter('month')}
+            >
+              <Text style={[styles.historyFilterBtnText, historyFilter === 'month' && styles.historyFilterBtnTextActive]}>
+                Tháng
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Shifts List mapping */}
         <View style={styles.shiftsListContainer}>
@@ -1540,5 +1627,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#475569',
+  },
+  historyFilterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 8,
+    marginBottom: 12,
+  },
+  historyFilterBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  historyFilterBtnActive: {
+    backgroundColor: '#FFEFEB',
+    borderColor: '#FFDBCC',
+  },
+  historyFilterBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  historyFilterBtnTextActive: {
+    color: '#FF6B00',
   },
 });

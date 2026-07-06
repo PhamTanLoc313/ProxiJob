@@ -322,18 +322,33 @@ export default function PayrollSettlementScreen() {
   // Filter completed logs that have checked-out
   const completedLogs = (attendanceLogs || []).filter(log => log.status === 'completed');
 
-  // Map completed logs to pending payrolls, filtering out those that are already in allSettled
   const pendingPayrolls = completedLogs
     .filter(log => {
-      // Check if employee has a settled payroll in the database
-      const isAlreadySettled = allSettled.some(p => (p.employeeId === log.employeeId || p.EmployeeId === log.employeeId));
+      // Check if this specific timekeeping log has already been settled
+      const isAlreadySettled = allSettled.some(p => {
+        const note = p.adjustmentNote || p.AdjustmentNote || '';
+        return note === `TimekeepingId:${log.id}` || note === `TimekeepingId:${log.Id}`;
+      });
       return !isAlreadySettled;
     })
     .map(log => {
       // Find the hourly rate from the shift
       const shift = (shifts || []).find(s => s.id === log.shiftId);
       const rate = shift ? shift.hourlyRate : 35000;
-      const hours = 4; // default hours
+      
+      let hours = 4;
+      const rawIn = log.rawCheckInTime || log.checkInTime;
+      const rawOut = log.rawCheckOutTime || log.checkOutTime;
+      if (rawIn && rawOut) {
+        const inTime = new Date(rawIn);
+        const outTime = new Date(rawOut);
+        if (!isNaN(inTime.getTime()) && !isNaN(outTime.getTime())) {
+          const diffMs = outTime - inTime;
+          const diffHrs = diffMs / (1000 * 60 * 60);
+          if (diffHrs > 0) hours = Math.round(diffHrs * 100) / 100;
+        }
+      }
+
       const wages = rate * hours;
       return {
         id: log.id,
@@ -347,7 +362,9 @@ export default function PayrollSettlementScreen() {
         status: 'Pending',
         Status: 'Pending',
         employeeId: log.employeeId,
-        EmployeeId: log.employeeId
+        EmployeeId: log.employeeId,
+        hourlyRate: rate,
+        actualHours: hours
       };
     })
     .filter(p => {
@@ -987,16 +1004,12 @@ export default function PayrollSettlementScreen() {
                   placeholder="Nhập số giờ"
                   placeholderTextColor="#94A3B8"
                 />
-                <View style={styles.presetsRow}>
-                  <TouchableOpacity style={styles.presetBtn} onPress={() => setPresetHours(4)}>
-                    <Text style={styles.presetBtnText}>Chuẩn 4h</Text>
+                {parseFloat(customHours) !== parseFloat(selectedPayroll?.actualHours || 0) && (
+                  <TouchableOpacity style={styles.resetActualBtn} onPress={() => setPresetHours(selectedPayroll?.actualHours || 0)}>
+                    <Ionicons name="refresh-outline" size={14} color="#FF6B00" style={{ marginRight: 6 }} />
+                    <Text style={styles.resetActualBtnText}>Thực tế ({selectedPayroll?.actualHours || 0}h)</Text>
                   </TouchableOpacity>
-                  {selectedPayroll?.actualHours !== 4 && (
-                    <TouchableOpacity style={styles.presetBtn} onPress={() => setPresetHours(selectedPayroll?.actualHours || 0)}>
-                      <Text style={styles.presetBtnText}>Thực tế ({selectedPayroll?.actualHours || 0}h)</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
+                )}
               </View>
 
               <View style={[styles.calculationRow, { marginTop: 10, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 }]}>
@@ -1899,35 +1912,32 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   hoursInput: {
-    width: 70,
-    height: 40,
+    width: 95,
+    height: 44,
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
     borderRadius: 8,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
-  presetsRow: {
+  resetActualBtn: {
     flexDirection: 'row',
-    gap: 8,
-    flex: 1,
-  },
-  presetBtn: {
+    alignItems: 'center',
     backgroundColor: '#FFEFEB',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#FFDBCC',
     flex: 1,
-    alignItems: 'center',
+    justifyContent: 'center',
   },
-  presetBtnText: {
+  resetActualBtnText: {
     color: '#FF6B00',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   finalCalculationValue: {

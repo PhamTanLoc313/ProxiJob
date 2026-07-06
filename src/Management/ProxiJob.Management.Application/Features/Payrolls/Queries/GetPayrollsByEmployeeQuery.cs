@@ -48,7 +48,8 @@ public class GetPayrollsByEmployeeQueryHandler : IRequestHandler<GetPayrollsByEm
                 TotalHours = p.TotalHours,
                 FinalAmount = p.FinalAmount,
                 PayDate = p.PayDate,
-                Status = p.Status.ToString()
+                Status = p.Status.ToString(),
+                AdjustmentNote = p.AdjustmentNote
             })
             .ToListAsync(cancellationToken);
     }

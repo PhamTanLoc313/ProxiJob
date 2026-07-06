@@ -1,0 +1,296 @@
+﻿[
+    {
+        "No":  1,
+        "Category":  "AUTH",
+        "Name":  "Student Login (locptse184400@fpt.edu.vn)",
+        "Status":  "PASS",
+        "Detail":  "statusCode=200, token_len=759"
+    },
+    {
+        "No":  2,
+        "Category":  "AUTH",
+        "Name":  "Student Login WRONG PASSWORD",
+        "Status":  "PASS",
+        "Detail":  "Correctly returned 401 Unauthorized"
+    },
+    {
+        "No":  3,
+        "Category":  "AUTH",
+        "Name":  "Trial Employer Login (business_trial)",
+        "Status":  "PASS",
+        "Detail":  "statusCode=200"
+    },
+    {
+        "No":  4,
+        "Category":  "AUTH",
+        "Name":  "Recruit Employer Login (business_recruit)",
+        "Status":  "PASS",
+        "Detail":  "statusCode=200"
+    },
+    {
+        "No":  5,
+        "Category":  "AUTH",
+        "Name":  "HRM Employer Login (business_hrm)",
+        "Status":  "PASS",
+        "Detail":  "statusCode=200"
+    },
+    {
+        "No":  6,
+        "Category":  "AUTH",
+        "Name":  "Non-existent Account Login",
+        "Status":  "PASS",
+        "Detail":  "Correctly rejected with error"
+    },
+    {
+        "No":  7,
+        "Category":  "AUTH",
+        "Name":  "Refresh Token (Student)",
+        "Status":  "PASS",
+        "Detail":  "New token issued, len=759"
+    },
+    {
+        "No":  8,
+        "Category":  "PROFILE",
+        "Name":  "GET Student Profile",
+        "Status":  "PASS",
+        "Detail":  "name=Phạm Tấn Lộc, status=ReadyForWork, reputation=4.50"
+    },
+    {
+        "No":  9,
+        "Category":  "PROFILE",
+        "Name":  "GET Student Profile NO AUTH",
+        "Status":  "PASS",
+        "Detail":  "Correctly returned 401"
+    },
+    {
+        "No":  10,
+        "Category":  "PROFILE",
+        "Name":  "GET Business Profile (Trial)",
+        "Status":  "PASS",
+        "Detail":  "name=Chủ Quán Trial, status=ProfileComplete"
+    },
+    {
+        "No":  11,
+        "Category":  "PROFILE",
+        "Name":  "GET Business Profile (Recruit)",
+        "Status":  "PASS",
+        "Detail":  "name=Chủ Quán Recruit, status=ProfileComplete"
+    },
+    {
+        "No":  12,
+        "Category":  "PLANS",
+        "Name":  "GET Plans List",
+        "Status":  "PASS",
+        "Detail":  "plans_count=4"
+    },
+    {
+        "No":  13,
+        "Category":  "PLANS",
+        "Name":  "GET Quota (Trial)",
+        "Status":  "PASS",
+        "Detail":  "tier=Trial, limit=3, used=3, remaining=0, canPost=False"
+    },
+    {
+        "No":  14,
+        "Category":  "PLANS",
+        "Name":  "GET Quota (Recruit)",
+        "Status":  "PASS",
+        "Detail":  "tier=Recruit, limit=33, used=0, remaining=33, canPost=True"
+    },
+    {
+        "No":  15,
+        "Category":  "PLANS",
+        "Name":  "GET Current Plan (Trial)",
+        "Status":  "PASS",
+        "Detail":  "plan=, tier="
+    },
+    {
+        "No":  16,
+        "Category":  "JOB",
+        "Name":  "GET Categories",
+        "Status":  "PASS",
+        "Detail":  "count=6"
+    },
+    {
+        "No":  17,
+        "Category":  "JOB",
+        "Name":  "GET Published Jobs",
+        "Status":  "PASS",
+        "Detail":  "count=10, totalPages=4"
+    },
+    {
+        "No":  18,
+        "Category":  "JOB",
+        "Name":  "GET Published Jobs with GPS",
+        "Status":  "PASS",
+        "Detail":  "count=10"
+    },
+    {
+        "No":  19,
+        "Category":  "JOB",
+        "Name":  "GET My Job Posts (Trial)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (400) Bad Request."
+    },
+    {
+        "No":  20,
+        "Category":  "JOB",
+        "Name":  "GET My Job Posts (Recruit)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (400) Bad Request."
+    },
+    {
+        "No":  21,
+        "Category":  "MGMT",
+        "Name":  "GET Employees (Trial)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  22,
+        "Category":  "MGMT",
+        "Name":  "GET Employees (HRM)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  23,
+        "Category":  "MGMT",
+        "Name":  "GET Schedules (Trial)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  24,
+        "Category":  "MGMT",
+        "Name":  "GET Timekeeping Logs (Trial)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  25,
+        "Category":  "MGMT",
+        "Name":  "GET Payrolls (Student)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  26,
+        "Category":  "MGMT",
+        "Name":  "GET Payrolls (Trial Business)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  27,
+        "Category":  "MGMT",
+        "Name":  "GET My Schedules (Student)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  28,
+        "Category":  "APP",
+        "Name":  "GET My Applications (Student)",
+        "Status":  "PASS",
+        "Detail":  "count=0"
+    },
+    {
+        "No":  29,
+        "Category":  "APP",
+        "Name":  "GET Business Applications (Trial)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (400) Bad Request."
+    },
+    {
+        "No":  30,
+        "Category":  "QR",
+        "Name":  "Generate QR Token (Trial)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  31,
+        "Category":  "QR",
+        "Name":  "Check-in with Invalid QR",
+        "Status":  "PASS",
+        "Detail":  "Correctly rejected invalid QR token"
+    },
+    {
+        "No":  32,
+        "Category":  "CHAT",
+        "Name":  "GET Conversations (Student)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  33,
+        "Category":  "CHAT",
+        "Name":  "GET Conversations (Trial Employer)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  34,
+        "Category":  "NOTIF",
+        "Name":  "GET Notifications (Student)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  35,
+        "Category":  "NOTIF",
+        "Name":  "GET Notifications (Trial Employer)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  36,
+        "Category":  "PUBLIC",
+        "Name":  "GET Student CV (id=16, no auth)",
+        "Status":  "PASS",
+        "Detail":  "name=Phạm Tấn Lộc, skills=Phục vụ, Rửa chén, Lái xe"
+    },
+    {
+        "No":  37,
+        "Category":  "PUBLIC",
+        "Name":  "Identity Root",
+        "Status":  "PASS",
+        "Detail":  "status=200"
+    },
+    {
+        "No":  38,
+        "Category":  "PUBLIC",
+        "Name":  "Job Root",
+        "Status":  "PASS",
+        "Detail":  "status=200"
+    },
+    {
+        "No":  39,
+        "Category":  "PUBLIC",
+        "Name":  "Management Root",
+        "Status":  "PASS",
+        "Detail":  "status=200"
+    },
+    {
+        "No":  40,
+        "Category":  "SECURITY",
+        "Name":  "Student accessing Employees list",
+        "Status":  "WARN",
+        "Detail":  "The remote server returned an error: (404) Not Found."
+    },
+    {
+        "No":  41,
+        "Category":  "SECURITY",
+        "Name":  "Fake JWT Token",
+        "Status":  "PASS",
+        "Detail":  "Correctly rejected fake token"
+    },
+    {
+        "No":  42,
+        "Category":  "SECURITY",
+        "Name":  "SQL Injection in Login",
+        "Status":  "PASS",
+        "Detail":  "Correctly rejected: The remote server returned an error: (400) Bad Request."
+    }
+]
