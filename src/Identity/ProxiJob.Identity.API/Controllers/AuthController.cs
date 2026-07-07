@@ -8,6 +8,10 @@ using ProxiJob.Identity.Application.Features.Auth.Commands.Login;
 using ProxiJob.Identity.Application.Features.Auth.Commands.Logout;
 using ProxiJob.Identity.Application.Features.Auth.Commands.RefreshToken;
 using ProxiJob.Identity.Application.Features.Auth.Commands.Register;
+using ProxiJob.Identity.Application.Features.Auth.Commands.ForgotPassword;
+using ProxiJob.Identity.Application.Features.Auth.Commands.ResetPassword;
+using ProxiJob.Identity.Application.Features.Auth.Commands.GoogleLogin;
+using ProxiJob.Identity.Application.Features.Auth.Commands.VerifyResetToken;
 using ProxiJob.Identity.Domain.Constants;
 using ProxiJob.Shared.Contract;
 using System.IdentityModel.Tokens.Jwt;
@@ -92,6 +96,98 @@ namespace ProxiJob.Identity.API.Controllers
             return result
                 ? Ok(ApiResponse.Success(StatusCodes.Status200OK, BusinessMessages.LogoutSuccess))
                 : BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, BusinessMessages.LogoutFailed));
+        }
+
+        /// <summary>Yêu cầu đặt lại mật khẩu</summary>
+        [HttpPost("forgot-password")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordCommand command, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await _mediator.Send(command, cancellationToken);
+                return Ok(ApiResponse<object>.Success(result, StatusCodes.Status200OK));
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, errors: ex.Errors.Select(e => e.ErrorMessage)));
+            }
+            catch (System.Collections.Generic.KeyNotFoundException ex)
+            {
+                return NotFound(ApiResponse.Fail(StatusCodes.Status404NotFound, ex.Message));
+            }
+        }
+
+        /// <summary>Xác thực mã OTP khôi phục mật khẩu</summary>
+        [HttpPost("verify-reset-token")]
+        [AllowAnonymous]
+        public async Task<IActionResult> VerifyResetToken([FromBody] VerifyResetTokenCommand command, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await _mediator.Send(command, cancellationToken);
+                return Ok(ApiResponse<object>.Success(result, StatusCodes.Status200OK));
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, errors: ex.Errors.Select(e => e.ErrorMessage)));
+            }
+            catch (System.Collections.Generic.KeyNotFoundException ex)
+            {
+                return NotFound(ApiResponse.Fail(StatusCodes.Status404NotFound, ex.Message));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, ex.Message));
+            }
+        }
+
+        /// <summary>Đặt lại mật khẩu mới với mã OTP</summary>
+        [HttpPost("reset-password")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordCommand command, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await _mediator.Send(command, cancellationToken);
+                return Ok(ApiResponse<object>.Success(result, StatusCodes.Status200OK));
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, errors: ex.Errors.Select(e => e.ErrorMessage)));
+            }
+            catch (System.Collections.Generic.KeyNotFoundException ex)
+            {
+                return NotFound(ApiResponse.Fail(StatusCodes.Status404NotFound, ex.Message));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, ex.Message));
+            }
+        }
+
+        /// <summary>Đăng nhập bằng Google ID Token</summary>
+        [HttpPost("google")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginCommand command, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await _mediator.Send(command, cancellationToken);
+                return Ok(ApiResponse<object>.Success(result, StatusCodes.Status200OK));
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, errors: ex.Errors.Select(e => e.ErrorMessage)));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(ApiResponse.Fail(StatusCodes.Status401Unauthorized, ex.Message));
+            }
         }
 
         /// <summary>Seed test accounts dynamically for plan and logic testing</summary>

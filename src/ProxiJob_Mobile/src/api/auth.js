@@ -445,52 +445,156 @@ export async function createPaymentSessionApi(orderId) {
 
 /**
  * Login with Google ID Token
- * POST /api/Auth/google (or your actual endpoint)
+ * POST /api/auth/google
  * @param {string} googleToken
  * @returns {Promise<object>} { token, refreshToken, user }
  */
 export async function loginWithGoogleApi(googleToken, role) {
   try {
-    // =========================================================================
-    // --- PLACEHOLDER: DROP IN YOUR ACTUAL GOOGLE AUTH API CALL HERE ---
-    // =========================================================================
-    // const response = await fetch(`${API_BASE_URL}/api/Auth/google`, {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ token: googleToken, role: role })
-    // });
-    // const resData = await response.json().catch(() => ({}));
-    // if (!response.ok) {
-    //   throw new Error(resData.message || `Failed to login with Google: ${response.status}`);
-    // }
-    // return resData.data || resData; // Should return { token, refreshToken, user }
-    // =========================================================================
+    console.log('[ProxiJob Auth API] loginWithGoogleApi calling backend with role:', role);
+    const response = await fetch(`${API_BASE_URL}/auth/google`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ idToken: googleToken, role: role }),
+    });
 
-    // --- Development Mock implementation for local testing ---
-    console.log('[ProxiJob Auth API] loginWithGoogleApi triggered with token:', googleToken, 'role:', role);
-    
-    // Simulating API loading latency
-    await new Promise(resolve => setTimeout(resolve, 800));
+    const resData = await response.json().catch(() => ({}));
 
-    const mockUser = {
-      id: role === 'employer' ? 'google-employer-id-999' : 'google-student-id-999',
-      email: role === 'employer' ? 'employer.google@gmail.com' : 'student.google@gmail.com',
-      name: role === 'employer' ? 'Google Employer' : 'Google Student',
-      role: role || 'student',
-      subscriptionTier: 'Standard',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'
-    };
+    if (!response.ok) {
+      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || 'Đăng nhập Google thất bại.';
+      throw new Error(errorMsg);
+    }
+
+    const authData = resData.data || resData;
+    const token = authData.accessToken || authData.token;
+    const refreshToken = authData.refreshToken;
+
+    if (!token) {
+      throw new Error('Không nhận được token từ hệ thống.');
+    }
+
+    const decodedUser = decodeJwt(token);
+    const rawRole = decodedUser['role'] || decodedUser['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || '';
+    const roleStr = (Array.isArray(rawRole) ? rawRole[0] : rawRole).toString();
+    const mappedRole = roleStr.toLowerCase() === 'student' ? 'student' : 'employer';
+    const userId = parseInt(decodedUser.sub || decodedUser['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] || 1, 10);
+    const subTier = decodedUser['subscription_tier'] || 'Free';
+    const avatarUrl = decodedUser['avatar_url'] || '';
 
     return {
-      token: 'mock-google-access-token-123456',
-      refreshToken: 'mock-google-refresh-token-123456',
-      user: mockUser
+      token: token,
+      refreshToken: refreshToken,
+      user: {
+        id: userId,
+        email: decodedUser.email || '',
+        name: decodedUser.name || decodedUser.unique_name || (roleStr.toLowerCase() === 'student' ? 'Sinh viên Google' : 'Chủ quán Google'),
+        role: mappedRole,
+        subscriptionTier: subTier,
+        avatarUrl: avatarUrl,
+      }
     };
   } catch (error) {
-    console.log('[ProxiJob Auth API] loginWithGoogleApi error:', error.message);
+    console.log('[ProxiJob Auth API] loginWithGoogleApi failed:', error.message);
     throw error;
   }
 }
+
+/**
+ * Request password reset OTP
+ * @param {string} email
+ * @returns {Promise<object>}
+ */
+export async function forgotPasswordApi(email) {
+  try {
+    console.log('[ProxiJob Auth API] forgotPasswordApi calling backend for:', email);
+    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const resData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || 'Gửi yêu cầu khôi phục mật khẩu thất bại.';
+      throw new Error(errorMsg);
+    }
+
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob Auth API] forgotPasswordApi failed:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Verify password reset OTP
+ * @param {string} email
+ * @param {string} code
+ * @returns {Promise<object>}
+ */
+export async function verifyResetTokenApi(email, code) {
+  try {
+    console.log('[ProxiJob Auth API] verifyResetTokenApi calling backend for:', email);
+    const response = await fetch(`${API_BASE_URL}/auth/verify-reset-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, code }),
+    });
+
+    const resData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || 'Mã xác minh không chính xác hoặc đã hết hạn.';
+      throw new Error(errorMsg);
+    }
+
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob Auth API] verifyResetTokenApi failed:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Reset password using OTP
+ * @param {string} email
+ * @param {string} code
+ * @param {string} newPassword
+ * @param {string} confirmNewPassword
+ * @returns {Promise<object>}
+ */
+export async function resetPasswordApi(email, code, newPassword, confirmNewPassword) {
+  try {
+    console.log('[ProxiJob Auth API] resetPasswordApi calling backend for:', email);
+    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, code, newPassword, confirmNewPassword }),
+    });
+
+    const resData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || 'Đặt lại mật khẩu thất bại.';
+      throw new Error(errorMsg);
+    }
+
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob Auth API] resetPasswordApi failed:', error.message);
+    throw error;
+  }
+}
+
 
 /**
  * Fetch dynamic job post quota for current user
