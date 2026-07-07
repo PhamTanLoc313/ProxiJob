@@ -44,16 +44,16 @@ export default function LoginScreen() {
   const handleWebViewNavigationStateChange = async (navState) => {
     const { url } = navState;
     console.log('[LoginScreen] WebView navigating to:', url);
-    
+
     // Check if the URL starts with the redirect URI
     if (url.startsWith('https://auth.expo.io/@anonymous/ProxiJob_Mobile')) {
       setShowGoogleWebView(false);
-      
+
       // Extract parameters from fragment (#) or query (?)
       const paramsStr = url.split('#')[1] || url.split('?')[1] || '';
       const params = new URLSearchParams(paramsStr);
       const idToken = params.get('id_token') || params.get('credential');
-      
+
       if (idToken) {
         console.log('[LoginScreen] WebView OAuth resolved token successfully.');
         showToast('Đăng nhập Google thành công!', 'success');
@@ -175,7 +175,7 @@ export default function LoginScreen() {
               webClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
               offlineAccess: true
             });
-            
+
             await GoogleSignin.hasPlayServices();
             const userInfo = await GoogleSignin.signIn();
             const idToken = userInfo.idToken || userInfo.data?.idToken;
@@ -197,7 +197,7 @@ export default function LoginScreen() {
       // 2. Custom WebView-based Google Login for Expo Go (bypasses browser redirect blocks)
       showToast('Đang mở đăng nhập Google...', 'info');
       setTargetRole(role);
-      
+
       const expoProxyUrl = 'https://auth.expo.io/@anonymous/ProxiJob_Mobile';
       const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
         `client_id=761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com` +
@@ -474,7 +474,7 @@ export default function LoginScreen() {
                       <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                         <TouchableOpacity
                           style={[
-                            styles.roleSelectCard, 
+                            styles.roleSelectCard,
                             { paddingVertical: 10, borderWidth: 1.5 },
                             devRole === 'student' ? { borderColor: theme.colors.student, backgroundColor: theme.colors.student + '0A' } : { borderColor: theme.colors.border }
                           ]}
@@ -485,7 +485,7 @@ export default function LoginScreen() {
 
                         <TouchableOpacity
                           style={[
-                            styles.roleSelectCard, 
+                            styles.roleSelectCard,
                             { paddingVertical: 10, borderWidth: 1.5 },
                             devRole === 'employer' ? { borderColor: theme.colors.employer, backgroundColor: theme.colors.employer + '0A' } : { borderColor: theme.colors.border }
                           ]}
