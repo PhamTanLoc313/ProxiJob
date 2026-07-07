@@ -405,20 +405,7 @@ export default function LoginScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity
-                      style={{ marginTop: 8, paddingVertical: 8, alignItems: 'center' }}
-                      onPress={() => {
-                        setShowRoleModal(false);
-                        setDevRole('student');
-                        setDevEmail('khoind1235@gmail.com');
-                        setDevName('Nguyễn Duy Khôi');
-                        setShowDevLoginModal(true);
-                      }}
-                    >
-                      <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: 'bold', textDecorationLine: 'underline' }}>
-                        Hoặc tự nhập Email/Tên thật để test DB
-                      </Text>
-                    </TouchableOpacity>
+
 
                     <TouchableOpacity
                       style={styles.modalCloseButton}
