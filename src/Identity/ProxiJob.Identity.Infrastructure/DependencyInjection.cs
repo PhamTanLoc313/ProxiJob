@@ -32,6 +32,7 @@ namespace ProxiJob.Identity.Infrastructure
             services.AddScoped<IAccessTokenValidator, JwtAccessTokenValidator>();
             services.AddScoped<IUserContextService, UserContextService>();
             services.AddScoped<IPasswordHasher, PasswordHasherService>();
+            services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IUnitOfWork, UnitOfWork.UnitOfWork>();
 
             services.Configure<PaymentSettings>(configuration.GetSection("PaymentSettings"));
