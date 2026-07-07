@@ -40,12 +40,6 @@
       "expo-font",
       "@react-native-google-signin/google-signin",
       "expo-web-browser"
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "b670a2a5-ddd7-4aab-ac0e-ef5bb8b63bbd"
-      }
-    },
-    "owner": "proxijob-team"
+    ]
   }
 }
