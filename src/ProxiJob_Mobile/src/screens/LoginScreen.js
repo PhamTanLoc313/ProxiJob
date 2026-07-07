@@ -93,25 +93,7 @@ export default function LoginScreen() {
     }
   }, [response]);
 
-  const [showDevLoginModal, setShowDevLoginModal] = useState(false);
-  const [devEmail, setDevEmail] = useState('khoind1235@gmail.com');
-  const [devName, setDevName] = useState('Nguyễn Duy Khôi');
-  const [devRole, setDevRole] = useState('student');
 
-  const handleDevLoginSubmit = async () => {
-    if (!devEmail.trim() || !devName.trim()) {
-      showToast('Vui lòng điền đầy đủ email và tên.', 'warning');
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(devEmail.trim())) {
-      showToast('Email không đúng định dạng.', 'warning');
-      return;
-    }
-    setShowDevLoginModal(false);
-    showToast('Đang đăng nhập giả lập Google...', 'info');
-    await loginWithGoogle(`mock-google-id-token|${devEmail.trim()}|${devName.trim()}`, devRole);
-  };
 
   const validateForm = () => {
     let tempErrors = {};
@@ -405,97 +387,12 @@ export default function LoginScreen() {
                       </TouchableOpacity>
                     </View>
 
-
-
                     <TouchableOpacity
                       style={styles.modalCloseButton}
                       onPress={() => setShowRoleModal(false)}
                       activeOpacity={0.7}
                     >
                       <Text style={styles.modalCloseButtonText}>Đóng</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableWithoutFeedback>
-              </View>
-            </TouchableWithoutFeedback>
-          </Modal>
-
-          {/* Custom Developer Login Modal */}
-          <Modal
-            visible={showDevLoginModal}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setShowDevLoginModal(false)}
-          >
-            <TouchableWithoutFeedback onPress={() => setShowDevLoginModal(false)}>
-              <View style={styles.modalOverlay}>
-                <TouchableWithoutFeedback>
-                  <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Đăng nhập nhanh cho Developer</Text>
-                    <Text style={styles.modalSubtitle}>
-                      Google Login bị chặn do chưa đăng ký Redirect URI trên Google Console. Bạn có thể sử dụng email thật của mình để test luồng DB Backend.
-                    </Text>
-
-                    <View style={{ width: '100%', marginBottom: 16 }}>
-                      <Text style={styles.inputLabel}>Tài khoản Email</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Nhập email của bạn (vd: test@gmail.com)..."
-                        placeholderTextColor={theme.colors.textLight}
-                        value={devEmail}
-                        onChangeText={setDevEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                      />
-
-                      <Text style={styles.inputLabel}>Họ và Tên</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Nhập họ và tên hiển thị..."
-                        placeholderTextColor={theme.colors.textLight}
-                        value={devName}
-                        onChangeText={setDevName}
-                      />
-
-                      <Text style={styles.inputLabel}>Vai trò đăng nhập</Text>
-                      <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-                        <TouchableOpacity
-                          style={[
-                            styles.roleSelectCard,
-                            { paddingVertical: 10, borderWidth: 1.5 },
-                            devRole === 'student' ? { borderColor: theme.colors.student, backgroundColor: theme.colors.student + '0A' } : { borderColor: theme.colors.border }
-                          ]}
-                          onPress={() => setDevRole('student')}
-                        >
-                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: devRole === 'student' ? theme.colors.student : theme.colors.textMuted }}>Sinh viên</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.roleSelectCard,
-                            { paddingVertical: 10, borderWidth: 1.5 },
-                            devRole === 'employer' ? { borderColor: theme.colors.employer, backgroundColor: theme.colors.employer + '0A' } : { borderColor: theme.colors.border }
-                          ]}
-                          onPress={() => setDevRole('employer')}
-                        >
-                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: devRole === 'employer' ? theme.colors.employer : theme.colors.textMuted }}>Chủ quán</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    <TouchableOpacity
-                      style={[styles.loginButton, { backgroundColor: theme.colors.primary, width: '100%', marginBottom: 10 }]}
-                      onPress={handleDevLoginSubmit}
-                    >
-                      <Text style={styles.loginButtonText}>Xác nhận Đăng nhập</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.modalCloseButton}
-                      onPress={() => setShowDevLoginModal(false)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.modalCloseButtonText}>Hủy bỏ</Text>
                     </TouchableOpacity>
                   </View>
                 </TouchableWithoutFeedback>
