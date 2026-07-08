@@ -98,7 +98,7 @@ export default function LoginScreen() {
   const validateForm = () => {
     let tempErrors = {};
 
-    if (!email.trim()) {
+    if (!email || !email.trim()) {
       tempErrors.email = 'Email không được để trống.';
     } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -107,9 +107,9 @@ export default function LoginScreen() {
       }
     }
 
-    if (!password) {
+    if (!password || !password.trim()) {
       tempErrors.password = 'Mật khẩu không được để trống.';
-    } else if (password.length < 8) {
+    } else if (password.trim().length < 8) {
       tempErrors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
     }
 
@@ -122,7 +122,7 @@ export default function LoginScreen() {
       return;
     }
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password.trim());
     } catch (err) {
       setErrors({
         email: ' ',
@@ -425,7 +425,8 @@ export default function LoginScreen() {
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
           <View style={{
-            height: 52,
+            height: 92,
+            paddingTop: 40,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',

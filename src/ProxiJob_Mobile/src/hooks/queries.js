@@ -237,6 +237,8 @@ export const useShiftsQuery = (user, studentCoords) => {
                     } else if (isCheckedOut) {
                       existing.status = 'completed';
                       existing.timekeepingId = sTimekeepingId;
+                      existing.actualCheckInTime = sActualCheckInTime;
+                      existing.actualCheckOutTime = sActualCheckOutTime;
                     } else {
                       if (existing.status !== 'checkin_active' && existing.status !== 'completed') {
                         existing.status = 'approved';
@@ -298,7 +300,8 @@ export const useShiftsQuery = (user, studentCoords) => {
                   status: status,
                   timekeepingId: sTimekeepingId || null,
                   checkInTime: (isCheckedIn && sActualCheckInTime) ? new Date(sActualCheckInTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '',
-                  actualCheckInTime: isCheckedIn ? sActualCheckInTime : null,
+                  actualCheckInTime: sActualCheckInTime || null,
+                  actualCheckOutTime: sActualCheckOutTime || null,
                   isEmergency: false,
                   auditFields: {
                     createdBy: 'System',
@@ -322,7 +325,7 @@ export const useShiftsQuery = (user, studentCoords) => {
       }
     },
     enabled: true,
-    staleTime: 30 * 1000, // 30 seconds - show cached data instantly while refetching in background
+    staleTime: 0,
     gcTime: 5 * 60 * 1000,    // 5 minutes garbage collection time
   });
 };
@@ -742,6 +745,17 @@ export const useCheckOutMutation = (user, showToast, addNotification) => {
       }
     },
     onError: (err) => {
+      const msg = err?.message || err?.response?.data?.message || err?.toString() || '';
+      if (msg.toLowerCase().includes('already checked out')) {
+        clearJobShiftsCache();
+        queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
+        showToast('Check-out thành công!', 'success');
+        if (addNotification) {
+          addNotification('Check-out', 'Đã check-out ca làm thành công!');
+        }
+        return;
+      }
       showToast('Check-out thất bại: ' + translateError(err), 'error');
     }
   });
@@ -828,6 +842,7 @@ export const useCreateJobPostWizardMutation = (user, showToast, addNotification,
         requirements,
         categoryId,
         salary,
+        slots,
         skillNames,
         address,
         latitude,
@@ -878,7 +893,7 @@ export const useCreateJobPostWizardMutation = (user, showToast, addNotification,
         startTime: startIso.toISOString(),
         endTime: endIso.toISOString(),
         salary: parseInt(salary, 10),
-        slots: 1,
+        slots: slots !== undefined ? parseInt(slots, 10) : 1,
         createdBy: user.name
       });
 

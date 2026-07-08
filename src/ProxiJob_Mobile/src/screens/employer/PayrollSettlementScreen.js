@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
@@ -14,7 +14,10 @@ import {
   Modal,
   Dimensions,
   Share,
-  TextInput
+  TextInput,
+  Keyboard,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LineChart } from 'react-native-chart-kit';
@@ -27,11 +30,29 @@ import {
   usePayrollAnalyticsQuery,
   useApproveInterimPayrollMutation,
   useAttendanceLogsQuery,
-  useShiftsQuery
+  useEmployerJobsQuery,
+  useStaffListQuery
 } from '../../hooks/queries';
 
 export default function PayrollSettlementScreen() {
   const { user, showToast } = useContext(AppContext);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const [selectedPeriod, setSelectedPeriod] = useState('week'); // 'day', 'week', 'month'
   const { data: analyticsData = {
@@ -43,7 +64,9 @@ export default function PayrollSettlementScreen() {
 
   const { data: payrolls = [] } = usePayrollsQuery(user);
   const { data: attendanceLogs = [] } = useAttendanceLogsQuery(user);
-  const { data: shifts = [] } = useShiftsQuery(user, null);
+  const { data: employerData } = useEmployerJobsQuery(user);
+  const shifts = employerData?.shifts || [];
+  const { data: staffList = [] } = useStaffListQuery(user);
 
   const approveInterimMutation = useApproveInterimPayrollMutation(user, showToast);
 
@@ -83,6 +106,44 @@ export default function PayrollSettlementScreen() {
       return null;
     }
     return d;
+  };
+
+  const formatTimeOnly = (dateVal) => {
+    if (!dateVal) return '--:--';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) {
+      const match = dateVal.match(/(\d{1,2}):(\d{2})/);
+      if (match) return `${match[1].padStart(2, '0')}:${match[2]}`;
+      return dateVal;
+    }
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const formatDateTime = (dateVal) => {
+    if (!dateVal) return '--:--';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return dateVal;
+    const hr = d.getHours().toString().padStart(2, '0');
+    const min = d.getMinutes().toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    return `${hr}:${min} (${day}/${month})`;
+  };
+
+  const formatWorkDuration = (hoursDecimal) => {
+    if (hoursDecimal === undefined || hoursDecimal === null || hoursDecimal <= 0) return '0 phút';
+    
+    const totalMinutes = Math.round(hoursDecimal * 60);
+    const hrs = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    
+    if (hrs > 0 && mins > 0) {
+      return `${hrs} giờ ${mins} phút`;
+    } else if (hrs > 0) {
+      return `${hrs} giờ`;
+    } else {
+      return `${mins} phút`;
+    }
   };
 
   const prevCalendarMonth = () => {
@@ -236,8 +297,8 @@ export default function PayrollSettlementScreen() {
     setRating(5);
     setComments('');
 
-    // Default to actual hours worked or 4 hours
-    const defaultHrs = payroll.actualHours || 4;
+    // Default to actual hours worked (including 0)
+    const defaultHrs = (payroll.actualHours !== undefined && payroll.actualHours !== null) ? payroll.actualHours : 0;
     setCustomHours(defaultHrs.toString());
     setCustomAmount(Math.round(defaultHrs * (payroll.hourlyRate || 35000)));
 
@@ -254,6 +315,13 @@ export default function PayrollSettlementScreen() {
     }
   };
 
+  const adjustHours = (amount) => {
+    const current = parseFloat(customHours) || 0;
+    const next = Math.max(0, current + amount);
+    const rounded = Math.round(next * 100) / 100;
+    handleHoursChange(rounded.toString());
+  };
+
   const setPresetHours = (hrs) => {
     setCustomHours(hrs.toString());
     setCustomAmount(Math.round(hrs * (selectedPayroll?.hourlyRate || 35000)));
@@ -266,7 +334,7 @@ export default function PayrollSettlementScreen() {
       payrollId: selectedPayroll.id || selectedPayroll.Id,
       rating,
       comments,
-      totalHours: parseFloat(customHours) || selectedPayroll.actualHours || 4,
+      totalHours: isNaN(parseFloat(customHours)) ? (selectedPayroll.actualHours || 4) : parseFloat(customHours),
       finalAmount: customAmount
     }).then(() => {
       setIsModalVisible(false);
@@ -333,10 +401,10 @@ export default function PayrollSettlementScreen() {
     })
     .map(log => {
       // Find the hourly rate from the shift
-      const shift = (shifts || []).find(s => s.id === log.shiftId);
-      const rate = shift ? shift.hourlyRate : 35000;
+      const shift = (shifts || []).find(s => s.id === log.jobShiftId);
+      const rate = shift ? (shift.hourlyRate || 35000) : 35000;
       
-      let hours = 4;
+      let hours = 0;
       const rawIn = log.rawCheckInTime || log.checkInTime;
       const rawOut = log.rawCheckOutTime || log.checkOutTime;
       if (rawIn && rawOut) {
@@ -345,7 +413,7 @@ export default function PayrollSettlementScreen() {
         if (!isNaN(inTime.getTime()) && !isNaN(outTime.getTime())) {
           const diffMs = outTime - inTime;
           const diffHrs = diffMs / (1000 * 60 * 60);
-          if (diffHrs > 0) hours = Math.round(diffHrs * 100) / 100;
+          hours = diffHrs > 0 ? Math.round(diffHrs * 100) / 100 : 0;
         }
       }
 
@@ -364,7 +432,11 @@ export default function PayrollSettlementScreen() {
         employeeId: log.employeeId,
         EmployeeId: log.employeeId,
         hourlyRate: rate,
-        actualHours: hours
+        actualHours: hours,
+        checkInTime: rawIn,
+        checkOutTime: rawOut,
+        shiftName: shift ? (shift.title || shift.name || 'Ca làm việc') : 'Ca làm việc',
+        shiftTime: shift ? (shift.time || `${shift.startTime || ''} - ${shift.endTime || ''}`) : ''
       };
     })
     .filter(p => {
@@ -807,7 +879,13 @@ export default function PayrollSettlementScreen() {
             pendingPayrolls.map((payroll) => (
               <View key={payroll.id || payroll.Id} style={[styles.payrollCard, styles.pendingCard]}>
                 <View style={styles.cardHeader}>
-                  <Image source={getAvatarSource(null, null, payroll.employeeName || payroll.EmployeeName)} style={styles.staffAvatar} />
+                  <Image 
+                    source={(() => {
+                      const staff = staffList.find(s => s.id === payroll.employeeId || s.name === (payroll.employeeName || payroll.EmployeeName));
+                      return getAvatarSource(staff?.avatarUrl, staff?.gender, payroll.employeeName || payroll.EmployeeName);
+                    })()} 
+                    style={styles.staffAvatar} 
+                  />
                   <View style={styles.staffMeta}>
                     <Text style={styles.studentName}>{payroll.employeeName || payroll.EmployeeName}</Text>
                     <Text style={styles.jobShiftMeta}>Mã bảng lương: #{payroll.id || payroll.Id}</Text>
@@ -849,7 +927,13 @@ export default function PayrollSettlementScreen() {
               return (
                 <View key={payroll.id || payroll.Id} style={[styles.payrollCard, styles.settledCard]}>
                   <View style={styles.cardHeader}>
-                    <Image source={getAvatarSource(null, null, payroll.employeeName || payroll.EmployeeName)} style={styles.staffAvatar} />
+                    <Image 
+                      source={(() => {
+                        const staff = staffList.find(s => s.id === payroll.employeeId || s.name === (payroll.employeeName || payroll.EmployeeName));
+                        return getAvatarSource(staff?.avatarUrl, staff?.gender, payroll.employeeName || payroll.EmployeeName);
+                      })()} 
+                      style={styles.staffAvatar} 
+                    />
                     <View style={styles.staffMeta}>
                       <Text style={styles.studentName}>{payroll.employeeName || payroll.EmployeeName}</Text>
                       <Text style={styles.jobShiftMeta}>Mã bảng lương: #{payroll.id || payroll.Id}</Text>
@@ -976,114 +1060,195 @@ export default function PayrollSettlementScreen() {
         animationType="slide"
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalHeading}>Chốt bảng lương</Text>
-            <Text style={styles.modalSubheading}>
-              Đang chốt bảng lương cho nhân viên: <Text style={{ fontWeight: '800', color: '#181c1e' }}>{selectedPayroll?.employeeName || selectedPayroll?.EmployeeName}</Text>
-            </Text>
-
-            {/* Hour calculation and adjustment section */}
-            <View style={styles.calculationBox}>
-              <View style={styles.calculationRow}>
-                <Text style={styles.calculationLabel}>Đơn giá lương đề xuất:</Text>
-                <Text style={styles.calculationValue}>{(selectedPayroll?.hourlyRate || 35000).toLocaleString('vi-VN')} đ/h</Text>
-              </View>
-              <View style={styles.calculationRow}>
-                <Text style={styles.calculationLabel}>Giờ làm thực tế (check-in/out):</Text>
-                <Text style={styles.calculationValue}>{selectedPayroll?.actualHours || 0} giờ</Text>
-              </View>
-
-              <Text style={styles.modalLabelSmall}>ĐIỀU CHỈNH SỐ GIỜ CÔNG THANH TOÁN (GIỜ):</Text>
-              <View style={styles.hoursInputRow}>
-                <TextInput
-                  style={styles.hoursInput}
-                  value={customHours}
-                  onChangeText={handleHoursChange}
-                  keyboardType="numeric"
-                  placeholder="Nhập số giờ"
-                  placeholderTextColor="#94A3B8"
-                />
-                {parseFloat(customHours) !== parseFloat(selectedPayroll?.actualHours || 0) && (
-                  <TouchableOpacity style={styles.resetActualBtn} onPress={() => setPresetHours(selectedPayroll?.actualHours || 0)}>
-                    <Ionicons name="refresh-outline" size={14} color="#FF6B00" style={{ marginRight: 6 }} />
-                    <Text style={styles.resetActualBtnText}>Thực tế ({selectedPayroll?.actualHours || 0}h)</Text>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+                {/* Header */}
+                <View style={styles.modalHeadingRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="receipt-outline" size={20} color="#FF6B00" />
+                    <Text style={styles.modalHeading}>Quyết toán ca làm</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setIsModalVisible(false)} style={styles.modalCloseIconBtn}>
+                    <Ionicons name="close" size={20} color="#64748B" />
                   </TouchableOpacity>
-                )}
-              </View>
+                </View>
 
-              <View style={[styles.calculationRow, { marginTop: 10, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 }]}>
-                <Text style={[styles.calculationLabel, { fontWeight: '800', color: '#0F172A' }]}>TỔNG TIỀN THANH TOÁN:</Text>
-                <Text style={styles.finalCalculationValue}>{(customAmount).toLocaleString('vi-VN')} đ</Text>
-              </View>
-            </View>
-
-            <View style={styles.modalDivider} />
-
-            {/* Checkbox (Mandatory) */}
-            <TouchableOpacity
-              style={styles.checkboxRow}
-              onPress={() => setOfflineConfirmed(!offlineConfirmed)}
-            >
-              <View style={[styles.checkboxBox, offlineConfirmed && styles.checkboxBoxChecked]}>
-                {offlineConfirmed && <Text style={styles.checkboxTick}>✓</Text>}
-              </View>
-              <Text style={styles.checkboxText}>
-                Tôi xác nhận đã chuyển khoản ngân hàng hoặc trả tiền mặt trực tiếp cho sinh viên này ở ngoài đời thực.
-              </Text>
-            </TouchableOpacity>
-
-            {/* Star Rating Section */}
-            <Text style={styles.modalLabel}>ĐÁNH GIÁ THÁI ĐỘ LÀM VIỆC CỦA SINH VIÊN (BẮT BUỘC)</Text>
-            <View style={styles.starRow}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  onPress={() => setRating(star)}
+                <ScrollView 
+                  showsVerticalScrollIndicator={false} 
+                  contentContainerStyle={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight - 40 : 10 }}
+                  keyboardShouldPersistTaps="handled"
                 >
-                  <Text style={[styles.starIcon, star <= rating && styles.starIconActive]}>★</Text>
+              {/* Employee Header */}
+              <View style={styles.employeeHeaderBox}>
+                <Ionicons name="person-circle-outline" size={20} color="#475569" />
+                <Text style={styles.employeeHeaderName}>
+                  Nhân viên: <Text style={{ fontWeight: '800', color: '#0F172A' }}>{selectedPayroll?.employeeName || selectedPayroll?.EmployeeName}</Text>
+                </Text>
+              </View>
+
+              {/* Shift Details Box */}
+              <View style={styles.shiftDetailsCard}>
+                <View style={styles.shiftDetailRow}>
+                  <Text style={styles.shiftDetailTitle}>Ca làm việc:</Text>
+                  <Text style={styles.shiftDetailValue}>{selectedPayroll?.shiftName || 'Chưa xác định'}</Text>
+                </View>
+                {selectedPayroll?.shiftTime ? (
+                  <View style={styles.shiftDetailRow}>
+                    <Text style={styles.shiftDetailTitle}>Khung giờ ca:</Text>
+                    <Text style={styles.shiftDetailValue}>{selectedPayroll.shiftTime}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.shiftDetailRow}>
+                  <Text style={styles.shiftDetailTitle}>Đơn giá ca làm:</Text>
+                  <Text style={styles.shiftDetailValue}>
+                    {((selectedPayroll?.hourlyRate || 35000)).toLocaleString('vi-VN')} đ/giờ
+                  </Text>
+                </View>
+                <View style={styles.shiftDetailRow}>
+                  <Text style={styles.shiftDetailTitle}>Mốc check-in/out:</Text>
+                  <Text style={styles.shiftDetailValue}>
+                    {(() => {
+                      if (!selectedPayroll?.checkInTime || !selectedPayroll?.checkOutTime) return '--:--';
+                      const inTime = new Date(selectedPayroll.checkInTime);
+                      const outTime = new Date(selectedPayroll.checkOutTime);
+                      const invalid = !isNaN(inTime.getTime()) && !isNaN(outTime.getTime()) && inTime > outTime;
+                      if (invalid) {
+                        return `${formatTimeOnly(selectedPayroll.checkInTime)} - --:-- (Chưa checkout hợp lệ)`;
+                      }
+                      return `${formatTimeOnly(selectedPayroll.checkInTime)} - ${formatTimeOnly(selectedPayroll.checkOutTime)}`;
+                    })()}
+                  </Text>
+                </View>
+                <View style={[styles.shiftDetailRow, { borderTopWidth: 1, borderTopColor: '#E2E8F0', marginTop: 8, paddingTop: 8 }]}>
+                  <Text style={[styles.shiftDetailTitle, { fontWeight: '700', color: '#334155' }]}>Thời gian làm thực tế:</Text>
+                  <Text style={[styles.shiftDetailValue, { fontWeight: '800', color: '#0F172A' }]}>
+                    {formatWorkDuration(selectedPayroll?.actualHours)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Hours Adjustment & Settlement Box */}
+              <View style={styles.calculationBox}>
+                <Text style={styles.modalLabelSmall}>SỐ GIỜ CÔNG QUYẾT TOÁN (GIỜ):</Text>
+                <View style={styles.hoursInputRow}>
+                  <View style={styles.counterContainer}>
+                    <TouchableOpacity 
+                      style={styles.counterBtn} 
+                      onPress={() => adjustHours(-0.5)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="remove" size={16} color="#475569" />
+                    </TouchableOpacity>
+                    
+                    <TextInput
+                      style={styles.hoursInput}
+                      value={customHours}
+                      onChangeText={handleHoursChange}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#94A3B8"
+                      returnKeyType="done"
+                      onSubmitEditing={Keyboard.dismiss}
+                      blurOnSubmit={true}
+                    />
+                    
+                    <TouchableOpacity 
+                      style={styles.counterBtn} 
+                      onPress={() => adjustHours(0.5)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add" size={16} color="#475569" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {parseFloat(customHours) !== parseFloat(selectedPayroll?.actualHours || 0) && (
+                    <TouchableOpacity style={styles.resetActualBtn} onPress={() => setPresetHours(selectedPayroll?.actualHours || 0)}>
+                      <Ionicons name="refresh-outline" size={12} color="#FF6B00" style={{ marginRight: 4 }} />
+                      <Text style={styles.resetActualBtnText}>Mặc định</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.totalCalculationRow}>
+                  <Text style={styles.totalCalculationLabel}>TỔNG TIỀN THANH TOÁN:</Text>
+                  <Text style={styles.finalCalculationValue}>{(customAmount).toLocaleString('vi-VN')} đ</Text>
+                </View>
+              </View>
+
+              {/* Checkbox */}
+              <TouchableOpacity
+                style={[
+                  styles.checkboxRow,
+                  offlineConfirmed ? styles.checkboxRowActive : styles.checkboxRowInactive
+                ]}
+                activeOpacity={0.8}
+                onPress={() => setOfflineConfirmed(!offlineConfirmed)}
+              >
+                <Ionicons 
+                  name={offlineConfirmed ? "checkmark-circle" : "ellipse-outline"} 
+                  size={22} 
+                  color={offlineConfirmed ? "#10B981" : "#64748B"} 
+                />
+                <Text style={[styles.checkboxText, offlineConfirmed && { color: '#0F172A', fontWeight: '600' }]}>
+                  Tôi xác nhận đã chuyển khoản ngân hàng hoặc trả tiền mặt trực tiếp cho sinh viên này ở ngoài đời thực.
+                </Text>
+              </TouchableOpacity>
+
+              {/* Star Rating Section */}
+              <Text style={styles.modalLabel}>ĐÁNH GIÁ THÁI ĐỘ LÀM VIỆC CỦA SINH VIÊN (BẮT BUỘC)</Text>
+              <View style={styles.starRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity
+                    key={star}
+                    onPress={() => setRating(star)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={star <= rating ? "star" : "star-outline"} 
+                      size={28} 
+                      color={star <= rating ? "#F59E0B" : "#CBD5E1"} 
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Feedback Comments Text Input */}
+              <Text style={styles.modalLabel}>Ý KIẾN ĐÓNG GÓP, NHẬN XÉT THÊM (TÙY CHỌN)</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.feedbackInput}
+                  value={comments}
+                  onChangeText={(text) => setComments(text)}
+                  placeholder="Ví dụ: Làm việc rất nhiệt tình, đúng giờ, thái độ phục vụ khách hàng tốt..."
+                  multiline={true}
+                  numberOfLines={3}
+                  placeholderTextColor="#94A3B8"
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                  blurOnSubmit={true}
+                />
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.modalActionRow}>
+                <TouchableOpacity
+                  style={[styles.modalSubmitBtn, !offlineConfirmed && styles.modalSubmitBtnDisabled]}
+                  disabled={!offlineConfirmed || approveInterimMutation.isPending}
+                  onPress={handleSubmitApprove}
+                >
+                  {approveInterimMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.modalSubmitBtnText}>{"Xác nhận chốt & Gửi đánh giá ⚡"}</Text>
+                  )}
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Feedback Comments Text Input */}
-            <Text style={styles.modalLabel}>Ý KIẾN ĐÓNG GÓP, NHẬN XÉT THÊM (TÙY CHỌN)</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.feedbackInput}
-                value={comments}
-                onChangeText={(text) => setComments(text)}
-                placeholder="Ví dụ: Làm việc rất nhiệt tình, đúng giờ, thái độ phục vụ khách hàng tốt..."
-                multiline={true}
-                numberOfLines={3}
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.modalActionRow}>
-              <TouchableOpacity
-                style={[styles.modalSubmitBtn, !offlineConfirmed && styles.modalSubmitBtnDisabled]}
-                disabled={!offlineConfirmed || approveInterimMutation.isPending}
-                onPress={handleSubmitApprove}
-              >
-                {approveInterimMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.modalSubmitBtnText}>{"Xác nhận chốt & Gửi đánh giá ⚡"}</Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setIsModalVisible(false)}
-              >
-                <Text style={styles.modalCloseBtnText}>Hủy</Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            </ScrollView>
           </View>
         </View>
-      </Modal>
+      </TouchableWithoutFeedback>
+    </Modal>
 
       {/* Custom Date Picker Modal */}
       <Modal
@@ -1746,6 +1911,7 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 360,
+    maxHeight: '85%',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 0.15,
@@ -1769,57 +1935,107 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     marginVertical: 14,
   },
+  modalHeadingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  modalCloseIconBtn: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  employeeHeaderBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  employeeHeaderName: {
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  shiftDetailsCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginVertical: 8,
+  },
+  shiftDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 3,
+  },
+  shiftDetailTitle: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  shiftDetailValue: {
+    fontSize: 12,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  totalCalculationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#FFE4D6',
+    paddingTop: 12,
+  },
+  totalCalculationLabel: {
+    fontSize: 12,
+    color: '#0F172A',
+    fontWeight: '800',
+  },
   checkboxRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginVertical: 10,
-  },
-  checkboxBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginVertical: 10,
+    gap: 10,
   },
-  checkboxBoxChecked: {
-    backgroundColor: '#FF6B00',
-    borderColor: '#FF6B00',
+  checkboxRowActive: {
+    borderColor: '#A7F3D0',
+    backgroundColor: '#ECFDF5',
   },
-  checkboxTick: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '900',
+  checkboxRowInactive: {
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
   },
   checkboxText: {
     flex: 1,
-    fontSize: 12,
-    color: '#334155',
+    fontSize: 11,
+    color: '#475569',
     fontWeight: '500',
-    lineHeight: 18,
+    lineHeight: 16,
   },
   modalLabel: {
     fontSize: 10,
     fontWeight: '800',
     color: '#475569',
     letterSpacing: 0.5,
-    marginTop: 16,
+    marginTop: 14,
     marginBottom: 8,
   },
   starRow: {
     flexDirection: 'row',
     gap: 12,
     marginVertical: 6,
-  },
-  starIcon: {
-    fontSize: 32,
-    color: '#E2E8F0',
-  },
-  starIconActive: {
-    color: '#F59E0B',
   },
   inputContainer: {
     backgroundColor: '#F8FAFC',
@@ -1837,7 +2053,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   modalActionRow: {
-    marginTop: 24,
+    marginTop: 20,
     gap: 10,
   },
   modalSubmitBtn: {
@@ -1862,22 +2078,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
-  modalCloseBtn: {
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  modalCloseBtnText: {
-    color: '#475569',
-    fontSize: 12,
-    fontWeight: '700',
-  },
   calculationBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFBF9',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#FFE4D6',
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6B00',
     padding: 14,
     marginVertical: 14,
   },
@@ -1911,17 +2118,30 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 6,
   },
-  hoursInput: {
-    width: 95,
-    height: 44,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
+  counterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  counterBtn: {
+    width: 36,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E2E8F0',
+  },
+  hoursInput: {
+    width: 50,
+    height: 40,
     textAlign: 'center',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
+    backgroundColor: '#FFFFFF',
   },
   resetActualBtn: {
     flexDirection: 'row',
@@ -1932,12 +2152,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#FFDBCC',
-    flex: 1,
+    height: 40,
     justifyContent: 'center',
   },
   resetActualBtnText: {
     color: '#FF6B00',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   finalCalculationValue: {

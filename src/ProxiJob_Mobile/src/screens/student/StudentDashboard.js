@@ -289,10 +289,20 @@ export default function StudentDashboard() {
     user,
     setUser,
     setStudentCoords,
-    showToast
+    showToast,
+    currentScreen
   } = useContext(AppContext);
 
   const { data: shifts = [], refetch: loadShifts } = useShiftsQuery(user, studentCoords);
+
+  // Auto-refresh shifts when Student Dashboard screen is focused (both guest and logged-in user)
+  useEffect(() => {
+    if (currentScreen === 'student_dashboard') {
+      const { clearJobShiftsCache } = require('../../hooks/queries');
+      clearJobShiftsCache();
+      loadShifts(true);
+    }
+  }, [currentScreen, loadShifts]);
 
   const [viewMode, setViewModeState] = useState('list');
 
@@ -887,7 +897,7 @@ export default function StudentDashboard() {
     .sort(compareShifts);
 
   const closestShift = filteredShifts.filter(s => !s.noGps).length > 0
-    ? filteredShifts.filter(s => !s.noGps)[0]
+    ? [...filteredShifts].filter(s => !s.noGps).sort((a, b) => a.distanceKm - b.distanceKm)[0]
     : null;
 
   const totalPages = Math.ceil(filteredShifts.length / ITEMS_PER_PAGE);
