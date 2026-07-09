@@ -156,6 +156,18 @@ namespace ProxiJob.Identity.Infrastructure.Repositories
                 Status = "Active",
                 CreatedBy = updatedBy
             }, cancellationToken);
+
+            if (plan.Name == SubscriptionNames.Student10)
+            {
+                var profile = await _context.StudentProfiles.FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
+                if (profile != null)
+                {
+                    profile.AppliesLimit += 10;
+                    profile.UpdatedAt = now;
+                    profile.UpdatedBy = updatedBy;
+                    _context.StudentProfiles.Update(profile);
+                }
+            }
         }
     }
 }

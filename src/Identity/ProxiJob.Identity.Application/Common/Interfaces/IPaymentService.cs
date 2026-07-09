@@ -7,6 +7,7 @@ namespace ProxiJob.Identity.Application.Common.Interfaces
         Task<PurchasePlanResponseDto> InitiatePurchaseAsync(
             int userId,
             int planId,
+            string userRole,
             CancellationToken cancellationToken = default);
 
         Task<PaymentOrderStatusDto> GetOrderStatusAsync(int orderId, int userId, CancellationToken cancellationToken = default);

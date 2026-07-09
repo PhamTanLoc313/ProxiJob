@@ -492,7 +492,13 @@ export default function StudentCalendar() {
               {isCompleted ? 'Lương thực nhận' : 'Lương ước tính'}
             </Text>
             <Text style={styles.earningsValueText}>
-              {Math.round(shift.hourlyRate * getShiftHours(shift)).toLocaleString('vi-VN')}đ
+              {(() => {
+                const matchedPayroll = (payrolls || []).find(p => p.adjustmentNote === `TimekeepingId:${shift.timekeepingId}` || p.AdjustmentNote === `TimekeepingId:${shift.timekeepingId}`);
+                if (matchedPayroll && (matchedPayroll.status === 'Paid' || matchedPayroll.Status === 'Paid' || matchedPayroll.status === 2 || matchedPayroll.Status === 2 || matchedPayroll.status === 'PendingStudentConfirmation' || matchedPayroll.Status === 'PendingStudentConfirmation')) {
+                  return (matchedPayroll.finalAmount !== undefined ? matchedPayroll.finalAmount : matchedPayroll.FinalAmount || 0).toLocaleString('vi-VN') + 'đ';
+                }
+                return Math.round(shift.hourlyRate * getShiftHours(shift)).toLocaleString('vi-VN') + 'đ';
+              })()}
             </Text>
           </View>
         </View>
@@ -827,8 +833,18 @@ export default function StudentCalendar() {
         animationType="fade"
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <View style={styles.dialogOverlay}>
-          <View style={[styles.dialogContent, { maxHeight: '80%' }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.dialogOverlay}>
+            {/* Backdrop Touch to dismiss keyboard */}
+            <TouchableOpacity 
+              style={StyleSheet.absoluteFillObject} 
+              activeOpacity={1} 
+              onPress={Keyboard.dismiss} 
+            />
+            <View style={styles.dialogContent}>
             {/* Close Button Top Right */}
             <TouchableOpacity
               style={styles.dialogCloseHeaderBtn}
@@ -941,6 +957,7 @@ export default function StudentCalendar() {
             </ScrollView>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
       {/* Leave/Swap Request Modal */}
       <Modal
@@ -2063,14 +2080,15 @@ const styles = StyleSheet.create({
   dialogOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
   },
   dialogContent: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    width: '90%',
+    width: '100%',
+    maxWidth: 380,
     padding: 24,
     alignItems: 'center',
     position: 'relative',
@@ -2079,7 +2097,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 8,
-    maxHeight: '85%',
+    maxHeight: Dimensions.get('window').height * 0.85,
+    marginBottom: Platform.OS === 'ios' ? 24 : 10,
   },
   dialogCloseHeaderBtn: {
     position: 'absolute',

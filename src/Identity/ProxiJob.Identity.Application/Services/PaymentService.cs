@@ -44,6 +44,7 @@ namespace ProxiJob.Identity.Application.Services
         public async Task<PurchasePlanResponseDto> InitiatePurchaseAsync(
             int userId,
             int planId,
+            string userRole,
             CancellationToken cancellationToken = default)
         {
             var plan = await _subscriptionRepository.GetByIdAsync(planId, cancellationToken)
@@ -52,9 +53,22 @@ namespace ProxiJob.Identity.Application.Services
             if (!SubscriptionNames.AllPaidPlans.Contains(plan.Name))
                 throw new InvalidOperationException(BusinessMessages.InvalidPlanId);
 
-            var active = await _subscriptionRepository.GetActiveByUserIdAsync(userId, cancellationToken);
-            if (active?.SubscriptionId == planId)
-                throw new InvalidOperationException(BusinessMessages.AlreadyOnPlan);
+            if (SubscriptionNames.AllBusinessPlans.Contains(plan.Name) && userRole != RoleNames.Business)
+            {
+                throw new InvalidOperationException("Chỉ tài khoản doanh nghiệp mới được mua gói này.");
+            }
+
+            if (SubscriptionNames.AllStudentPlans.Contains(plan.Name) && userRole != RoleNames.Student)
+            {
+                throw new InvalidOperationException("Chỉ tài khoản sinh viên mới được mua gói này.");
+            }
+
+            if (plan.Name != SubscriptionNames.Student10)
+            {
+                var active = await _subscriptionRepository.GetActiveByUserIdAsync(userId, cancellationToken);
+                if (active?.SubscriptionId == planId)
+                    throw new InvalidOperationException(BusinessMessages.AlreadyOnPlan);
+            }
 
             // Kiểm tra đơn pending đã có cho user+plan này
             var existingPending = await _paymentRepository.GetPendingByUserAndPlanAsync(userId, planId, cancellationToken);

@@ -23,6 +23,9 @@ namespace ProxiJob.Identity.Application.DTOs
         public int ReviewCount { get; set; }
         public DateTime? ReadyForWorkAt { get; set; }
         public int CompletionPercent { get; set; }
+        public int AppliesLimit { get; set; }
+        public int AppliesUsed { get; set; }
+        public int AppliesRemaining { get; set; }
         public IReadOnlyList<string> MissingFields { get; set; } = Array.Empty<string>();
     }
 }

@@ -18,7 +18,8 @@ namespace ProxiJob.Identity.Infrastructure.Services
         private readonly IdentityDbContext _dbContext;
         private readonly IJobPostQuotaService _jobPostQuotaService;
         private readonly IRoleRepository _roleRepository;
-
+        private readonly IStudentApplyQuotaService _studentApplyQuotaService;
+ 
         public IdentityGrpcServiceImpl(
             IStudentProfileRepository studentProfileRepository,
             IBusinessProfileRepository businessProfileRepository,
@@ -27,7 +28,8 @@ namespace ProxiJob.Identity.Infrastructure.Services
             IConfiguration configuration,
             IdentityDbContext dbContext,
             IJobPostQuotaService jobPostQuotaService,
-            IRoleRepository roleRepository)
+            IRoleRepository roleRepository,
+            IStudentApplyQuotaService studentApplyQuotaService)
         {
             _studentProfileRepository = studentProfileRepository;
             _businessProfileRepository = businessProfileRepository;
@@ -37,6 +39,7 @@ namespace ProxiJob.Identity.Infrastructure.Services
             _dbContext = dbContext;
             _jobPostQuotaService = jobPostQuotaService;
             _roleRepository = roleRepository;
+            _studentApplyQuotaService = studentApplyQuotaService;
         }
 
         public override async Task<GetUserContextResponse> GetUserContext(
@@ -247,6 +250,67 @@ namespace ProxiJob.Identity.Infrastructure.Services
                 {
                     Success = false,
                     JobPostsRemaining = 0,
+                    Message = ex.Message
+                };
+            }
+            catch (Exception ex)
+            {
+                throw new RpcException(new Status(StatusCode.Internal, ex.Message));
+            }
+        }
+
+        public override async Task<CheckStudentApplyQuotaResponse> CheckStudentApplyQuota(
+            CheckStudentApplyQuotaRequest request,
+            ServerCallContext context)
+        {
+            if (request.UserId <= 0)
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "user_id is required."));
+
+            try
+            {
+                var result = await _studentApplyQuotaService.GetQuotaAsync(request.UserId, context.CancellationToken);
+
+                return new CheckStudentApplyQuotaResponse
+                {
+                    CanApply = result.CanApply,
+                    AppliesLimit = result.AppliesLimit,
+                    AppliesUsed = result.AppliesUsed,
+                    AppliesRemaining = result.AppliesRemaining,
+                    Message = result.CanApply
+                        ? $"Còn {result.AppliesRemaining} lượt ứng tuyển."
+                        : "Bạn đã hết lượt ứng tuyển. Vui lòng mua thêm gói ứng tuyển."
+                };
+            }
+            catch (Exception ex)
+            {
+                throw new RpcException(new Status(StatusCode.Internal, ex.Message));
+            }
+        }
+
+        public override async Task<ConsumeStudentApplyQuotaResponse> ConsumeStudentApplyQuota(
+            ConsumeStudentApplyQuotaRequest request,
+            ServerCallContext context)
+        {
+            if (request.UserId <= 0)
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "user_id is required."));
+
+            try
+            {
+                var result = await _studentApplyQuotaService.ConsumeOneApplyAsync(request.UserId, context.CancellationToken);
+
+                return new ConsumeStudentApplyQuotaResponse
+                {
+                    Success = true,
+                    AppliesRemaining = result.AppliesRemaining,
+                    Message = $"Đã trừ 1 lượt ứng tuyển. Còn lại {result.AppliesRemaining} lượt."
+                };
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new ConsumeStudentApplyQuotaResponse
+                {
+                    Success = false,
+                    AppliesRemaining = 0,
                     Message = ex.Message
                 };
             }
