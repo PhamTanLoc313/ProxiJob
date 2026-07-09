@@ -28,6 +28,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const FONT_REGULAR = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular';
+const FONT_BOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold';
 import { getStudentProfileApi, updateStudentProfileApi, registerStudentProfileApi } from '../../api/studentApi';
 import { supabase } from '../../db/dbConfig';
 import * as ImagePicker from 'expo-image-picker';
@@ -201,7 +203,7 @@ const decodeBase64ToArrayBuffer = (base64String) => {
 };
 
 export default function StudentPortfolio() {
-  const { user, setUser, showToast, studentCoords, setStudentCoords } = useContext(AppContext);
+  const { user, setUser, showToast, studentCoords, setStudentCoords, navigateTo } = useContext(AppContext);
   const { data: shifts = [] } = useShiftsQuery(user, studentCoords);
   const { data: payrolls = [] } = usePayrollsQuery(user);
 
@@ -1204,6 +1206,38 @@ export default function StudentPortfolio() {
             </View>
             <Text style={styles.statValue}>{profile?.completionPercent !== undefined ? `${profile.completionPercent}%` : '100%'}</Text>
             <Text style={styles.statLabel}>Hoàn thiện HS</Text>
+          </View>
+        </View>
+
+        {/* Student Apply Quota details */}
+        <View style={[styles.detailsCard, theme.shadows.light, { marginTop: 12, paddingVertical: 14 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="ticket-outline" size={24} color={theme.colors.student} style={{ marginRight: 10 }} />
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1F2937', fontFamily: FONT_BOLD }}>Lượt ứng tuyển</Text>
+                <Text style={{ fontSize: 12, color: '#6B7280', fontFamily: FONT_REGULAR }}>
+                  Đã dùng: {profile?.appliesUsed ?? 0} / Hạn mức: {profile?.appliesLimit ?? 3}
+                </Text>
+              </View>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: theme.colors.student, fontFamily: FONT_BOLD }}>
+                {profile?.appliesRemaining !== undefined ? profile.appliesRemaining : 3} lượt còn lại
+              </Text>
+              <TouchableOpacity
+                onPress={() => navigateTo('student_upgrade')}
+                style={{
+                  backgroundColor: 'rgba(255, 107, 0, 0.1)',
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  marginTop: 6
+                }}
+              >
+                <Text style={{ fontSize: 11, color: '#FF6B00', fontWeight: '700', fontFamily: FONT_BOLD }}>Mua thêm lượt</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 

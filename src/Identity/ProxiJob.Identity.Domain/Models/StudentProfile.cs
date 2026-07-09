@@ -20,6 +20,8 @@ namespace ProxiJob.Identity.Domain.Models
         public decimal ReputationScore { get; set; }
         public int ReviewCount { get; set; }
         public DateTime? ReadyForWorkAt { get; set; }
+        public int AppliesLimit { get; set; } = 3;
+        public int AppliesUsed { get; set; } = 0;
 
         public User User { get; set; } = null!;
     }

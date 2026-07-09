@@ -114,6 +114,8 @@ namespace ProxiJob.Identity.Infrastructure.Data
                 e.Property(x => x.Major).HasMaxLength(150);
                 e.Property(x => x.Bio).HasMaxLength(2000);
                 e.Property(x => x.Skills).HasMaxLength(500);
+                e.Property(x => x.AppliesLimit).HasDefaultValue(3);
+                e.Property(x => x.AppliesUsed).HasDefaultValue(0);
                 e.HasIndex(x => x.UserId).IsUnique();
                 e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             });

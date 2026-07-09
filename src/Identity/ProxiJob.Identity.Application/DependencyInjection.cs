@@ -23,6 +23,7 @@ namespace ProxiJob.Identity.Application
             services.AddScoped<IAuthSessionService, AuthSessionService>();
             services.AddScoped<IJobPostQuotaService, JobPostQuotaService>();
             services.AddScoped<IPaymentService, PaymentService>();
+            services.AddScoped<IStudentApplyQuotaService, StudentApplyQuotaService>();
 
             return services;
         }

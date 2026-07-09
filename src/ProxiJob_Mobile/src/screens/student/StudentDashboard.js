@@ -19,6 +19,8 @@ import { theme } from '../../styles/theme';
 import { AppContext } from '../../context/AppContext';
 import { useShiftsQuery } from '../../hooks/queries';
 import { Ionicons } from '@expo/vector-icons';
+const FONT_REGULAR = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular';
+const FONT_BOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { getStudentProfileApi, activateStudentProfileApi, deactivateStudentProfileApi } from '../../api/studentApi';
@@ -294,6 +296,26 @@ export default function StudentDashboard() {
   } = useContext(AppContext);
 
   const { data: shifts = [], refetch: loadShifts } = useShiftsQuery(user, studentCoords);
+  const [profileData, setProfileData] = useState(null);
+
+  const fetchProfileQuota = async () => {
+    if (user && user.role === 'student') {
+      try {
+        const data = await getStudentProfileApi();
+        if (data) {
+          setProfileData(data);
+        }
+      } catch (err) {
+        console.log('Error fetching student profile on dashboard:', err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (currentScreen === 'student_dashboard') {
+      fetchProfileQuota();
+    }
+  }, [currentScreen]);
 
   // Auto-refresh shifts when Student Dashboard screen is focused (both guest and logged-in user)
   useEffect(() => {
@@ -1232,6 +1254,38 @@ export default function StudentDashboard() {
           ))}
         </ScrollView>
       </View>
+
+      {/* Student Apply Quota info banner */}
+      {user?.role === 'student' && (
+        <View style={{
+          backgroundColor: '#FFF',
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: '#E2E8F0',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <Ionicons name="ticket-outline" size={18} color="#FF6B00" style={{ marginRight: 8 }} />
+            <Text style={{ fontSize: 13, color: '#334155', fontFamily: FONT_REGULAR }}>
+              Lượt ứng tuyển: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{profileData ? (profileData.appliesLimit - profileData.appliesUsed) : 3} lượt còn lại</Text>
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => navigateTo('student_upgrade')}
+            style={{
+              backgroundColor: 'rgba(255, 107, 0, 0.1)',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 6
+            }}
+          >
+            <Text style={{ fontSize: 12, color: '#FF6B00', fontWeight: 'bold', fontFamily: FONT_BOLD }}>Mua gói</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {viewMode === 'list' ? (
         <ScrollView

@@ -106,6 +106,23 @@ namespace ProxiJob.Identity.Infrastructure.Data
                     MaxActiveQrs = 9999,
                     MaxSearchRadius = 9999,
                     CreatedBy = "System"
+                },
+                new Subscription
+                {
+                    Name = SubscriptionNames.Student10,
+                    Description = "Gói 10 lượt ứng tuyển dành cho sinh viên",
+                    Price = 10_000,
+                    VariableCost = 1_000,
+                    GrossMargin = 9_000,
+                    BillingType = BillingType.PerShift,
+                    JobPostLimit = 0,
+                    DurationDays = 30,
+                    HasPriorityDisplay = false,
+                    HasHrManagement = false,
+                    MaxEmployees = 0,
+                    MaxActiveQrs = 0,
+                    MaxSearchRadius = 0,
+                    CreatedBy = "System"
                 }
             };
 

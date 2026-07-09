@@ -22,17 +22,20 @@ namespace ProxiJob.Identity.API.Controllers
         private readonly ICurrentUserService _currentUser;
         private readonly IRoleRepository _roleRepository;
         private readonly IJobPostQuotaService _jobPostQuotaService;
+        private readonly IStudentApplyQuotaService _studentApplyQuotaService;
 
         public PlansController(
             IMediator mediator,
             ICurrentUserService currentUser,
             IRoleRepository roleRepository,
-            IJobPostQuotaService jobPostQuotaService)
+            IJobPostQuotaService jobPostQuotaService,
+            IStudentApplyQuotaService studentApplyQuotaService)
         {
             _mediator = mediator;
             _currentUser = currentUser;
             _roleRepository = roleRepository;
             _jobPostQuotaService = jobPostQuotaService;
+            _studentApplyQuotaService = studentApplyQuotaService;
         }
 
         /// <summary>Danh sách gói dịch vụ B2B (public)</summary>
@@ -132,6 +135,54 @@ namespace ProxiJob.Identity.API.Controllers
             }
         }
 
+        /// <summary>Lấy hạn mức ứng tuyển của sinh viên hiện tại.</summary>
+        [HttpGet("student/quota")]
+        [Authorize]
+        public async Task<IActionResult> GetStudentApplyQuota(CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (_currentUser.UserId is not int userId)
+                    return Unauthorized(ApiResponse.Fail(StatusCodes.Status401Unauthorized, BusinessMessages.NotAuthenticated));
+
+                await EnsureStudentAsync(userId, cancellationToken);
+                var result = await _studentApplyQuotaService.GetQuotaAsync(userId, cancellationToken);
+                return Ok(ApiResponse<object>.Success(result, StatusCodes.Status200OK));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(ApiResponse.Fail(StatusCodes.Status401Unauthorized, ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, ex.Message));
+            }
+        }
+
+        /// <summary>Trừ 1 lượt ứng tuyển của sinh viên hiện tại.</summary>
+        [HttpPost("student/consume")]
+        [Authorize]
+        public async Task<IActionResult> ConsumeStudentApply(CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (_currentUser.UserId is not int userId)
+                    return Unauthorized(ApiResponse.Fail(StatusCodes.Status401Unauthorized, BusinessMessages.NotAuthenticated));
+
+                await EnsureStudentAsync(userId, cancellationToken);
+                var result = await _studentApplyQuotaService.ConsumeOneApplyAsync(userId, cancellationToken);
+                return Ok(ApiResponse<object>.Success(result, StatusCodes.Status200OK));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(ApiResponse.Fail(StatusCodes.Status401Unauthorized, ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ApiResponse.Fail(StatusCodes.Status400BadRequest, ex.Message));
+            }
+        }
+
         private async Task<object> GetJobPostQuotaForCurrentUserAsync(CancellationToken cancellationToken)
         {
             if (_currentUser.UserId is not int userId)
@@ -146,6 +197,15 @@ namespace ProxiJob.Identity.API.Controllers
             var role = await _roleRepository.GetUserRoleNameAsync(userId, cancellationToken) ?? RoleNames.Student;
             if (role != RoleNames.Business)
                 throw new UnauthorizedAccessException(BusinessMessages.BusinessJobPostOnly);
+
+            return role;
+        }
+
+        private async Task<string> EnsureStudentAsync(int userId, CancellationToken cancellationToken)
+        {
+            var role = await _roleRepository.GetUserRoleNameAsync(userId, cancellationToken) ?? RoleNames.Student;
+            if (role != RoleNames.Student)
+                throw new UnauthorizedAccessException("Chỉ tài khoản sinh viên mới được sử dụng tính năng này.");
 
             return role;
         }

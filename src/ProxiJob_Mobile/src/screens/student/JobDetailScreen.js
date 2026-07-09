@@ -9,7 +9,9 @@ import {
   Platform,
   Share,
   Image,
-  Animated
+  Animated,
+  Alert,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +43,7 @@ export default function JobDetailScreen() {
   const [applying, setApplying] = useState(false);
   const [success, setSuccess] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [quotaModalVisible, setQuotaModalVisible] = useState(false);
 
   const shiftId = navigationParams?.shiftId;
   const shift = shifts.find((s) => s.id === shiftId) || employerShifts.find((s) => s.id === shiftId);
@@ -82,13 +85,23 @@ export default function JobDetailScreen() {
       return;
     }
     setApplying(true);
-    const ok = await applyToShift(shift.id);
-    setApplying(false);
-    if (ok) {
-      setSuccess(true);
-      setTimeout(() => {
-        navigateTo('student_calendar');
-      }, 1500);
+    try {
+      const ok = await applyToShift(shift.id);
+      if (ok) {
+        setSuccess(true);
+        setTimeout(() => {
+          navigateTo('student_calendar');
+        }, 1500);
+      }
+    } catch (err) {
+      const msg = (err.message || '').toLowerCase();
+      if (msg.includes('hết lượt') || msg.includes('limit') || msg.includes('quota') || msg.includes('lượt ứng tuyển')) {
+        setQuotaModalVisible(true);
+      } else {
+        showToast(err.message || 'Ứng tuyển thất bại!', 'error');
+      }
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -448,6 +461,45 @@ export default function JobDetailScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Quota Exhausted Modal */}
+      <Modal
+        visible={quotaModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setQuotaModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconBg}>
+              <Ionicons name="alert-circle" size={34} color="#FF6B00" />
+            </View>
+            <Text style={styles.modalTitle}>Hết lượt ứng tuyển</Text>
+            <Text style={styles.modalBodyText}>
+              Bạn đã dùng hết lượt ứng tuyển miễn phí. Vui lòng mua thêm gói ứng tuyển (10k / 10 lượt) để tiếp tục ứng tuyển.
+            </Text>
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                activeOpacity={0.7}
+                onPress={() => setQuotaModalVisible(false)}
+              >
+                <Text style={styles.modalCancelBtnText}>Để sau</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  setQuotaModalVisible(false);
+                  navigateTo('student_upgrade');
+                }}
+              >
+                <Text style={styles.modalConfirmBtnText}>Mua ngay</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -773,5 +825,83 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalIconBg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF0E6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Sora' : 'sans-serif',
+  },
+  modalBodyText: {
+    fontSize: 13,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FF6B00',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalConfirmBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
   }
 });

@@ -1048,206 +1048,210 @@ export default function PayrollSettlementScreen() {
             })
           )}
         </View>
-
       </ScrollView>
-
-      {/* Floating Action Button for Excel Export removed */}
-
-      {/* Rating & Offline Payment Form Modal */}
       <Modal
         visible={isModalVisible}
         transparent={true}
         animationType="slide"
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-                {/* Header */}
-                <View style={styles.modalHeadingRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="receipt-outline" size={20} color="#FF6B00" />
-                    <Text style={styles.modalHeading}>Quyết toán ca làm</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => setIsModalVisible(false)} style={styles.modalCloseIconBtn}>
-                    <Ionicons name="close" size={20} color="#64748B" />
-                  </TouchableOpacity>
+          {/* Backdrop Touch to dismiss keyboard */}
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFillObject} 
+            activeOpacity={1} 
+            onPress={Keyboard.dismiss} 
+          />
+          <View style={styles.modalContent}>
+              {/* Header */}
+              <View style={styles.modalHeadingRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="receipt-outline" size={20} color="#FF6B00" />
+                  <Text style={styles.modalHeading}>Quyết toán ca làm</Text>
                 </View>
-
-                <ScrollView 
-                  showsVerticalScrollIndicator={false} 
-                  contentContainerStyle={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight - 40 : 10 }}
-                  keyboardShouldPersistTaps="handled"
-                >
-              {/* Employee Header */}
-              <View style={styles.employeeHeaderBox}>
-                <Ionicons name="person-circle-outline" size={20} color="#475569" />
-                <Text style={styles.employeeHeaderName}>
-                  Nhân viên: <Text style={{ fontWeight: '800', color: '#0F172A' }}>{selectedPayroll?.employeeName || selectedPayroll?.EmployeeName}</Text>
-                </Text>
-              </View>
-
-              {/* Shift Details Box */}
-              <View style={styles.shiftDetailsCard}>
-                <View style={styles.shiftDetailRow}>
-                  <Text style={styles.shiftDetailTitle}>Ca làm việc:</Text>
-                  <Text style={styles.shiftDetailValue}>{selectedPayroll?.shiftName || 'Chưa xác định'}</Text>
-                </View>
-                {selectedPayroll?.shiftTime ? (
-                  <View style={styles.shiftDetailRow}>
-                    <Text style={styles.shiftDetailTitle}>Khung giờ ca:</Text>
-                    <Text style={styles.shiftDetailValue}>{selectedPayroll.shiftTime}</Text>
-                  </View>
-                ) : null}
-                <View style={styles.shiftDetailRow}>
-                  <Text style={styles.shiftDetailTitle}>Đơn giá ca làm:</Text>
-                  <Text style={styles.shiftDetailValue}>
-                    {((selectedPayroll?.hourlyRate || 35000)).toLocaleString('vi-VN')} đ/giờ
-                  </Text>
-                </View>
-                <View style={styles.shiftDetailRow}>
-                  <Text style={styles.shiftDetailTitle}>Mốc check-in/out:</Text>
-                  <Text style={styles.shiftDetailValue}>
-                    {(() => {
-                      if (!selectedPayroll?.checkInTime || !selectedPayroll?.checkOutTime) return '--:--';
-                      const inTime = new Date(selectedPayroll.checkInTime);
-                      const outTime = new Date(selectedPayroll.checkOutTime);
-                      const invalid = !isNaN(inTime.getTime()) && !isNaN(outTime.getTime()) && inTime > outTime;
-                      if (invalid) {
-                        return `${formatTimeOnly(selectedPayroll.checkInTime)} - --:-- (Chưa checkout hợp lệ)`;
-                      }
-                      return `${formatTimeOnly(selectedPayroll.checkInTime)} - ${formatTimeOnly(selectedPayroll.checkOutTime)}`;
-                    })()}
-                  </Text>
-                </View>
-                <View style={[styles.shiftDetailRow, { borderTopWidth: 1, borderTopColor: '#E2E8F0', marginTop: 8, paddingTop: 8 }]}>
-                  <Text style={[styles.shiftDetailTitle, { fontWeight: '700', color: '#334155' }]}>Thời gian làm thực tế:</Text>
-                  <Text style={[styles.shiftDetailValue, { fontWeight: '800', color: '#0F172A' }]}>
-                    {formatWorkDuration(selectedPayroll?.actualHours)}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Hours Adjustment & Settlement Box */}
-              <View style={styles.calculationBox}>
-                <Text style={styles.modalLabelSmall}>SỐ GIỜ CÔNG QUYẾT TOÁN (GIỜ):</Text>
-                <View style={styles.hoursInputRow}>
-                  <View style={styles.counterContainer}>
-                    <TouchableOpacity 
-                      style={styles.counterBtn} 
-                      onPress={() => adjustHours(-0.5)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="remove" size={16} color="#475569" />
-                    </TouchableOpacity>
-                    
-                    <TextInput
-                      style={styles.hoursInput}
-                      value={customHours}
-                      onChangeText={handleHoursChange}
-                      keyboardType="numeric"
-                      placeholder="0"
-                      placeholderTextColor="#94A3B8"
-                      returnKeyType="done"
-                      onSubmitEditing={Keyboard.dismiss}
-                      blurOnSubmit={true}
-                    />
-                    
-                    <TouchableOpacity 
-                      style={styles.counterBtn} 
-                      onPress={() => adjustHours(0.5)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="add" size={16} color="#475569" />
-                    </TouchableOpacity>
-                  </View>
-
-                  {parseFloat(customHours) !== parseFloat(selectedPayroll?.actualHours || 0) && (
-                    <TouchableOpacity style={styles.resetActualBtn} onPress={() => setPresetHours(selectedPayroll?.actualHours || 0)}>
-                      <Ionicons name="refresh-outline" size={12} color="#FF6B00" style={{ marginRight: 4 }} />
-                      <Text style={styles.resetActualBtnText}>Mặc định</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                <View style={styles.totalCalculationRow}>
-                  <Text style={styles.totalCalculationLabel}>TỔNG TIỀN THANH TOÁN:</Text>
-                  <Text style={styles.finalCalculationValue}>{(customAmount).toLocaleString('vi-VN')} đ</Text>
-                </View>
-              </View>
-
-              {/* Checkbox */}
-              <TouchableOpacity
-                style={[
-                  styles.checkboxRow,
-                  offlineConfirmed ? styles.checkboxRowActive : styles.checkboxRowInactive
-                ]}
-                activeOpacity={0.8}
-                onPress={() => setOfflineConfirmed(!offlineConfirmed)}
-              >
-                <Ionicons 
-                  name={offlineConfirmed ? "checkmark-circle" : "ellipse-outline"} 
-                  size={22} 
-                  color={offlineConfirmed ? "#10B981" : "#64748B"} 
-                />
-                <Text style={[styles.checkboxText, offlineConfirmed && { color: '#0F172A', fontWeight: '600' }]}>
-                  Tôi xác nhận đã chuyển khoản ngân hàng hoặc trả tiền mặt trực tiếp cho sinh viên này ở ngoài đời thực.
-                </Text>
-              </TouchableOpacity>
-
-              {/* Star Rating Section */}
-              <Text style={styles.modalLabel}>ĐÁNH GIÁ THÁI ĐỘ LÀM VIỆC CỦA SINH VIÊN (BẮT BUỘC)</Text>
-              <View style={styles.starRow}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <TouchableOpacity
-                    key={star}
-                    onPress={() => setRating(star)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons 
-                      name={star <= rating ? "star" : "star-outline"} 
-                      size={28} 
-                      color={star <= rating ? "#F59E0B" : "#CBD5E1"} 
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Feedback Comments Text Input */}
-              <Text style={styles.modalLabel}>Ý KIẾN ĐÓNG GÓP, NHẬN XÉT THÊM (TÙY CHỌN)</Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.feedbackInput}
-                  value={comments}
-                  onChangeText={(text) => setComments(text)}
-                  placeholder="Ví dụ: Làm việc rất nhiệt tình, đúng giờ, thái độ phục vụ khách hàng tốt..."
-                  multiline={true}
-                  numberOfLines={3}
-                  placeholderTextColor="#94A3B8"
-                  returnKeyType="done"
-                  onSubmitEditing={Keyboard.dismiss}
-                  blurOnSubmit={true}
-                />
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.modalActionRow}>
-                <TouchableOpacity
-                  style={[styles.modalSubmitBtn, !offlineConfirmed && styles.modalSubmitBtnDisabled]}
-                  disabled={!offlineConfirmed || approveInterimMutation.isPending}
-                  onPress={handleSubmitApprove}
-                >
-                  {approveInterimMutation.isPending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.modalSubmitBtnText}>{"Xác nhận chốt & Gửi đánh giá ⚡"}</Text>
-                  )}
+                <TouchableOpacity onPress={() => setIsModalVisible(false)} style={styles.modalCloseIconBtn}>
+                  <Ionicons name="close" size={20} color="#64748B" />
                 </TouchableOpacity>
               </View>
-            </ScrollView>
-          </View>
+
+              <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                contentContainerStyle={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight - 40 : 10 }}
+                keyboardShouldPersistTaps="handled"
+              >
+            {/* Employee Header */}
+            <View style={styles.employeeHeaderBox}>
+              <Ionicons name="person-circle-outline" size={20} color="#475569" />
+              <Text style={styles.employeeHeaderName}>
+                Nhân viên: <Text style={{ fontWeight: '800', color: '#0F172A' }}>{selectedPayroll?.employeeName || selectedPayroll?.EmployeeName}</Text>
+              </Text>
+            </View>
+
+            {/* Shift Details Box */}
+            <View style={styles.shiftDetailsCard}>
+              <View style={styles.shiftDetailRow}>
+                <Text style={styles.shiftDetailTitle}>Ca làm việc:</Text>
+                <Text style={styles.shiftDetailValue}>{selectedPayroll?.shiftName || 'Chưa xác định'}</Text>
+              </View>
+              {selectedPayroll?.shiftTime ? (
+                <View style={styles.shiftDetailRow}>
+                  <Text style={styles.shiftDetailTitle}>Khung giờ ca:</Text>
+                  <Text style={styles.shiftDetailValue}>{selectedPayroll.shiftTime}</Text>
+                </View>
+              ) : null}
+              <View style={styles.shiftDetailRow}>
+                <Text style={styles.shiftDetailTitle}>Đơn giá ca làm:</Text>
+                <Text style={styles.shiftDetailValue}>
+                  {((selectedPayroll?.hourlyRate || 35000)).toLocaleString('vi-VN')} đ/giờ
+                </Text>
+              </View>
+              <View style={styles.shiftDetailRow}>
+                <Text style={styles.shiftDetailTitle}>Mốc check-in/out:</Text>
+                <Text style={styles.shiftDetailValue}>
+                  {(() => {
+                    if (!selectedPayroll?.checkInTime || !selectedPayroll?.checkOutTime) return '--:--';
+                    const inTime = new Date(selectedPayroll.checkInTime);
+                    const outTime = new Date(selectedPayroll.checkOutTime);
+                    const invalid = !isNaN(inTime.getTime()) && !isNaN(outTime.getTime()) && inTime > outTime;
+                    if (invalid) {
+                      return `${formatTimeOnly(selectedPayroll.checkInTime)} - --:-- (Chưa checkout hợp lệ)`;
+                    }
+                    return `${formatTimeOnly(selectedPayroll.checkInTime)} - ${formatTimeOnly(selectedPayroll.checkOutTime)}`;
+                  })()}
+                </Text>
+              </View>
+              <View style={[styles.shiftDetailRow, { borderTopWidth: 1, borderTopColor: '#E2E8F0', marginTop: 8, paddingTop: 8 }]}>
+                <Text style={[styles.shiftDetailTitle, { fontWeight: '700', color: '#334155' }]}>Thời gian làm thực tế:</Text>
+                <Text style={[styles.shiftDetailValue, { fontWeight: '800', color: '#0F172A' }]}>
+                  {formatWorkDuration(selectedPayroll?.actualHours)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Hours Adjustment & Settlement Box */}
+            <View style={styles.calculationBox}>
+              <Text style={styles.modalLabelSmall}>SỐ GIỜ CÔNG QUYẾT TOÁN (GIỜ):</Text>
+              <View style={styles.hoursInputRow}>
+                <View style={styles.counterContainer}>
+                  <TouchableOpacity 
+                    style={styles.counterBtn} 
+                    onPress={() => adjustHours(-0.5)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="remove" size={16} color="#475569" />
+                  </TouchableOpacity>
+                  
+                  <TextInput
+                    style={styles.hoursInput}
+                    value={customHours}
+                    onChangeText={handleHoursChange}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor="#94A3B8"
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                    blurOnSubmit={true}
+                  />
+                  
+                  <TouchableOpacity 
+                    style={styles.counterBtn} 
+                    onPress={() => adjustHours(0.5)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="add" size={16} color="#475569" />
+                  </TouchableOpacity>
+                </View>
+
+                {parseFloat(customHours) !== parseFloat(selectedPayroll?.actualHours || 0) && (
+                  <TouchableOpacity style={styles.resetActualBtn} onPress={() => setPresetHours(selectedPayroll?.actualHours || 0)}>
+                    <Ionicons name="refresh-outline" size={12} color="#FF6B00" style={{ marginRight: 4 }} />
+                    <Text style={styles.resetActualBtnText}>Mặc định</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.totalCalculationRow}>
+                <Text style={styles.totalCalculationLabel}>TỔNG TIỀN THANH TOÁN:</Text>
+                <Text style={styles.finalCalculationValue}>{(customAmount).toLocaleString('vi-VN')} đ</Text>
+              </View>
+            </View>
+
+            {/* Checkbox */}
+            <TouchableOpacity
+              style={[
+                styles.checkboxRow,
+                offlineConfirmed ? styles.checkboxRowActive : styles.checkboxRowInactive
+              ]}
+              activeOpacity={0.8}
+              onPress={() => setOfflineConfirmed(!offlineConfirmed)}
+            >
+              <Ionicons 
+                name={offlineConfirmed ? "checkmark-circle" : "ellipse-outline"} 
+                size={22} 
+                color={offlineConfirmed ? "#10B981" : "#64748B"} 
+              />
+              <Text style={[styles.checkboxText, offlineConfirmed && { color: '#0F172A', fontWeight: '600' }]}>
+                Tôi xác nhận đã chuyển khoản ngân hàng hoặc trả tiền mặt trực tiếp cho sinh viên này ở ngoài đời thực.
+              </Text>
+            </TouchableOpacity>
+
+            {/* Star Rating Section */}
+            <Text style={styles.modalLabel}>ĐÁNH GIÁ THÁI ĐỘ LÀM VIỆC CỦA SINH VIÊN (BẮT BUỘC)</Text>
+            <View style={styles.starRow}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setRating(star)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name={star <= rating ? "star" : "star-outline"} 
+                    size={28} 
+                    color={star <= rating ? "#F59E0B" : "#CBD5E1"} 
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Feedback Comments Text Input */}
+            <Text style={styles.modalLabel}>Ý KIẾN ĐÓNG GÓP, NHẬN XÉT THÊM (TÙY CHỌN)</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.feedbackInput}
+                value={comments}
+                onChangeText={(text) => setComments(text)}
+                placeholder="Ví dụ: Làm việc rất nhiệt tình, đúng giờ, thái độ phục vụ khách hàng tốt..."
+                multiline={true}
+                numberOfLines={3}
+                placeholderTextColor="#94A3B8"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+                blurOnSubmit={true}
+              />
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, !offlineConfirmed && styles.modalSubmitBtnDisabled]}
+                disabled={!offlineConfirmed || approveInterimMutation.isPending}
+                onPress={handleSubmitApprove}
+              >
+                {approveInterimMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>{"Xác nhận chốt & Gửi đánh giá ⚡"}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
-      </TouchableWithoutFeedback>
+      </View>
+        </KeyboardAvoidingView>
     </Modal>
 
       {/* Custom Date Picker Modal */}
@@ -1901,17 +1905,18 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
   },
   modalContent: {
     backgroundColor: '#ffffff',
     borderRadius: 24,
     padding: 24,
     width: '100%',
-    maxWidth: 360,
-    maxHeight: '85%',
+    maxWidth: 380,
+    maxHeight: Dimensions.get('window').height * 0.85,
+    marginBottom: Platform.OS === 'ios' ? 24 : 10,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 0.15,
