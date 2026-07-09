@@ -57,7 +57,7 @@ export default function StudentUpgradeScreen() {
   async function loadPlans() {
     try {
       const data = await getPlansApi();
-      const studentPlans = Array.isArray(data) 
+      const studentPlans = Array.isArray(data)
         ? data.filter(p => p.planName === 'Student10' || p.Name === 'Student10')
         : [];
       setPlans(studentPlans);
