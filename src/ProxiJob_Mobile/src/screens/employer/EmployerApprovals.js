@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 const getLeftBorderColorByCategory = (categoryName, shopName) => {
   const target = (categoryName || shopName || '').trim().toLowerCase();
-  
+
   if (target.includes('giao hàng') || target.includes('delivery') || target.includes('shipper')) {
     return '#EF4444'; // Red
   }
@@ -46,7 +46,7 @@ const getLeftBorderColorByCategory = (categoryName, shopName) => {
 
 const getCategoryColors = (categoryName, shopName) => {
   const target = (categoryName || shopName || '').trim().toLowerCase();
-  
+
   if (target.includes('giao hàng') || target.includes('delivery') || target.includes('shipper')) {
     return {
       primary: '#EF4444', // Red
@@ -272,30 +272,30 @@ const EmployerShiftCard = React.memo(({ shift, navigateTo, handleEditPress, hand
       activeOpacity={0.9}
       onPress={() => navigateTo('job_detail', { shiftId: shift.id })}
     >
-       <Animated.View style={[
-         styles.cardContent,
-         { borderLeftColor: leftBorderColor, borderLeftWidth: 6 },
-         shift.isEmergency && {
-           borderLeftWidth: 8,
-           backgroundColor: pulseAnim.interpolate({
-             inputRange: [0.3, 1],
-             outputRange: ['#FFFFFF', catColors.bgLight]
-           }),
-           borderColor: pulseAnim.interpolate({
-             inputRange: [0.3, 1],
-             outputRange: ['#F1F5F9', catColors.borderLight]
-           }),
-           borderWidth: 1.5,
-           shadowColor: catColors.primary,
-           shadowOffset: { width: 0, height: 6 },
-           shadowOpacity: pulseAnim.interpolate({
-             inputRange: [0.3, 1],
-             outputRange: [0.05, 0.35]
-           }),
-           shadowRadius: 12,
-           elevation: 4
-         }
-       ]}>
+      <Animated.View style={[
+        styles.cardContent,
+        { borderLeftColor: leftBorderColor, borderLeftWidth: 6 },
+        shift.isEmergency && {
+          borderLeftWidth: 8,
+          backgroundColor: pulseAnim.interpolate({
+            inputRange: [0.3, 1],
+            outputRange: ['#FFFFFF', catColors.bgLight]
+          }),
+          borderColor: pulseAnim.interpolate({
+            inputRange: [0.3, 1],
+            outputRange: ['#F1F5F9', catColors.borderLight]
+          }),
+          borderWidth: 1.5,
+          shadowColor: catColors.primary,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: pulseAnim.interpolate({
+            inputRange: [0.3, 1],
+            outputRange: [0.05, 0.35]
+          }),
+          shadowRadius: 12,
+          elevation: 4
+        }
+      ]}>
         <View style={styles.cardTopRow}>
           <View style={styles.logoAndName}>
             <View style={[styles.shopLogoCircle, { backgroundColor: getShopBgColor(shift.shopName) }]}>
@@ -935,7 +935,7 @@ export default function EmployerApprovals() {
     getSkillsApi().then(res => {
       const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : (res?.items || []));
       if (list) {
-        const filteredSkills = list.filter(s => 
+        const filteredSkills = list.filter(s =>
           STANDARD_SKILL_NAMES.map(n => n.toLowerCase()).includes((s.name || '').trim().toLowerCase())
         );
         setSkillsList([...filteredSkills, { id: 'other_skill_trigger', name: 'Khác...' }]);
@@ -1261,7 +1261,7 @@ export default function EmployerApprovals() {
 
                 <View style={styles.pageIndicator}>
                   <Text style={styles.pageIndicatorText}>
-                    Trang <Text style={{fontWeight: 'bold', color: '#0A58CA'}}>{currentPage}</Text> / {totalPages}
+                    Trang <Text style={{ fontWeight: 'bold', color: '#0A58CA' }}>{currentPage}</Text> / {totalPages}
                   </Text>
                 </View>
 
@@ -1419,302 +1419,301 @@ export default function EmployerApprovals() {
         onRequestClose={() => setEditModalVisible(false)}
       >
         <View style={styles.modalOverlayContainer}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          <View
             style={{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' }}
           >
             <View style={styles.modalContentCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chỉnh sửa bài đăng</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeModalBtn}>
-                <Ionicons name="close" size={20} color="#5A4136" />
-              </TouchableOpacity>
-            </View>
-
-            {loadingDetails ? (
-              <View style={styles.modalLoaderContainer}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={styles.modalLoaderText}>Đang tải chi tiết bài đăng...</Text>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Chỉnh sửa bài đăng</Text>
+                <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeModalBtn}>
+                  <Ionicons name="close" size={20} color="#5A4136" />
+                </TouchableOpacity>
               </View>
-            ) : (
-              <ScrollView 
-                style={styles.modalScrollView} 
-                contentContainerStyle={styles.modalScrollViewContent}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
-                {/* CARD 1: Thông tin cơ bản */}
-                <View style={styles.modalSectionCard}>
-                  <View style={styles.modalSectionHeader}>
-                    <Ionicons name="information-circle-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
-                    <Text style={styles.modalSectionTitle}>Thông tin cơ bản</Text>
-                  </View>
 
-                  <Text style={styles.modalInputLabel}>Tiêu đề công việc</Text>
-                  <TextInput
-                    style={styles.modalPremiumInput}
-                    value={editTitle}
-                    onChangeText={setEditTitle}
-                    placeholder="Nhập tiêu đề công việc..."
-                    placeholderTextColor="#94A3B8"
-                  />
-
-                  <Text style={styles.modalInputLabel}>Danh mục công việc</Text>
-                  <View style={styles.modalCategoryGrid}>
-                    {categories.map((cat) => {
-                      const isSelected = editCategoryId === String(cat.id);
-                      return (
-                        <TouchableOpacity
-                          key={cat.id}
-                          style={[
-                            styles.modalCategoryPill,
-                            isSelected && styles.modalCategoryPillActive
-                          ]}
-                          onPress={() => setEditCategoryId(String(cat.id))}
-                        >
-                          <Text style={[
-                            styles.modalCategoryPillText,
-                            isSelected && styles.modalCategoryPillTextActive
-                          ]}>
-                            {cat.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {isOtherCat && (
-                    <View style={{ marginTop: 4 }}>
-                      <Text style={styles.modalInputLabel}>Nhập danh mục khác</Text>
-                      <TextInput
-                        style={styles.modalPremiumInput}
-                        placeholder="Ví dụ: Rửa bát, Phụ bếp..."
-                        placeholderTextColor="#94A3B8"
-                        value={editCustomCategory}
-                        onChangeText={setEditCustomCategory}
-                      />
+              {loadingDetails ? (
+                <View style={styles.modalLoaderContainer}>
+                  <ActivityIndicator size="large" color={theme.colors.primary} />
+                  <Text style={styles.modalLoaderText}>Đang tải chi tiết bài đăng...</Text>
+                </View>
+              ) : (
+                <ScrollView
+                  style={styles.modalScrollView}
+                  contentContainerStyle={styles.modalScrollViewContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {/* CARD 1: Thông tin cơ bản */}
+                  <View style={styles.modalSectionCard}>
+                    <View style={styles.modalSectionHeader}>
+                      <Ionicons name="information-circle-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
+                      <Text style={styles.modalSectionTitle}>Thông tin cơ bản</Text>
                     </View>
-                  )}
-                </View>
 
-                {/* CARD 2: Nội dung mô tả */}
-                <View style={styles.modalSectionCard}>
-                  <View style={styles.modalSectionHeader}>
-                    <Ionicons name="document-text-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
-                    <Text style={styles.modalSectionTitle}>Mô tả công việc</Text>
-                  </View>
-
-                  <Text style={styles.modalInputLabel}>Mô tả chi tiết</Text>
-                  <TextInput
-                    style={[styles.modalPremiumInput, styles.modalTextArea]}
-                    value={editDescription}
-                    onChangeText={setEditDescription}
-                    multiline
-                    numberOfLines={4}
-                    placeholder="Nhập mô tả chi tiết công việc..."
-                    placeholderTextColor="#94A3B8"
-                  />
-
-                  <Text style={styles.modalInputLabel}>Yêu cầu đối với ứng viên</Text>
-                  <TextInput
-                    style={[styles.modalPremiumInput, styles.modalTextArea, { height: 80 }]}
-                    value={editRequirements}
-                    onChangeText={setEditRequirements}
-                    multiline
-                    numberOfLines={3}
-                    placeholder="Nhập yêu cầu đối với ứng viên..."
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-
-                {/* CARD 3: Địa điểm làm việc */}
-                <View style={styles.modalSectionCard}>
-                  <View style={styles.modalSectionHeader}>
-                    <Ionicons name="location-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
-                    <Text style={styles.modalSectionTitle}>Địa chỉ làm việc</Text>
-                  </View>
-
-                  <Text style={styles.modalInputLabel}>Địa chỉ chi tiết</Text>
-                  <View style={{ position: 'relative', zIndex: 10, marginBottom: 16 }}>
+                    <Text style={styles.modalInputLabel}>Tiêu đề công việc</Text>
                     <TextInput
-                      style={[styles.modalPremiumInput, { paddingRight: 105, marginBottom: 0, height: 64, textAlignVertical: 'top', paddingTop: 10, paddingBottom: 10 }]}
-                      value={editAddress}
-                      onChangeText={handleAddressChange}
-                      placeholder="Nhập địa chỉ hoặc nhấn nút GPS bên dưới..."
+                      style={styles.modalPremiumInput}
+                      value={editTitle}
+                      onChangeText={setEditTitle}
+                      placeholder="Nhập tiêu đề công việc..."
                       placeholderTextColor="#94A3B8"
-                      multiline={true}
                     />
-                    <TouchableOpacity
-                      style={{
-                        position: 'absolute',
-                        right: 8,
-                        top: 7,
-                        backgroundColor: '#64748B',
-                        borderRadius: 10,
-                        paddingVertical: 8,
-                        paddingHorizontal: 12,
-                        height: 34,
-                        justifyContent: 'center',
-                        zIndex: 20
-                      }}
-                      onPress={geocodeTypedAddress}
-                      disabled={gpsLoading}
-                    >
-                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>
-                        {gpsLoading ? '...' : 'Tìm Tọa Độ'}
-                      </Text>
-                    </TouchableOpacity>
 
-                    {showSuggestions && (
-                      <View style={{
-                        position: 'absolute',
-                        top: 52,
-                        left: 0,
-                        right: 0,
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: '#E2E8F0',
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.1,
-                        shadowRadius: 8,
-                        elevation: 4,
-                        maxHeight: 200,
-                        zIndex: 9999,
-                      }}>
-                        <ScrollView keyboardShouldPersistTaps="always">
-                          {addressSuggestions.map((item, index) => (
-                            <TouchableOpacity
-                              key={index}
-                              style={{
-                                paddingVertical: 12,
-                                paddingHorizontal: 16,
-                                borderBottomWidth: index === addressSuggestions.length - 1 ? 0 : 1,
-                                borderBottomColor: '#F1F5F9',
-                              }}
-                              onPress={() => handleSelectSuggestion(item)}
-                            >
-                              <Text style={{ fontSize: 13, color: '#334155', fontWeight: '500' }}>{item.display_name}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
+                    <Text style={styles.modalInputLabel}>Danh mục công việc</Text>
+                    <View style={styles.modalCategoryGrid}>
+                      {categories.map((cat) => {
+                        const isSelected = editCategoryId === String(cat.id);
+                        return (
+                          <TouchableOpacity
+                            key={cat.id}
+                            style={[
+                              styles.modalCategoryPill,
+                              isSelected && styles.modalCategoryPillActive
+                            ]}
+                            onPress={() => setEditCategoryId(String(cat.id))}
+                          >
+                            <Text style={[
+                              styles.modalCategoryPillText,
+                              isSelected && styles.modalCategoryPillTextActive
+                            ]}>
+                              {cat.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {isOtherCat && (
+                      <View style={{ marginTop: 4 }}>
+                        <Text style={styles.modalInputLabel}>Nhập danh mục khác</Text>
+                        <TextInput
+                          style={styles.modalPremiumInput}
+                          placeholder="Ví dụ: Rửa bát, Phụ bếp..."
+                          placeholderTextColor="#94A3B8"
+                          value={editCustomCategory}
+                          onChangeText={setEditCustomCategory}
+                        />
                       </View>
                     )}
                   </View>
 
-                  {/* Location Buttons Row */}
-                  <View style={styles.locationButtonsRow}>
-                    <TouchableOpacity
-                      style={[styles.gpsButton, { flex: 1, marginRight: 8 }]}
-                      onPress={getCurrentLocation}
-                      disabled={gpsLoading}
-                    >
-                      {gpsLoading ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.gpsButtonText}>📍 GPS Hiện Tại</Text>
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.mapButton, { flex: 1 }]}
-                      onPress={handleOpenMapPicker}
-                    >
-                      <Text style={styles.mapButtonText}>🗺 Bản Đồ</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Coordinates Display */}
-                  {editLatitude && editLongitude ? (
-                    <View style={styles.coordsRow}>
-                      <View style={styles.coordBox}>
-                        <Text style={styles.coordLabel}>Lat: {parseFloat(editLatitude).toFixed(6)}</Text>
-                      </View>
-                      <View style={styles.coordBox}>
-                        <Text style={styles.coordLabel}>Long: {parseFloat(editLongitude).toFixed(6)}</Text>
-                      </View>
-                      <View style={[styles.coordBox, { backgroundColor: '#10B98120', borderColor: '#10B981' }]}>
-                        <Text style={[styles.coordLabel, { color: '#10B981' }]}>✓ GPS Đã kết nối</Text>
-                      </View>
+                  {/* CARD 2: Nội dung mô tả */}
+                  <View style={styles.modalSectionCard}>
+                    <View style={styles.modalSectionHeader}>
+                      <Ionicons name="document-text-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
+                      <Text style={styles.modalSectionTitle}>Mô tả công việc</Text>
                     </View>
-                  ) : (
-                    <View style={styles.coordsRow}>
-                      <View style={[styles.coordBox, { backgroundColor: '#EF444420', borderColor: '#EF4444' }]}>
-                        <Text style={[styles.coordLabel, { color: '#EF4444' }]}>⚠ Chưa có tọa độ GPS</Text>
-                      </View>
+
+                    <Text style={styles.modalInputLabel}>Mô tả chi tiết</Text>
+                    <TextInput
+                      style={[styles.modalPremiumInput, styles.modalTextArea]}
+                      value={editDescription}
+                      onChangeText={setEditDescription}
+                      multiline
+                      numberOfLines={4}
+                      placeholder="Nhập mô tả chi tiết công việc..."
+                      placeholderTextColor="#94A3B8"
+                    />
+
+                    <Text style={styles.modalInputLabel}>Yêu cầu đối với ứng viên</Text>
+                    <TextInput
+                      style={[styles.modalPremiumInput, styles.modalTextArea, { height: 80 }]}
+                      value={editRequirements}
+                      onChangeText={setEditRequirements}
+                      multiline
+                      numberOfLines={3}
+                      placeholder="Nhập yêu cầu đối với ứng viên..."
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+
+                  {/* CARD 3: Địa điểm làm việc */}
+                  <View style={styles.modalSectionCard}>
+                    <View style={styles.modalSectionHeader}>
+                      <Ionicons name="location-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
+                      <Text style={styles.modalSectionTitle}>Địa chỉ làm việc</Text>
                     </View>
-                  )}
-                </View>
 
-                {/* CARD 4: Kỹ năng cần thiết */}
-                <View style={styles.modalSectionCard}>
-                  <View style={styles.modalSectionHeader}>
-                    <Ionicons name="flash-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
-                    <Text style={styles.modalSectionTitle}>Kỹ năng yêu cầu</Text>
-                  </View>
-
-                  <Text style={styles.modalInputLabel}>Chọn kỹ năng (có thể chọn nhiều)</Text>
-                  <View style={styles.modalSkillsContainer}>
-                    {skillsList.map((skill) => {
-                      const isSelected = skill.id === 'other_skill_trigger' ? showCustomSkillInput : editSelectedSkills.includes(skill.id);
-                      return (
-                        <TouchableOpacity
-                          key={skill.id}
-                          style={[
-                            styles.modalSkillPill,
-                            isSelected && styles.modalSkillPillActive
-                          ]}
-                          onPress={() => handleSkillToggle(skill.id)}
-                        >
-                          <Text style={[
-                            styles.modalSkillPillText,
-                            isSelected && styles.modalSkillPillTextActive
-                          ]}>
-                            {isSelected ? '✓ ' : ''}{skill.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {showCustomSkillInput && (
-                    <View style={styles.customSkillInputRow}>
+                    <Text style={styles.modalInputLabel}>Địa chỉ chi tiết</Text>
+                    <View style={{ position: 'relative', zIndex: 10, marginBottom: 16 }}>
                       <TextInput
-                        style={[styles.modalPremiumInput, styles.customSkillInput, { marginRight: 0 }]}
-                        placeholder="Nhập kỹ năng khác (cách nhau bởi dấu phẩy)..."
+                        style={[styles.modalPremiumInput, { paddingRight: 105, marginBottom: 0, height: 64, textAlignVertical: 'top', paddingTop: 10, paddingBottom: 10 }]}
+                        value={editAddress}
+                        onChangeText={handleAddressChange}
+                        placeholder="Nhập địa chỉ hoặc nhấn nút GPS bên dưới..."
                         placeholderTextColor="#94A3B8"
-                        value={customSkillInput}
-                        onChangeText={setCustomSkillInput}
+                        multiline={true}
                       />
-                    </View>
-                  )}
-                </View>
-              </ScrollView>
-            )}
+                      <TouchableOpacity
+                        style={{
+                          position: 'absolute',
+                          right: 8,
+                          top: 7,
+                          backgroundColor: '#64748B',
+                          borderRadius: 10,
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          height: 34,
+                          justifyContent: 'center',
+                          zIndex: 20
+                        }}
+                        onPress={geocodeTypedAddress}
+                        disabled={gpsLoading}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>
+                          {gpsLoading ? '...' : 'Tìm Tọa Độ'}
+                        </Text>
+                      </TouchableOpacity>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setEditModalVisible(false)}
-                disabled={savingEdit}
-              >
-                <Text style={styles.modalCancelBtnText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleSubmitEdit}
-                disabled={savingEdit}
-              >
-                {savingEdit ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.modalSaveBtnText}>Lưu thay đổi ⚡</Text>
-                )}
-              </TouchableOpacity>
+                      {showSuggestions && (
+                        <View style={{
+                          position: 'absolute',
+                          top: 52,
+                          left: 0,
+                          right: 0,
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 8,
+                          elevation: 4,
+                          maxHeight: 200,
+                          zIndex: 9999,
+                        }}>
+                          <ScrollView keyboardShouldPersistTaps="always">
+                            {addressSuggestions.map((item, index) => (
+                              <TouchableOpacity
+                                key={index}
+                                style={{
+                                  paddingVertical: 12,
+                                  paddingHorizontal: 16,
+                                  borderBottomWidth: index === addressSuggestions.length - 1 ? 0 : 1,
+                                  borderBottomColor: '#F1F5F9',
+                                }}
+                                onPress={() => handleSelectSuggestion(item)}
+                              >
+                                <Text style={{ fontSize: 13, color: '#334155', fontWeight: '500' }}>{item.display_name}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Location Buttons Row */}
+                    <View style={styles.locationButtonsRow}>
+                      <TouchableOpacity
+                        style={[styles.gpsButton, { flex: 1, marginRight: 8 }]}
+                        onPress={getCurrentLocation}
+                        disabled={gpsLoading}
+                      >
+                        {gpsLoading ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.gpsButtonText}>📍 GPS Hiện Tại</Text>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.mapButton, { flex: 1 }]}
+                        onPress={handleOpenMapPicker}
+                      >
+                        <Text style={styles.mapButtonText}>🗺 Bản Đồ</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Coordinates Display */}
+                    {editLatitude && editLongitude ? (
+                      <View style={styles.coordsRow}>
+                        <View style={styles.coordBox}>
+                          <Text style={styles.coordLabel}>Lat: {parseFloat(editLatitude).toFixed(6)}</Text>
+                        </View>
+                        <View style={styles.coordBox}>
+                          <Text style={styles.coordLabel}>Long: {parseFloat(editLongitude).toFixed(6)}</Text>
+                        </View>
+                        <View style={[styles.coordBox, { backgroundColor: '#10B98120', borderColor: '#10B981' }]}>
+                          <Text style={[styles.coordLabel, { color: '#10B981' }]}>✓ GPS Đã kết nối</Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.coordsRow}>
+                        <View style={[styles.coordBox, { backgroundColor: '#EF444420', borderColor: '#EF4444' }]}>
+                          <Text style={[styles.coordLabel, { color: '#EF4444' }]}>⚠ Chưa có tọa độ GPS</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* CARD 4: Kỹ năng cần thiết */}
+                  <View style={styles.modalSectionCard}>
+                    <View style={styles.modalSectionHeader}>
+                      <Ionicons name="flash-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
+                      <Text style={styles.modalSectionTitle}>Kỹ năng yêu cầu</Text>
+                    </View>
+
+                    <Text style={styles.modalInputLabel}>Chọn kỹ năng (có thể chọn nhiều)</Text>
+                    <View style={styles.modalSkillsContainer}>
+                      {skillsList.map((skill) => {
+                        const isSelected = skill.id === 'other_skill_trigger' ? showCustomSkillInput : editSelectedSkills.includes(skill.id);
+                        return (
+                          <TouchableOpacity
+                            key={skill.id}
+                            style={[
+                              styles.modalSkillPill,
+                              isSelected && styles.modalSkillPillActive
+                            ]}
+                            onPress={() => handleSkillToggle(skill.id)}
+                          >
+                            <Text style={[
+                              styles.modalSkillPillText,
+                              isSelected && styles.modalSkillPillTextActive
+                            ]}>
+                              {isSelected ? '✓ ' : ''}{skill.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {showCustomSkillInput && (
+                      <View style={styles.customSkillInputRow}>
+                        <TextInput
+                          style={[styles.modalPremiumInput, styles.customSkillInput, { marginRight: 0 }]}
+                          placeholder="Nhập kỹ năng khác (cách nhau bởi dấu phẩy)..."
+                          placeholderTextColor="#94A3B8"
+                          value={customSkillInput}
+                          onChangeText={setCustomSkillInput}
+                        />
+                      </View>
+                    )}
+                  </View>
+                </ScrollView>
+              )}
+
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setEditModalVisible(false)}
+                  disabled={savingEdit}
+                >
+                  <Text style={styles.modalCancelBtnText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalSaveBtn}
+                  onPress={handleSubmitEdit}
+                  disabled={savingEdit}
+                >
+                  {savingEdit ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.modalSaveBtnText}>Lưu thay đổi ⚡</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-            </View>
-          </KeyboardAvoidingView>
+          </View>
         </View>
       </Modal>
 

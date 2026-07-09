@@ -833,8 +833,7 @@ export default function StudentCalendar() {
         animationType="fade"
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        <View
           style={{ flex: 1 }}
         >
           <View style={styles.dialogOverlay}>
@@ -957,7 +956,7 @@ export default function StudentCalendar() {
             </ScrollView>
           </View>
         </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
       {/* Leave/Swap Request Modal */}
       <Modal

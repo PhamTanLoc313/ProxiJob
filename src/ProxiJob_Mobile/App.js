@@ -24,6 +24,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { getAvatarSource, isValidAvatar } from "./src/utils/avatarHelper";
 import { getJobPostQuotaApi } from "./src/api/auth";
+import { getStudentProfileApi } from "./src/api/studentApi";
 
 const cacheBuster = Date.now();
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ function MainAppShell() {
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [quota, setQuota] = useState(null);
+  const [studentProfile, setStudentProfile] = useState(null);
 
   const toggleAvatarMenu = async () => {
     const nextState = !avatarMenuOpen;
@@ -55,12 +57,21 @@ function MainAppShell() {
     if (nextState) {
       setNotifModalVisible(false); // Close notification dropdown if open
     }
-    if (nextState && user && user.role !== "student") {
-      try {
-        const q = await getJobPostQuotaApi();
-        if (q) setQuota(q);
-      } catch (err) {
-        console.log("Failed to fetch quota:", err);
+    if (nextState && user) {
+      if (user.role !== "student") {
+        try {
+          const q = await getJobPostQuotaApi();
+          if (q) setQuota(q);
+        } catch (err) {
+          console.log("Failed to fetch quota:", err);
+        }
+      } else {
+        try {
+          const p = await getStudentProfileApi();
+          if (p) setStudentProfile(p);
+        } catch (err) {
+          console.log("Failed to fetch student profile:", err);
+        }
       }
     }
   };
@@ -239,7 +250,7 @@ function MainAppShell() {
             </Text>
             <View style={styles.planRow}>
               <Text style={styles.planLabel}>
-                {isStudent ? "Vai trò:" : "Gói dịch vụ:"}
+                {isStudent ? "Gói ứng tuyển:" : "Gói dịch vụ:"}
               </Text>
               <View style={
                 isStudent 
@@ -264,7 +275,12 @@ function MainAppShell() {
                           : styles.enterprisePillText
                 }>
                   {(() => {
-                    if (isStudent) return "Sinh viên";
+                    if (isStudent) {
+                      const limit = studentProfile ? studentProfile.appliesLimit : 3;
+                      const used = studentProfile ? studentProfile.appliesUsed : 0;
+                      const remaining = Math.max(0, limit - used);
+                      return `Sinh viên (Còn ${remaining} lượt)`;
+                    }
                     const tierName = user?.subscriptionTier || "None";
                     const lowerTier = tierName.toLowerCase();
                     if (lowerTier === 'none' || lowerTier === 'free' || lowerTier === '') {
@@ -299,9 +315,21 @@ function MainAppShell() {
               </View>
             </View>
           </View>
-
+ 
           {/* Section 2: All Packages */}
-          {!isStudent && (
+          {isStudent ? (
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              activeOpacity={0.6}
+              onPress={() => {
+                setAvatarMenuOpen(false);
+                navigateTo("student_upgrade");
+              }}
+            >
+              <Ionicons name="grid-outline" size={18} color="#FF6B00" style={styles.dropdownItemIcon} />
+              <Text style={styles.dropdownItemText}>Xem các gói ứng tuyển</Text>
+            </TouchableOpacity>
+          ) : (
             <TouchableOpacity
               style={styles.dropdownItem}
               activeOpacity={0.6}
@@ -314,7 +342,7 @@ function MainAppShell() {
               <Text style={styles.dropdownItemText}>Xem các gói dịch vụ</Text>
             </TouchableOpacity>
           )}
-
+ 
           {/* Section 3: Store Profile */}
           {!isStudent && (
             <TouchableOpacity
@@ -650,19 +678,19 @@ const styles = StyleSheet.create({
   },
   dropdownMenu: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 104 : 95, // Account for status bar and header height
+    top: Platform.OS === "ios" ? 120 : 110, // Shifted down to clear header avatar cleanly
     right: 16,
     backgroundColor: "#FFFFFF", // Solid white for high contrast
     borderRadius: 20,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "#E2E8F0", // Clean slate border
     padding: 16,
     width: 272,
     shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.15, // Increased shadow opacity for maximum contrast
-    shadowRadius: 30, // Softer, wider shadow glow
-    elevation: 10, // Higher elevation to rise above all maps and components on Android
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.22, // Increased shadow opacity for maximum contrast
+    shadowRadius: 25, // Cleaner, more prominent shadow glow
+    elevation: 12, // Higher elevation to rise above all maps and components on Android
     zIndex: 99999,
   },
   dropdownSection1: {

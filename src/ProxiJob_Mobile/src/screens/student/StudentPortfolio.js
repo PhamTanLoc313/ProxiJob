@@ -30,6 +30,7 @@ import * as Location from 'expo-location';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const FONT_REGULAR = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular';
 const FONT_BOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold';
+const FONT_EXTRABOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-ExtraBold';
 import { getStudentProfileApi, updateStudentProfileApi, registerStudentProfileApi } from '../../api/studentApi';
 import { supabase } from '../../db/dbConfig';
 import * as ImagePicker from 'expo-image-picker';
@@ -1210,34 +1211,101 @@ export default function StudentPortfolio() {
         </View>
 
         {/* Student Apply Quota details */}
-        <View style={[styles.detailsCard, theme.shadows.light, { marginTop: 12, paddingVertical: 14 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="ticket-outline" size={24} color={theme.colors.student} style={{ marginRight: 10 }} />
-              <View>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1F2937', fontFamily: FONT_BOLD }}>Lượt ứng tuyển</Text>
-                <Text style={{ fontSize: 12, color: '#6B7280', fontFamily: FONT_REGULAR }}>
-                  Đã dùng: {profile?.appliesUsed ?? 0} / Hạn mức: {profile?.appliesLimit ?? 3}
+        <View style={{
+          backgroundColor: '#FFF7ED',
+          borderRadius: 20,
+          borderWidth: 1.5,
+          borderColor: '#FFD3B6',
+          padding: 16,
+          marginTop: 14,
+          shadowColor: '#FF6B00',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.05,
+          shadowRadius: 10,
+          elevation: 2,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: '#FF6B0018',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 12,
+              }}>
+                <Ionicons name="ticket-outline" size={22} color="#FF6B00" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, color: '#1E293B', fontFamily: FONT_EXTRABOLD }}>Lượt ứng tuyển còn lại</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', fontFamily: FONT_REGULAR, marginTop: 2 }}>
+                  Đã dùng: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{profile?.appliesUsed ?? 0}</Text> / Hạn mức: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{profile?.appliesLimit ?? 3}</Text>
                 </Text>
               </View>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: theme.colors.student, fontFamily: FONT_BOLD }}>
-                {profile?.appliesRemaining !== undefined ? profile.appliesRemaining : 3} lượt còn lại
-              </Text>
-              <TouchableOpacity
-                onPress={() => navigateTo('student_upgrade')}
-                style={{
-                  backgroundColor: 'rgba(255, 107, 0, 0.1)',
-                  paddingHorizontal: 10,
-                  paddingVertical: 4,
-                  borderRadius: 6,
-                  marginTop: 6
-                }}
-              >
-                <Text style={{ fontSize: 11, color: '#FF6B00', fontWeight: '700', fontFamily: FONT_BOLD }}>Mua thêm lượt</Text>
-              </TouchableOpacity>
+            <View style={{ justifyContent: 'center' }}>
+              <View style={{
+                backgroundColor: '#FF6B00',
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#FF6B00',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+                elevation: 2,
+                minWidth: 70,
+              }}>
+                <Text style={{ fontSize: 18, color: '#FFFFFF', fontFamily: FONT_EXTRABOLD, lineHeight: 22 }}>
+                  {profile ? Math.max(0, profile.appliesLimit - profile.appliesUsed) : 3}
+                </Text>
+                <Text style={{ fontSize: 8, color: '#FFFFFF', fontFamily: FONT_BOLD, textTransform: 'uppercase', letterSpacing: 0.2, marginTop: 1 }}>
+                  Lượt còn
+                </Text>
+              </View>
             </View>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={{ height: 6, backgroundColor: '#FFE4D1', borderRadius: 3, overflow: 'hidden', marginBottom: 14 }}>
+            <View style={{
+              height: '100%',
+              width: profile && profile.appliesLimit > 0
+                ? `${(Math.min(profile.appliesLimit, profile.appliesUsed) / profile.appliesLimit) * 100}%`
+                : '0%',
+              backgroundColor: '#FF6B00',
+              borderRadius: 3
+            }} />
+          </View>
+
+          {/* Upgrade Call to action */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#FFE4D1' }}>
+            <Text style={{ fontSize: 11, color: '#7C2D12', fontWeight: '600', fontFamily: FONT_REGULAR, flex: 1, marginRight: 8 }}>
+              Nâng cấp gói Pro để cộng thêm lượt và nhận các quyền lợi ưu tiên duyệt hồ sơ!
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigateTo('student_upgrade')}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#FF6B00',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                shadowColor: '#FF6B00',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: '#FFFFFF', fontWeight: '800', fontFamily: FONT_BOLD, marginRight: 2 }}>Mua thêm</Text>
+              <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         </View>
 

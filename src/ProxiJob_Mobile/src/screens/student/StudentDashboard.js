@@ -1256,36 +1256,7 @@ export default function StudentDashboard() {
       </View>
 
       {/* Student Apply Quota info banner */}
-      {user?.role === 'student' && (
-        <View style={{
-          backgroundColor: '#FFF',
-          paddingHorizontal: 16,
-          paddingVertical: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: '#E2E8F0',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-            <Ionicons name="ticket-outline" size={18} color="#FF6B00" style={{ marginRight: 8 }} />
-            <Text style={{ fontSize: 13, color: '#334155', fontFamily: FONT_REGULAR }}>
-              Lượt ứng tuyển: <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{profileData ? (profileData.appliesLimit - profileData.appliesUsed) : 3} lượt còn lại</Text>
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => navigateTo('student_upgrade')}
-            style={{
-              backgroundColor: 'rgba(255, 107, 0, 0.1)',
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 6
-            }}
-          >
-            <Text style={{ fontSize: 12, color: '#FF6B00', fontWeight: 'bold', fontFamily: FONT_BOLD }}>Mua gói</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+
 
       {viewMode === 'list' ? (
         <ScrollView

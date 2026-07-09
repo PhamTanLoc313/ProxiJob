@@ -1055,8 +1055,7 @@ export default function PayrollSettlementScreen() {
         animationType="slide"
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        <View
           style={{ flex: 1 }}
         >
           <View style={styles.modalOverlay}>
@@ -1251,7 +1250,7 @@ export default function PayrollSettlementScreen() {
           </ScrollView>
         </View>
       </View>
-        </KeyboardAvoidingView>
+        </View>
     </Modal>
 
       {/* Custom Date Picker Modal */}
