@@ -128,12 +128,19 @@ export default function PaymentQRScreen() {
   const handlePaid = async () => {
     try {
       const tk = await createPaymentSessionApi(orderId);
+      let updatedUser = null;
       if (tk?.accessToken) {
-        const u = await checkAuthApi(tk.accessToken);
-        await saveAuthSession(tk.accessToken, tk.refreshToken, u);
+        updatedUser = await checkAuthApi(tk.accessToken);
+        await saveAuthSession(tk.accessToken, tk.refreshToken, updatedUser);
       }
-      setIsEnterprise(true);
-      showToast('Thanh toán thành công! Gói đã kích hoạt.', 'success');
+      const currentUserRole = updatedUser?.role || user?.role;
+      if (currentUserRole === 'student') {
+        showToast('Thanh toán thành công! Đã cộng thêm 10 lượt ứng tuyển.', 'success');
+        navigateTo('student_portfolio');
+      } else {
+        setIsEnterprise(true);
+        showToast('Thanh toán thành công! Gói đã kích hoạt.', 'success');
+      }
     } catch {
       showToast('Thanh toán xác nhận! Đăng nhập lại để cập nhật.', 'success');
     }
@@ -424,7 +431,7 @@ const st = StyleSheet.create({
 
   /* Header */
   header: {
-    paddingTop: Platform.OS === 'ios' ? 44 : 34,
+    paddingTop: 12,
     paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',

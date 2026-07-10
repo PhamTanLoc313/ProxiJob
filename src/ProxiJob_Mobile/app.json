@@ -2,6 +2,7 @@
   "expo": {
     "name": "ProxiJob_Mobile",
     "slug": "proxijob-mobile",
+    "scheme": "proxijob",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -36,7 +37,9 @@
           "cameraPermission": "Cho phép ProxiJob truy cập camera của bạn."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "@react-native-google-signin/google-signin",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

@@ -24,6 +24,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { getAvatarSource, isValidAvatar } from "./src/utils/avatarHelper";
 import { getJobPostQuotaApi } from "./src/api/auth";
+import { getStudentProfileApi } from "./src/api/studentApi";
 
 const cacheBuster = Date.now();
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ function MainAppShell() {
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [quota, setQuota] = useState(null);
+  const [studentProfile, setStudentProfile] = useState(null);
 
   const toggleAvatarMenu = async () => {
     const nextState = !avatarMenuOpen;
@@ -55,12 +57,21 @@ function MainAppShell() {
     if (nextState) {
       setNotifModalVisible(false); // Close notification dropdown if open
     }
-    if (nextState && user && user.role !== "student") {
-      try {
-        const q = await getJobPostQuotaApi();
-        if (q) setQuota(q);
-      } catch (err) {
-        console.log("Failed to fetch quota:", err);
+    if (nextState && user) {
+      if (user.role !== "student") {
+        try {
+          const q = await getJobPostQuotaApi();
+          if (q) setQuota(q);
+        } catch (err) {
+          console.log("Failed to fetch quota:", err);
+        }
+      } else {
+        try {
+          const p = await getStudentProfileApi();
+          if (p) setStudentProfile(p);
+        } catch (err) {
+          console.log("Failed to fetch student profile:", err);
+        }
       }
     }
   };
@@ -98,7 +109,7 @@ function MainAppShell() {
   const tier = user?.subscriptionTier?.toLowerCase() || '';
   const hasStandard = tier === 'hrm basic' || tier === 'enterprise' || tier === 'standard' || tier === 'premium';
 
-  const hideHeaderScreens = ["candidate_list", "payment_qr", "upgrade_package", "employer_emergency_post"];
+  const hideHeaderScreens = ["candidate_list", "payment_qr", "upgrade_package", "student_upgrade", "employer_emergency_post"];
   const showHeader = !hideHeaderScreens.includes(currentScreen) && !isChatRoomActive;
 
   return (
@@ -198,223 +209,240 @@ function MainAppShell() {
               )}
             </View>
           </View>
-
-          {/* Avatar Dropdown Menu */}
-          {avatarMenuOpen && (
-            <View style={styles.dropdownMenu}>
-              {/* Caret pointing up to Avatar */}
-              <View style={{
-                position: 'absolute',
-                top: -8,
-                right: 22,
-                width: 0,
-                height: 0,
-                backgroundColor: 'transparent',
-                borderStyle: 'solid',
-                borderLeftWidth: 8,
-                borderRightWidth: 8,
-                borderBottomWidth: 8,
-                borderLeftColor: 'transparent',
-                borderRightColor: 'transparent',
-                borderBottomColor: '#FFFFFF',
-              }} />
-              {/* Close Button */}
-              <TouchableOpacity
-                style={styles.closeDropdownBtn}
-                onPress={() => setAvatarMenuOpen(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.closeDropdownText}>✕</Text>
-              </TouchableOpacity>
-
-              {/* Section 1: Current Plan */}
-              <View style={styles.dropdownSection1}>
-                <Text style={styles.dropdownStoreName}>
-                  {isStudent ? (user?.name || "Sinh viên") : (user?.name || "Doanh nghiệp")}
-                </Text>
-                <Text style={styles.dropdownEmail}>
-                  {isStudent ? (user?.email || "student@proxijob.test") : (user?.email || "business@proxijob.test")}
-                </Text>
-                <View style={styles.planRow}>
-                  <Text style={styles.planLabel}>
-                    {isStudent ? "Vai trò:" : "Gói dịch vụ:"}
-                  </Text>
-                  <View style={
-                    isStudent 
-                      ? styles.studentPill 
-                      : (!user?.subscriptionTier || user.subscriptionTier === 'None' || user.subscriptionTier === '')
-                        ? { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
-                        : (user.subscriptionTier.toLowerCase() === 'recruit' || user.subscriptionTier.toLowerCase() === 'pershift')
-                          ? { backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
-                          : (user.subscriptionTier.toLowerCase() === 'hrm basic' || user.subscriptionTier.toLowerCase() === 'standard')
-                            ? { backgroundColor: '#FAF5FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
-                            : styles.enterprisePill
-                  }>
-                    <Text style={
-                      isStudent 
-                        ? styles.studentPillText 
-                        : (!user?.subscriptionTier || user.subscriptionTier === 'None' || user.subscriptionTier === '')
-                          ? { color: '#64748B', fontSize: 11, fontWeight: '800' }
-                          : (user.subscriptionTier.toLowerCase() === 'recruit' || user.subscriptionTier.toLowerCase() === 'pershift')
-                            ? { color: '#059669', fontSize: 11, fontWeight: '800' }
-                            : (user.subscriptionTier.toLowerCase() === 'hrm basic' || user.subscriptionTier.toLowerCase() === 'standard')
-                              ? { color: '#7C3AED', fontSize: 11, fontWeight: '800' }
-                              : styles.enterprisePillText
-                    }>
-                      {(() => {
-                        if (isStudent) return "Sinh viên";
-                        const tierName = user?.subscriptionTier || "None";
-                        const lowerTier = tierName.toLowerCase();
-                        if (lowerTier === 'none' || lowerTier === 'free' || lowerTier === '') {
-                          return "Chưa đăng ký";
-                        }
-                        
-                        const remaining = quota 
-                          ? quota.jobPostsRemaining 
-                          : (user?.jobPostLimit !== undefined && user?.jobPostsUsed !== undefined)
-                            ? Math.max(0, user.jobPostLimit - user.jobPostsUsed)
-                            : (lowerTier === 'pershift' ? 1 : lowerTier === 'recruit' || lowerTier === 'basic' ? 30 : 999);
-                        
-                        let vietnameseName = tierName;
-                        if (lowerTier === 'pershift') {
-                          vietnameseName = 'Gói đăng ca lẻ';
-                        } else if (lowerTier === 'recruit') {
-                          vietnameseName = 'Tuyển dụng';
-                        } else if (lowerTier === 'hrm basic' || lowerTier === 'standard') {
-                          vietnameseName = 'HRM Cơ bản';
-                        } else if (lowerTier === 'enterprise' || lowerTier === 'premium') {
-                          vietnameseName = 'Doanh nghiệp';
-                        } else if (lowerTier === 'trial') {
-                          vietnameseName = 'Dùng thử';
-                        }
-                        
-                        if (lowerTier === 'pershift') {
-                          return `Đăng ca lẻ (Còn ${remaining} lượt)`;
-                        }
-                        return `${vietnameseName} (Còn ${remaining} lượt)`;
-                      })()}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Section 2: All Packages */}
-              {!isStudent && (
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  activeOpacity={0.6}
-                  onPress={() => {
-                    setAvatarMenuOpen(false);
-                    navigateTo("upgrade_package");
-                  }}
-                >
-                  <Ionicons name="grid-outline" size={18} color="#64748B" style={styles.dropdownItemIcon} />
-                  <Text style={styles.dropdownItemText}>Xem các gói dịch vụ</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Section 3: Store Profile */}
-              {!isStudent && (
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  activeOpacity={0.6}
-                  onPress={() => {
-                    setAvatarMenuOpen(false);
-                    navigateTo("employer_profile");
-                  }}
-                >
-                  <Ionicons name="storefront-outline" size={18} color="#64748B" style={styles.dropdownItemIcon} />
-                  <Text style={styles.dropdownItemText}>Profile của quán</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Section 4: Sign Out */}
-              <View style={styles.dropdownDivider} />
-
-              <TouchableOpacity
-                style={[styles.dropdownItem, { paddingBottom: 2 }]}
-                activeOpacity={0.6}
-                onPress={() => {
-                  setAvatarMenuOpen(false);
-                  logout();
-                }}
-              >
-                <Ionicons name="log-out-outline" size={18} color="#EF4444" style={styles.dropdownItemIcon} />
-                <Text style={[styles.dropdownItemText, { color: "#EF4444" }]}>Đăng xuất</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Notification Dropdown Menu */}
-          {notifModalVisible && (
-            <View style={[styles.dropdownMenu, { width: 290 }]}>
-              {/* Caret pointing up to Bell */}
-              <View style={{
-                position: 'absolute',
-                top: -8,
-                right: 67, // Points directly to the center of the bell button
-                width: 0,
-                height: 0,
-                backgroundColor: 'transparent',
-                borderStyle: 'solid',
-                borderLeftWidth: 8,
-                borderRightWidth: 8,
-                borderBottomWidth: 8,
-                borderLeftColor: 'transparent',
-                borderRightColor: 'transparent',
-                borderBottomColor: '#FFFFFF',
-              }} />
-              {/* Header */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderColor: '#E2E8F0', paddingBottom: 8, marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="notifications-outline" size={16} color="#1E293B" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E293B' }}>
-                    Thông báo Hệ thống
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setNotifModalVisible(false)}
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 11,
-                    backgroundColor: '#F1F5F9',
-                    justifyContent: 'center',
-                    alignItems: 'center'
-                  }}
-                >
-                  <Ionicons name="close" size={12} color="#64748B" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Notification List inside ScrollView */}
-              <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-                {notifications.length === 0 ? (
-                  <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                    <Text style={{ color: '#94A3B8', fontSize: 12 }}>
-                      Không có thông báo mới.
-                    </Text>
-                  </View>
-                ) : (
-                  notifications.map((notif) => (
-                    <View key={notif.id} style={{ flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 8, backgroundColor: '#F8FAFC', borderRadius: 12, marginBottom: 6, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                      <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#FF6B001A', justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
-                        <Ionicons name="notifications-outline" size={14} color="#FF6B00" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E293B' }}>{notif.title}</Text>
-                          <Text style={{ fontSize: 9, color: '#94A3B8', fontWeight: '600' }}>{notif.time}</Text>
-                        </View>
-                        <Text style={{ fontSize: 11, color: '#475569', lineHeight: 14, marginTop: 2 }}>{notif.content}</Text>
-                      </View>
-                    </View>
-                  ))
-                )}
-              </ScrollView>
-            </View>
-          )}
         </SafeAreaView>
+      )}
+
+      {/* Avatar Dropdown Menu */}
+      {avatarMenuOpen && (
+        <View style={styles.dropdownMenu}>
+          {/* Caret pointing up to Avatar */}
+          <View style={{
+            position: 'absolute',
+            top: -8,
+            right: 22,
+            width: 0,
+            height: 0,
+            backgroundColor: 'transparent',
+            borderStyle: 'solid',
+            borderLeftWidth: 8,
+            borderRightWidth: 8,
+            borderBottomWidth: 8,
+            borderLeftColor: 'transparent',
+            borderRightColor: 'transparent',
+            borderBottomColor: '#FFFFFF',
+          }} />
+          {/* Close Button */}
+          <TouchableOpacity
+            style={styles.closeDropdownBtn}
+            onPress={() => setAvatarMenuOpen(false)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.closeDropdownText}>✕</Text>
+          </TouchableOpacity>
+
+          {/* Section 1: Current Plan */}
+          <View style={styles.dropdownSection1}>
+            <Text style={styles.dropdownStoreName}>
+              {isStudent ? (user?.name || "Sinh viên") : (user?.name || "Doanh nghiệp")}
+            </Text>
+            <Text style={styles.dropdownEmail}>
+              {isStudent ? (user?.email || "student@proxijob.test") : (user?.email || "business@proxijob.test")}
+            </Text>
+            <View style={styles.planRow}>
+              <Text style={styles.planLabel}>
+                {isStudent ? "Gói ứng tuyển:" : "Gói dịch vụ:"}
+              </Text>
+              <View style={
+                isStudent 
+                  ? styles.studentPill 
+                  : (!user?.subscriptionTier || user.subscriptionTier === 'None' || user.subscriptionTier === '')
+                    ? { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
+                    : (user.subscriptionTier.toLowerCase() === 'recruit' || user.subscriptionTier.toLowerCase() === 'pershift')
+                      ? { backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
+                      : (user.subscriptionTier.toLowerCase() === 'hrm basic' || user.subscriptionTier.toLowerCase() === 'standard')
+                        ? { backgroundColor: '#FAF5FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }
+                        : styles.enterprisePill
+              }>
+                <Text style={
+                  isStudent 
+                    ? styles.studentPillText 
+                    : (!user?.subscriptionTier || user.subscriptionTier === 'None' || user.subscriptionTier === '')
+                      ? { color: '#64748B', fontSize: 11, fontWeight: '800' }
+                      : (user.subscriptionTier.toLowerCase() === 'recruit' || user.subscriptionTier.toLowerCase() === 'pershift')
+                        ? { color: '#059669', fontSize: 11, fontWeight: '800' }
+                        : (user.subscriptionTier.toLowerCase() === 'hrm basic' || user.subscriptionTier.toLowerCase() === 'standard')
+                          ? { color: '#7C3AED', fontSize: 11, fontWeight: '800' }
+                          : styles.enterprisePillText
+                }>
+                  {(() => {
+                    if (isStudent) {
+                      const limit = studentProfile ? studentProfile.appliesLimit : 3;
+                      const used = studentProfile ? studentProfile.appliesUsed : 0;
+                      const remaining = Math.max(0, limit - used);
+                      return `Sinh viên (Còn ${remaining} lượt)`;
+                    }
+                    const tierName = user?.subscriptionTier || "None";
+                    const lowerTier = tierName.toLowerCase();
+                    if (lowerTier === 'none' || lowerTier === 'free' || lowerTier === '') {
+                      return "Chưa đăng ký";
+                    }
+                    
+                    const remaining = quota 
+                      ? quota.jobPostsRemaining 
+                      : (user?.jobPostLimit !== undefined && user?.jobPostsUsed !== undefined)
+                        ? Math.max(0, user.jobPostLimit - user.jobPostsUsed)
+                        : (lowerTier === 'pershift' ? 1 : lowerTier === 'recruit' || lowerTier === 'basic' ? 30 : 999);
+                    
+                    let vietnameseName = tierName;
+                    if (lowerTier === 'pershift') {
+                      vietnameseName = 'Gói đăng ca lẻ';
+                    } else if (lowerTier === 'recruit') {
+                      vietnameseName = 'Tuyển dụng';
+                    } else if (lowerTier === 'hrm basic' || lowerTier === 'standard') {
+                      vietnameseName = 'HRM Cơ bản';
+                    } else if (lowerTier === 'enterprise' || lowerTier === 'premium') {
+                      vietnameseName = 'Doanh nghiệp';
+                    } else if (lowerTier === 'trial') {
+                      vietnameseName = 'Dùng thử';
+                    }
+                    
+                    if (lowerTier === 'pershift') {
+                      return `Đăng ca lẻ (Còn ${remaining} lượt)`;
+                    }
+                    return `${vietnameseName} (Còn ${remaining} lượt)`;
+                  })()}
+                </Text>
+              </View>
+            </View>
+          </View>
+ 
+          {/* Section 2: All Packages */}
+          {isStudent ? (
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              activeOpacity={0.6}
+              onPress={() => {
+                setAvatarMenuOpen(false);
+                navigateTo("student_upgrade");
+              }}
+            >
+              <Ionicons name="grid-outline" size={18} color="#FF6B00" style={styles.dropdownItemIcon} />
+              <Text style={styles.dropdownItemText}>Xem các gói ứng tuyển</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              activeOpacity={0.6}
+              onPress={() => {
+                setAvatarMenuOpen(false);
+                navigateTo("upgrade_package");
+              }}
+            >
+              <Ionicons name="grid-outline" size={18} color="#64748B" style={styles.dropdownItemIcon} />
+              <Text style={styles.dropdownItemText}>Xem các gói dịch vụ</Text>
+            </TouchableOpacity>
+          )}
+ 
+          {/* Section 3: Store Profile */}
+          {!isStudent && (
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              activeOpacity={0.6}
+              onPress={() => {
+                setAvatarMenuOpen(false);
+                navigateTo("employer_profile");
+              }}
+            >
+              <Ionicons name="storefront-outline" size={18} color="#64748B" style={styles.dropdownItemIcon} />
+              <Text style={styles.dropdownItemText}>Profile của quán</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Section 4: Sign Out */}
+          <View style={styles.dropdownDivider} />
+
+          <TouchableOpacity
+            style={[styles.dropdownItem, { paddingBottom: 2 }]}
+            activeOpacity={0.6}
+            onPress={() => {
+              setAvatarMenuOpen(false);
+              logout();
+            }}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#EF4444" style={styles.dropdownItemIcon} />
+            <Text style={[styles.dropdownItemText, { color: "#EF4444" }]}>Đăng xuất</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Notification Dropdown Menu */}
+      {notifModalVisible && (
+        <View style={[styles.dropdownMenu, { width: 290 }]}>
+          {/* Caret pointing up to Bell */}
+          <View style={{
+            position: 'absolute',
+            top: -8,
+            right: 67, // Points directly to the center of the bell button
+            width: 0,
+            height: 0,
+            backgroundColor: 'transparent',
+            borderStyle: 'solid',
+            borderLeftWidth: 8,
+            borderRightWidth: 8,
+            borderBottomWidth: 8,
+            borderLeftColor: 'transparent',
+            borderRightColor: 'transparent',
+            borderBottomColor: '#FFFFFF',
+          }} />
+          {/* Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderColor: '#E2E8F0', paddingBottom: 8, marginBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="notifications-outline" size={16} color="#1E293B" style={{ marginRight: 6 }} />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E293B' }}>
+                Thông báo Hệ thống
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setNotifModalVisible(false)}
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 11,
+                backgroundColor: '#F1F5F9',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+            >
+              <Ionicons name="close" size={12} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Notification List inside ScrollView */}
+          <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+            {notifications.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                <Text style={{ color: '#94A3B8', fontSize: 12 }}>
+                  Không có thông báo mới.
+                </Text>
+              </View>
+            ) : (
+              notifications.map((notif) => (
+                <View key={notif.id} style={{ flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 8, backgroundColor: '#F8FAFC', borderRadius: 12, marginBottom: 6, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                  <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#FF6B001A', justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+                    <Ionicons name="notifications-outline" size={14} color="#FF6B00" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E293B' }}>{notif.title}</Text>
+                      <Text style={{ fontSize: 9, color: '#94A3B8', fontWeight: '600' }}>{notif.time}</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#475569', lineHeight: 14, marginTop: 2 }}>{notif.content}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </View>
       )}
       {/* Main Content Area using MainTabNavigator */}
       <MainTabNavigator isStudent={isStudent} />
@@ -650,19 +678,19 @@ const styles = StyleSheet.create({
   },
   dropdownMenu: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 104 : 95, // Account for status bar and header height
+    top: Platform.OS === "ios" ? 120 : 110, // Shifted down to clear header avatar cleanly
     right: 16,
     backgroundColor: "#FFFFFF", // Solid white for high contrast
     borderRadius: 20,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "#E2E8F0", // Clean slate border
     padding: 16,
     width: 272,
     shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.15, // Increased shadow opacity for maximum contrast
-    shadowRadius: 30, // Softer, wider shadow glow
-    elevation: 10, // Higher elevation to rise above all maps and components on Android
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.22, // Increased shadow opacity for maximum contrast
+    shadowRadius: 25, // Cleaner, more prominent shadow glow
+    elevation: 12, // Higher elevation to rise above all maps and components on Android
     zIndex: 99999,
   },
   dropdownSection1: {

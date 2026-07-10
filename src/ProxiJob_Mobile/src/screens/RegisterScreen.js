@@ -39,11 +39,11 @@ export default function RegisterScreen() {
   const validateForm = () => {
     let tempErrors = {};
 
-    if (!fullName.trim()) {
+    if (!fullName || !fullName.trim()) {
       tempErrors.fullName = 'Họ và tên không được để trống.';
     }
 
-    if (!email.trim()) {
+    if (!email || !email.trim()) {
       tempErrors.email = 'Email không được để trống.';
     } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -52,15 +52,15 @@ export default function RegisterScreen() {
       }
     }
 
-    if (!password) {
+    if (!password || !password.trim()) {
       tempErrors.password = 'Mật khẩu không được để trống.';
-    } else if (password.length < 8) {
+    } else if (password.trim().length < 8) {
       tempErrors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
     }
 
-    if (!confirmPassword) {
+    if (!confirmPassword || !confirmPassword.trim()) {
       tempErrors.confirmPassword = 'Xác nhận mật khẩu không được để trống.';
-    } else if (confirmPassword !== password) {
+    } else if (confirmPassword.trim() !== password.trim()) {
       tempErrors.confirmPassword = 'Mật khẩu xác nhận không trùng khớp.';
     }
 
@@ -73,8 +73,8 @@ export default function RegisterScreen() {
       const success = await register(
         fullName.trim(),
         email.trim(),
-        password,
-        confirmPassword,
+        password.trim(),
+        confirmPassword.trim(),
         selectedRole
       );
       if (success) {

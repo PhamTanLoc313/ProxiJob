@@ -13,7 +13,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
-  RefreshControl
+  RefreshControl,
+  Keyboard
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -27,6 +28,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const FONT_REGULAR = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular';
+const FONT_BOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold';
+const FONT_EXTRABOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-ExtraBold';
 import { getStudentProfileApi, updateStudentProfileApi, registerStudentProfileApi } from '../../api/studentApi';
 import { supabase } from '../../db/dbConfig';
 import * as ImagePicker from 'expo-image-picker';
@@ -200,7 +204,7 @@ const decodeBase64ToArrayBuffer = (base64String) => {
 };
 
 export default function StudentPortfolio() {
-  const { user, setUser, showToast, studentCoords, setStudentCoords } = useContext(AppContext);
+  const { user, setUser, showToast, studentCoords, setStudentCoords, navigateTo } = useContext(AppContext);
   const { data: shifts = [] } = useShiftsQuery(user, studentCoords);
   const { data: payrolls = [] } = usePayrollsQuery(user);
 
@@ -220,6 +224,24 @@ export default function StudentPortfolio() {
   const [skillInput, setSkillInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [formErrors, setFormErrors] = useState({});
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorModalMessage, setErrorModalMessage] = useState('');
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   // State phục vụ quét định vị thiết bị
   const [gpsScanning, setGpsScanning] = useState(false);
@@ -243,7 +265,7 @@ export default function StudentPortfolio() {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
           setAvatarMenuVisible(false);
-          Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh để đổi ảnh đại diện.');
+          showToast('Bạn cần cho phép truy cập thư viện ảnh để đổi ảnh đại diện.', 'warning');
           return;
         }
       }
@@ -266,7 +288,7 @@ export default function StudentPortfolio() {
     } catch (error) {
       setAvatarMenuVisible(false);
       console.log('[StudentPortfolio] handlePickImage error:', error);
-      Alert.alert('Lỗi', 'Không thể chọn hình ảnh.');
+      showToast('Lỗi: Không thể chọn hình ảnh.', 'error');
     }
   };
 
@@ -276,7 +298,7 @@ export default function StudentPortfolio() {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           setAvatarMenuVisible(false);
-          Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập camera để chụp ảnh đại diện.');
+          showToast('Bạn cần cho phép truy cập camera để chụp ảnh đại diện.', 'warning');
           return;
         }
       }
@@ -299,7 +321,7 @@ export default function StudentPortfolio() {
     } catch (error) {
       setAvatarMenuVisible(false);
       console.log('[StudentPortfolio] handleTakePhoto error:', error);
-      Alert.alert('Lỗi', 'Không thể chụp ảnh.');
+      showToast('Lỗi: Không thể chụp ảnh.', 'error');
     }
   };
 
@@ -369,7 +391,7 @@ export default function StudentPortfolio() {
       showToast('Cập nhật ảnh đại diện thành công!', 'success');
     } catch (err) {
       console.log('[StudentPortfolio] Upload avatar error:', err);
-      Alert.alert('Lỗi', err.message || 'Không thể tải ảnh lên.');
+      showToast(err.message || 'Không thể tải ảnh lên.', 'error');
     } finally {
       setUploadingAvatar(false);
     }
@@ -465,6 +487,7 @@ export default function StudentPortfolio() {
             const dateStr = `${calYear}-${monthStr}-${dayStr}`;
             setForm(prev => ({ ...prev, dateOfBirth: dateStr }));
             setCalendarVisible(false);
+            if (formErrors.dateOfBirth) setFormErrors(prev => ({ ...prev, dateOfBirth: null }));
           }}
         >
           <Text style={[styles.calDayText, isSelected && styles.calDayTextActive]}>
@@ -679,15 +702,90 @@ export default function StudentPortfolio() {
     const updatedSkills = [...currentSkills, trimmedInput].join(', ');
     setForm(prev => ({ ...prev, skills: updatedSkills }));
     setSkillInput('');
+    if (formErrors.skills) setFormErrors(prev => ({ ...prev, skills: null }));
   };
 
   const handleRemoveSkillTag = (skillToRemove) => {
     const currentSkills = form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : [];
     const updatedSkills = currentSkills.filter(s => s !== skillToRemove).join(', ');
     setForm(prev => ({ ...prev, skills: updatedSkills }));
+    if (formErrors.skills) setFormErrors(prev => ({ ...prev, skills: null }));
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!form.phoneNumber || !form.phoneNumber.trim()) {
+      newErrors.phoneNumber = 'Số điện thoại không được để trống.';
+    } else {
+      const phoneRegex = /^0\d{9}$/;
+      if (!phoneRegex.test(form.phoneNumber.trim())) {
+        newErrors.phoneNumber = 'Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.';
+      }
+    }
+
+    if (!form.dateOfBirth) {
+      newErrors.dateOfBirth = 'Ngày sinh không được để trống.';
+    } else {
+      const birthDate = new Date(form.dateOfBirth);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      if (isNaN(age)) {
+        newErrors.dateOfBirth = 'Ngày sinh không hợp lệ.';
+      } else if (age < 16 || age > 60) {
+        newErrors.dateOfBirth = 'Độ tuổi của sinh viên phải từ 16 đến 60 tuổi.';
+      }
+    }
+
+    if (!form.gender || !form.gender.trim()) {
+      newErrors.gender = 'Vui lòng chọn giới tính.';
+    }
+
+    if (!form.school || !form.school.trim()) {
+      newErrors.school = 'Trường học không được để trống.';
+    }
+
+    if (!form.major || !form.major.trim()) {
+      newErrors.major = 'Chuyên ngành không được để trống.';
+    }
+
+    const yearNum = parseInt(form.yearOfStudy, 10);
+    if (!form.yearOfStudy || isNaN(yearNum) || yearNum < 1 || yearNum > 6) {
+      newErrors.yearOfStudy = 'Năm học phải là số từ 1 đến 6.';
+    }
+
+    if (!form.address || !form.address.trim()) {
+      newErrors.address = 'Địa chỉ không được để trống.';
+    }
+
+    if (!form.city || !form.city.trim()) {
+      newErrors.city = 'Thành phố không được để trống.';
+    }
+
+    if (!form.bio || !form.bio.trim()) {
+      newErrors.bio = 'Tiểu sử (Bio) không được để trống.';
+    } else if (form.bio.trim().length < 20) {
+      newErrors.bio = `Tiểu sử phải có ít nhất 20 ký tự (Hiện tại: ${form.bio.trim().length} ký tự).`;
+    }
+
+    if (!form.skills || !form.skills.trim()) {
+      newErrors.skills = 'Vui lòng thêm ít nhất một kỹ năng.';
+    }
+
+    setFormErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSaveProfile = async () => {
+    if (!validateForm()) {
+      showToast('Vui lòng kiểm tra lại các trường thông tin!', 'warning');
+      return;
+    }
+
     try {
       setSaving(true);
 
@@ -708,19 +806,19 @@ export default function StudentPortfolio() {
       }
 
       const payload = {
-        phoneNumber: form.phoneNumber,
+        phoneNumber: form.phoneNumber.trim(),
         avatarUrl: form.avatarUrl,
         dateOfBirth: parseDateInput(form.dateOfBirth),
-        gender: form.gender,
-        address: form.address,
-        city: form.city,
+        gender: form.gender.trim(),
+        address: form.address.trim(),
+        city: form.city.trim(),
         latitude: currentLat,
         longitude: currentLng,
-        school: form.school,
-        major: form.major,
+        school: form.school.trim(),
+        major: form.major.trim(),
         yearOfStudy: parseInt(form.yearOfStudy, 10) || 0,
-        bio: form.bio,
-        skills: form.skills,
+        bio: form.bio.trim(),
+        skills: form.skills.trim(),
       };
 
       if (profileExists) {
@@ -735,7 +833,9 @@ export default function StudentPortfolio() {
       setEditModalVisible(false);
     } catch (err) {
       console.log('Error saving profile:', err);
-      Alert.alert('Thất bại', err.message || 'Không thể lưu thông tin hồ sơ.');
+      let errMsg = err.message || 'Không thể lưu thông tin hồ sơ.';
+      setErrorModalMessage(errMsg);
+      setErrorModalVisible(true);
     } finally {
       setSaving(false);
     }
@@ -892,6 +992,7 @@ export default function StudentPortfolio() {
 
   const handleAddressChange = async (text) => {
     setForm(prev => ({ ...prev, address: text }));
+    if (formErrors.address) setFormErrors(prev => ({ ...prev, address: null }));
     if (text.length < 4) {
       setAddressSuggestions([]);
       setShowSuggestions(false);
@@ -1021,7 +1122,7 @@ export default function StudentPortfolio() {
   };
 
   const completedShifts = shifts.filter(s => s.status === 'completed');
-  const totalCompletedShifts = completedShifts.length + (profile?.reviewCount || 12);
+  const totalCompletedShifts = completedShifts.length + (profile?.reviewCount ?? 0);
   const averageRating = profile?.reputationScore !== undefined ? profile.reputationScore.toFixed(1) : '4.9';
 
   return (
@@ -1106,6 +1207,105 @@ export default function StudentPortfolio() {
             </View>
             <Text style={styles.statValue}>{profile?.completionPercent !== undefined ? `${profile.completionPercent}%` : '100%'}</Text>
             <Text style={styles.statLabel}>Hoàn thiện HS</Text>
+          </View>
+        </View>
+
+        {/* Student Apply Quota details */}
+        <View style={{
+          backgroundColor: '#FFF7ED',
+          borderRadius: 20,
+          borderWidth: 1.5,
+          borderColor: '#FFD3B6',
+          padding: 16,
+          marginTop: 14,
+          shadowColor: '#FF6B00',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.05,
+          shadowRadius: 10,
+          elevation: 2,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: '#FF6B0018',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 12,
+              }}>
+                <Ionicons name="ticket-outline" size={22} color="#FF6B00" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, color: '#1E293B', fontFamily: FONT_EXTRABOLD }}>Lượt ứng tuyển còn lại</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', fontFamily: FONT_REGULAR, marginTop: 2 }}>
+                  Đã dùng: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{profile?.appliesUsed ?? 0}</Text> / Hạn mức: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{profile?.appliesLimit ?? 3}</Text>
+                </Text>
+              </View>
+            </View>
+            <View style={{ justifyContent: 'center' }}>
+              <View style={{
+                backgroundColor: '#FF6B00',
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#FF6B00',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+                elevation: 2,
+                minWidth: 70,
+              }}>
+                <Text style={{ fontSize: 18, color: '#FFFFFF', fontFamily: FONT_EXTRABOLD, lineHeight: 22 }}>
+                  {profile ? Math.max(0, profile.appliesLimit - profile.appliesUsed) : 3}
+                </Text>
+                <Text style={{ fontSize: 8, color: '#FFFFFF', fontFamily: FONT_BOLD, textTransform: 'uppercase', letterSpacing: 0.2, marginTop: 1 }}>
+                  Lượt còn
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={{ height: 6, backgroundColor: '#FFE4D1', borderRadius: 3, overflow: 'hidden', marginBottom: 14 }}>
+            <View style={{
+              height: '100%',
+              width: profile && profile.appliesLimit > 0
+                ? `${(Math.min(profile.appliesLimit, profile.appliesUsed) / profile.appliesLimit) * 100}%`
+                : '0%',
+              backgroundColor: '#FF6B00',
+              borderRadius: 3
+            }} />
+          </View>
+
+          {/* Upgrade Call to action */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#FFE4D1' }}>
+            <Text style={{ fontSize: 11, color: '#7C2D12', fontWeight: '600', fontFamily: FONT_REGULAR, flex: 1, marginRight: 8 }}>
+              Nâng cấp gói Pro để cộng thêm lượt và nhận các quyền lợi ưu tiên duyệt hồ sơ!
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigateTo('student_upgrade')}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#FF6B00',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                shadowColor: '#FF6B00',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: '#FFFFFF', fontWeight: '800', fontFamily: FONT_BOLD, marginRight: 2 }}>Mua thêm</Text>
+              <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1225,10 +1425,7 @@ export default function StudentPortfolio() {
         transparent={true}
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{profileExists ? 'Chỉnh sửa hồ sơ' : 'Tạo hồ sơ năng lực'}</Text>
@@ -1237,22 +1434,30 @@ export default function StudentPortfolio() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalForm}>
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[styles.modalForm, { paddingBottom: keyboardHeight > 0 ? keyboardHeight - 20 : 20 }]}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Số điện thoại</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.phoneNumber && { borderColor: '#EF4444' }]}
                   value={form.phoneNumber}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, phoneNumber: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, phoneNumber: val }));
+                    if (formErrors.phoneNumber) setFormErrors(prev => ({ ...prev, phoneNumber: null }));
+                  }}
                   placeholder="Nhập số điện thoại"
                   keyboardType="phone-pad"
                 />
+                {formErrors.phoneNumber && <Text style={styles.fieldErrorText}>{formErrors.phoneNumber}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Ngày sinh</Text>
                 <TouchableOpacity
-                  style={styles.datePickerBtn}
+                  style={[styles.datePickerBtn, formErrors.dateOfBirth && { borderColor: '#EF4444' }]}
                   onPress={() => setCalendarVisible(true)}
                 >
                   <Text style={styles.datePickerBtnText}>
@@ -1260,12 +1465,13 @@ export default function StudentPortfolio() {
                   </Text>
                   <Ionicons name="calendar-outline" size={18} color="#64748B" />
                 </TouchableOpacity>
+                {formErrors.dateOfBirth && <Text style={styles.fieldErrorText}>{formErrors.dateOfBirth}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Giới tính</Text>
                 <TouchableOpacity
-                  style={styles.dropdownBtn}
+                  style={[styles.dropdownBtn, formErrors.gender && { borderColor: '#EF4444' }]}
                   onPress={() => setShowGenderDropdown(prev => !prev)}
                 >
                   <Text style={styles.dropdownBtnText}>
@@ -1283,6 +1489,7 @@ export default function StudentPortfolio() {
                         onPress={() => {
                           setForm(prev => ({ ...prev, gender: g }));
                           setShowGenderDropdown(false);
+                          if (formErrors.gender) setFormErrors(prev => ({ ...prev, gender: null }));
                         }}
                       >
                         <Text style={styles.dropdownItemText}>{g}</Text>
@@ -1290,44 +1497,57 @@ export default function StudentPortfolio() {
                     ))}
                   </View>
                 )}
+                {formErrors.gender && <Text style={styles.fieldErrorText}>{formErrors.gender}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Trường học</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.school && { borderColor: '#EF4444' }]}
                   value={form.school}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, school: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, school: val }));
+                    if (formErrors.school) setFormErrors(prev => ({ ...prev, school: null }));
+                  }}
                   placeholder="Ví dụ: Đại học Bách Khoa"
                 />
+                {formErrors.school && <Text style={styles.fieldErrorText}>{formErrors.school}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Chuyên ngành</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.major && { borderColor: '#EF4444' }]}
                   value={form.major}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, major: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, major: val }));
+                    if (formErrors.major) setFormErrors(prev => ({ ...prev, major: null }));
+                  }}
                   placeholder="Ví dụ: Công nghệ thông tin"
                 />
+                {formErrors.major && <Text style={styles.fieldErrorText}>{formErrors.major}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Năm học hiện tại</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.yearOfStudy && { borderColor: '#EF4444' }]}
                   value={form.yearOfStudy}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, yearOfStudy: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, yearOfStudy: val }));
+                    if (formErrors.yearOfStudy) setFormErrors(prev => ({ ...prev, yearOfStudy: null }));
+                  }}
                   placeholder="Ví dụ: 2"
                   keyboardType="numeric"
                 />
+                {formErrors.yearOfStudy && <Text style={styles.fieldErrorText}>{formErrors.yearOfStudy}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Địa chỉ</Text>
                 <View style={{ position: 'relative', marginBottom: 12, zIndex: 10 }}>
                   <TextInput
-                    style={[styles.input, { paddingRight: 105, marginBottom: 0 }]}
+                    style={[styles.input, { paddingRight: 105, marginBottom: 0 }, formErrors.address && { borderColor: '#EF4444' }]}
                     placeholder="Nhập địa chỉ hoặc nhấn nút GPS bên dưới..."
                     value={form.address}
                     onChangeText={handleAddressChange}
@@ -1391,6 +1611,7 @@ export default function StudentPortfolio() {
                     </View>
                   )}
                 </View>
+                {formErrors.address && <Text style={styles.fieldErrorText}>{formErrors.address}</Text>}
 
                 {/* Location Buttons Row */}
                 <View style={styles.locationButtonsRow}>
@@ -1439,32 +1660,43 @@ export default function StudentPortfolio() {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Thành phố</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.city && { borderColor: '#EF4444' }]}
                   value={form.city}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, city: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, city: val }));
+                    if (formErrors.city) setFormErrors(prev => ({ ...prev, city: null }));
+                  }}
                   placeholder="Ví dụ: TP. Hồ Chí Minh"
                 />
+                {formErrors.city && <Text style={styles.fieldErrorText}>{formErrors.city}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Mô tả bản thân (Bio)</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[styles.input, styles.textArea, formErrors.bio && { borderColor: '#EF4444' }]}
                   value={form.bio}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, bio: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, bio: val }));
+                    if (formErrors.bio) setFormErrors(prev => ({ ...prev, bio: null }));
+                  }}
                   placeholder="Giới thiệu ngắn gọn về bản thân bạn..."
                   multiline={true}
                   numberOfLines={3}
                 />
+                {formErrors.bio && <Text style={styles.fieldErrorText}>{formErrors.bio}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Kỹ năng</Text>
                 <View style={styles.skillInputRow}>
                   <TextInput
-                    style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                    style={[styles.input, { flex: 1, marginBottom: 0 }, formErrors.skills && { borderColor: '#EF4444' }]}
                     value={skillInput}
-                    onChangeText={setSkillInput}
+                    onChangeText={(val) => {
+                      setSkillInput(val);
+                      if (formErrors.skills) setFormErrors(prev => ({ ...prev, skills: null }));
+                    }}
                     placeholder="Nhập kỹ năng (ví dụ: Rửa chén)..."
                     onSubmitEditing={handleAddSkillTag}
                   />
@@ -1609,7 +1841,7 @@ export default function StudentPortfolio() {
               </View>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Map Picker Modal */}
@@ -2749,5 +2981,83 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
     fontStyle: 'italic',
+  },
+  fieldErrorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  errorDialogOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 999,
+  },
+  errorDialogContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '85%',
+    maxWidth: 320,
+    padding: 24,
+    alignItems: 'center',
+    position: 'relative',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  errorDialogCloseBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorDialogIconBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  errorDialogTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 8,
+  },
+  errorDialogScroll: {
+    maxHeight: 180,
+    width: '100%',
+    marginBottom: 16,
+  },
+  errorDialogText: {
+    fontSize: 13,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  errorDialogButton: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  errorDialogButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

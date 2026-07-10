@@ -19,6 +19,8 @@ import { theme } from '../../styles/theme';
 import { AppContext } from '../../context/AppContext';
 import { useShiftsQuery } from '../../hooks/queries';
 import { Ionicons } from '@expo/vector-icons';
+const FONT_REGULAR = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular';
+const FONT_BOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { getStudentProfileApi, activateStudentProfileApi, deactivateStudentProfileApi } from '../../api/studentApi';
@@ -289,10 +291,40 @@ export default function StudentDashboard() {
     user,
     setUser,
     setStudentCoords,
-    showToast
+    showToast,
+    currentScreen
   } = useContext(AppContext);
 
   const { data: shifts = [], refetch: loadShifts } = useShiftsQuery(user, studentCoords);
+  const [profileData, setProfileData] = useState(null);
+
+  const fetchProfileQuota = async () => {
+    if (user && user.role === 'student') {
+      try {
+        const data = await getStudentProfileApi();
+        if (data) {
+          setProfileData(data);
+        }
+      } catch (err) {
+        console.log('Error fetching student profile on dashboard:', err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (currentScreen === 'student_dashboard') {
+      fetchProfileQuota();
+    }
+  }, [currentScreen]);
+
+  // Auto-refresh shifts when Student Dashboard screen is focused (both guest and logged-in user)
+  useEffect(() => {
+    if (currentScreen === 'student_dashboard') {
+      const { clearJobShiftsCache } = require('../../hooks/queries');
+      clearJobShiftsCache();
+      loadShifts(true);
+    }
+  }, [currentScreen, loadShifts]);
 
   const [viewMode, setViewModeState] = useState('list');
 
@@ -887,7 +919,7 @@ export default function StudentDashboard() {
     .sort(compareShifts);
 
   const closestShift = filteredShifts.filter(s => !s.noGps).length > 0
-    ? filteredShifts.filter(s => !s.noGps)[0]
+    ? [...filteredShifts].filter(s => !s.noGps).sort((a, b) => a.distanceKm - b.distanceKm)[0]
     : null;
 
   const totalPages = Math.ceil(filteredShifts.length / ITEMS_PER_PAGE);
@@ -1222,6 +1254,9 @@ export default function StudentDashboard() {
           ))}
         </ScrollView>
       </View>
+
+      {/* Student Apply Quota info banner */}
+
 
       {viewMode === 'list' ? (
         <ScrollView

@@ -12,5 +12,7 @@ namespace ProxiJob.Identity.Domain.Models
         public string? AvatarUrl { get; set; }
         public bool IsActive { get; set; } = true;
         public int JobPostsUsed { get; set; }
+        public string? ResetToken { get; set; }
+        public DateTime? ResetTokenExpiry { get; set; }
     }
 }

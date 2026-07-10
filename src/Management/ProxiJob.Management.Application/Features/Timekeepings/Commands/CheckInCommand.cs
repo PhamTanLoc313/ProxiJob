@@ -96,9 +96,8 @@ public class CheckInCommandHandler : IRequestHandler<CheckInCommand, int>
 
         TimekeepingStatus status = TimekeepingStatus.OnTime;
         var now = DateTime.UtcNow;
-        var nowLocal = now.AddHours(7);
 
-        if (nowLocal > workSchedule.StartTime.AddMinutes(15))
+        if (now > workSchedule.StartTime.AddMinutes(15))
         {
             status = TimekeepingStatus.Late;
         }

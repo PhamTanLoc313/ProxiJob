@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,16 +14,54 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../styles/theme';
 import { AppContext } from '../context/AppContext';
-import { supabase } from '../db/dbConfig';
+import { forgotPasswordApi, verifyResetTokenApi, resetPasswordApi } from '../api/auth';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ForgotPasswordScreen() {
   const { navigateTo, selectedRole } = useContext(AppContext);
+  
+  // State for Multi-step Wizard
+  const [step, setStep] = useState(1); // 1 = email input, 2 = OTP verification, 3 = reset password
   const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  
   const [isEmailFocused, setIsEmailFocused] = useState(false);
+  const [isCodeFocused, setIsCodeFocused] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+  const [isConfirmFocused, setIsConfirmFocused] = useState(false);
+  
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  
+  const [timer, setTimer] = useState(60);
+  const [isTimerActive, setIsTimerActive] = useState(false);
+
+  const activeColor = selectedRole === 0 ? theme.colors.student : theme.colors.employer;
+
+  // Countdown timer for OTP resending
+  useEffect(() => {
+    let interval = null;
+    if (isTimerActive && timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (timer === 0) {
+      setIsTimerActive(false);
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerActive, timer]);
+
+  const startCountdown = () => {
+    setTimer(60);
+    setIsTimerActive(true);
+  };
 
   const validateEmail = () => {
     if (!email.trim()) {
@@ -39,33 +77,304 @@ export default function ForgotPasswordScreen() {
     return true;
   };
 
-  const handleResetPassword = async () => {
+  const handleSendOtp = async () => {
     if (!validateEmail()) return;
 
     setLoading(true);
     setError('');
     try {
-      // Attempt to request reset password email via Supabase Auth
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: 'proxijob://reset-password',
-      });
-
-      if (resetError) {
-        throw resetError;
-      }
-
-      setSuccess(true);
+      await forgotPasswordApi(email.trim());
+      setStep(2);
+      startCountdown();
     } catch (err) {
-      console.log('[ForgotPassword] Error sending reset email:', err.message);
-      // Fallback for offline/mock or other credentials error
-      // In case user hasn't configured SMTP in Supabase, we still show success or a premium mock success
-      if (err.message.includes('SMTP') || err.message.includes('not configured')) {
-        setSuccess(true);
-      } else {
-        setError(err.message || 'Gửi yêu cầu thất bại. Vui lòng thử lại sau.');
-      }
+      console.log('[ForgotPassword] Error sending OTP:', err.message);
+      setError(err.message || 'Gửi mã khôi phục thất bại. Vui lòng thử lại.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (isTimerActive) return;
+    setError('');
+    try {
+      await forgotPasswordApi(email.trim());
+      startCountdown();
+    } catch (err) {
+      setError(err.message || 'Gửi lại mã OTP thất bại.');
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!code.trim()) {
+      setError('Vui lòng nhập mã xác minh.');
+      return;
+    }
+    if (code.trim().length !== 6) {
+      setError('Mã xác minh phải gồm 6 chữ số.');
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    try {
+      await verifyResetTokenApi(email.trim(), code.trim());
+      setStep(3);
+    } catch (err) {
+      console.log('[ForgotPassword] Error verifying OTP:', err.message);
+      setError(err.message || 'Mã xác minh không chính xác hoặc đã hết hạn.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword) {
+      setError('Mật khẩu mới không được để trống.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError('Mật khẩu mới phải có ít nhất 8 ký tự.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError('Xác nhận mật khẩu không khớp.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      await resetPasswordApi(email.trim(), code.trim(), newPassword, confirmNewPassword);
+      setSuccess(true);
+    } catch (err) {
+      console.log('[ForgotPassword] Error resetting password:', err.message);
+      setError(err.message || 'Đặt lại mật khẩu thất bại. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderStepContent = () => {
+    if (success) {
+      return (
+        <View style={styles.successContainer}>
+          <View style={styles.successIconBadge}>
+            <Ionicons name="checkmark-circle" size={36} color="#198754" />
+          </View>
+          <Text style={styles.successTitle}>Đổi mật khẩu thành công!</Text>
+          <Text style={styles.successMessage}>
+            Mật khẩu mới của bạn đã được cập nhật. Bây giờ bạn có thể đăng nhập bằng tài khoản này.
+          </Text>
+          <TouchableOpacity
+            style={[styles.submitButton, { backgroundColor: activeColor, width: '100%', marginTop: 20 }]}
+            onPress={() => navigateTo('login')}
+          >
+            <Text style={styles.submitButtonText}>Đăng nhập ngay</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    switch (step) {
+      case 1:
+        return (
+          <View style={styles.formContainer}>
+            <Text style={styles.instructionText}>
+              Nhập địa chỉ email đăng ký của bạn bên dưới. Chúng tôi sẽ gửi một mã OTP gồm 6 chữ số để khôi phục mật khẩu.
+            </Text>
+
+            <Text style={styles.inputLabel}>Tài khoản Email</Text>
+            <TextInput
+              style={[
+                styles.input,
+                isEmailFocused && { borderColor: activeColor, borderWidth: 1.5 },
+                error && { borderColor: theme.colors.danger, borderWidth: 1.5 }
+              ]}
+              placeholder="Nhập địa chỉ email..."
+              placeholderTextColor={theme.colors.textLight}
+              value={email}
+              onChangeText={(e) => {
+                setEmail(e);
+                if (error) setError('');
+              }}
+              onFocus={() => setIsEmailFocused(true)}
+              onBlur={() => setIsEmailFocused(false)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!loading}
+            />
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <TouchableOpacity
+              style={[styles.submitButton, { backgroundColor: activeColor }, loading && { opacity: 0.6 }]}
+              activeOpacity={0.9}
+              onPress={handleSendOtp}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={theme.colors.white} />
+              ) : (
+                <Text style={styles.submitButtonText}>Gửi mã xác thực OTP</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        );
+
+      case 2:
+        return (
+          <View style={styles.formContainer}>
+            <Text style={styles.instructionText}>
+              Mã xác thực OTP đã được gửi đến hòm thư <Text style={{ fontWeight: 'bold', color: theme.colors.text }}>{email}</Text>. Vui lòng nhập mã bên dưới.
+            </Text>
+
+            <Text style={styles.inputLabel}>Mã xác thực OTP (6 chữ số)</Text>
+            <TextInput
+              style={[
+                styles.input,
+                styles.otpInput,
+                isCodeFocused && { borderColor: activeColor, borderWidth: 1.5 },
+                error && { borderColor: theme.colors.danger, borderWidth: 1.5 }
+              ]}
+              placeholder="123456"
+              placeholderTextColor={theme.colors.textLight}
+              value={code}
+              onChangeText={(e) => {
+                setCode(e.replace(/[^0-9]/g, ''));
+                if (error) setError('');
+              }}
+              onFocus={() => setIsCodeFocused(true)}
+              onBlur={() => setIsCodeFocused(false)}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoCapitalize="none"
+              editable={!loading}
+            />
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            {/* Countdown / Resend Link */}
+            <View style={styles.timerRow}>
+              {isTimerActive ? (
+                <Text style={styles.timerText}>Gửi lại mã sau {timer}s</Text>
+              ) : (
+                <TouchableOpacity onPress={handleResendOtp}>
+                  <Text style={[styles.resendText, { color: activeColor }]}>Gửi lại mã OTP</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.backStepButton, { borderColor: activeColor }]}
+                onPress={() => {
+                  setError('');
+                  setStep(1);
+                }}
+                disabled={loading}
+              >
+                <Text style={[styles.backStepButtonText, { color: activeColor }]}>Quay lại</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.nextStepButton, { backgroundColor: activeColor }, loading && { opacity: 0.6 }]}
+                onPress={handleVerifyOtp}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={theme.colors.white} />
+                ) : (
+                  <Text style={styles.submitButtonText}>Xác nhận mã</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+
+      case 3:
+        return (
+          <View style={styles.formContainer}>
+            <Text style={styles.instructionText}>
+              Xác minh thành công! Bây giờ vui lòng thiết lập mật khẩu đăng nhập mới cho tài khoản của bạn.
+            </Text>
+
+            <Text style={styles.inputLabel}>Mật khẩu mới</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[
+                  styles.input,
+                  { paddingRight: 48, marginBottom: 0 },
+                  isPasswordFocused && { borderColor: activeColor, borderWidth: 1.5 },
+                  error && { borderColor: theme.colors.danger, borderWidth: 1.5 }
+                ]}
+                placeholder="Nhập mật khẩu mới..."
+                placeholderTextColor={theme.colors.textLight}
+                value={newPassword}
+                onChangeText={(e) => {
+                  setNewPassword(e);
+                  if (error) setError('');
+                }}
+                onFocus={() => setIsPasswordFocused(true)}
+                onBlur={() => setIsPasswordFocused(false)}
+                secureTextEntry={!showPassword}
+                editable={!loading}
+              />
+              <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons
+                  name={showPassword ? "eye" : "eye-off"}
+                  size={20}
+                  color={theme.colors.textMuted || "#6B7280"}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Xác nhận mật khẩu mới</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[
+                  styles.input,
+                  { paddingRight: 48, marginBottom: 0 },
+                  isConfirmFocused && { borderColor: activeColor, borderWidth: 1.5 },
+                  error && { borderColor: theme.colors.danger, borderWidth: 1.5 }
+                ]}
+                placeholder="Xác nhận mật khẩu..."
+                placeholderTextColor={theme.colors.textLight}
+                value={confirmNewPassword}
+                onChangeText={(e) => {
+                  setConfirmNewPassword(e);
+                  if (error) setError('');
+                }}
+                onFocus={() => setIsConfirmFocused(true)}
+                onBlur={() => setIsConfirmFocused(false)}
+                secureTextEntry={!showConfirmPassword}
+                editable={!loading}
+              />
+              <TouchableOpacity style={styles.eyeButton} onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                <Ionicons
+                  name={showConfirmPassword ? "eye" : "eye-off"}
+                  size={20}
+                  color={theme.colors.textMuted || "#6B7280"}
+                />
+              </TouchableOpacity>
+            </View>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <TouchableOpacity
+              style={[styles.submitButton, { backgroundColor: activeColor, marginTop: 15 }, loading && { opacity: 0.6 }]}
+              activeOpacity={0.9}
+              onPress={handleResetPassword}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={theme.colors.white} />
+              ) : (
+                <Text style={styles.submitButtonText}>Đặt lại mật khẩu</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        );
+
+      default:
+        return null;
     }
   };
 
@@ -90,86 +399,23 @@ export default function ForgotPasswordScreen() {
 
           {/* Card Body */}
           <View style={[styles.loginCard, theme.shadows.medium]}>
-            <Text style={styles.cardTitle}>Quên Mật Khẩu</Text>
+            <Text style={styles.cardTitle}>
+              {success ? 'Hoàn tất' : `Khôi phục Mật khẩu (Bước ${step}/3)`}
+            </Text>
 
-            {!success ? (
-              <View style={styles.formContainer}>
-                <Text style={styles.instructionText}>
-                  Nhập địa chỉ email đăng ký của bạn bên dưới. Chúng tôi sẽ gửi một liên kết khôi phục mật khẩu đến hòm thư này.
-                </Text>
-
-                <Text style={styles.inputLabel}>Tài khoản Email</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    isEmailFocused && { borderColor: selectedRole === 0 ? theme.colors.student : theme.colors.employer, borderWidth: 1.5 },
-                    error && { borderColor: theme.colors.danger, borderWidth: 1.5 }
-                  ]}
-                  placeholder="Nhập địa chỉ email..."
-                  placeholderTextColor={theme.colors.textLight}
-                  value={email}
-                  onChangeText={(e) => {
-                    setEmail(e);
-                    if (error) setError('');
-                  }}
-                  onFocus={() => setIsEmailFocused(true)}
-                  onBlur={() => setIsEmailFocused(false)}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  editable={!loading}
-                />
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-                {/* Submit Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.submitButton,
-                    selectedRole === 0
-                      ? { backgroundColor: theme.colors.student }
-                      : { backgroundColor: theme.colors.employer },
-                    loading && { opacity: 0.6 }
-                  ]}
-                  activeOpacity={0.9}
-                  onPress={handleResetPassword}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color={theme.colors.white} />
-                  ) : (
-                    <Text style={styles.submitButtonText}>Gửi liên kết khôi phục</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.successContainer}>
-                <View style={styles.successIconBadge}>
-                  <Text style={{ fontSize: 32 }}>✉️</Text>
-                </View>
-                <Text style={styles.successTitle}>Đã gửi yêu cầu!</Text>
-                <Text style={styles.successMessage}>
-                  Một email hướng dẫn khôi phục mật khẩu đã được gửi đến:
-                </Text>
-                <Text style={styles.successEmail}>{email}</Text>
-                <Text style={styles.successHint}>
-                  Vui lòng kiểm tra hộp thư đến (hoặc thư rác) để hoàn tất việc đặt lại mật khẩu của bạn.
-                </Text>
-              </View>
-            )}
+            {renderStepContent()}
           </View>
 
           {/* Back to Login Footer */}
-          <View style={styles.footerContainer}>
-            <TouchableOpacity onPress={() => navigateTo('login')} disabled={loading}>
-              <Text
-                style={[
-                  styles.backToLoginText,
-                  selectedRole === 0 ? { color: theme.colors.student } : { color: theme.colors.employer }
-                ]}
-              >
-                ← Quay lại Đăng nhập
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {!success && (
+            <View style={styles.footerContainer}>
+              <TouchableOpacity onPress={() => navigateTo('login')} disabled={loading}>
+                <Text style={[styles.backToLoginText, { color: activeColor }]}>
+                  ← Quay lại Đăng nhập
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Continue as Guest */}
           <TouchableOpacity
@@ -232,7 +478,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     color: theme.colors.text,
     marginBottom: theme.spacing.md,
@@ -265,6 +511,25 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     marginBottom: theme.spacing.md,
   },
+  otpInput: {
+    fontSize: 24,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    letterSpacing: 8,
+  },
+  passwordContainer: {
+    position: 'relative',
+    marginBottom: theme.spacing.md,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 48,
+  },
   errorText: {
     color: theme.colors.danger,
     fontSize: 11,
@@ -272,6 +537,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontWeight: '500',
     paddingHorizontal: 4,
+  },
+  timerRow: {
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
+  timerText: {
+    fontSize: 12,
+    color: theme.colors.textMuted,
+  },
+  resendText: {
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   submitButton: {
     height: 48,
@@ -283,28 +560,52 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-    marginTop: 10,
+    marginTop: 5,
   },
   submitButtonText: {
     color: theme.colors.white,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: 'bold',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 5,
+  },
+  backStepButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backStepButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  nextStepButton: {
+    flex: 2,
+    height: 48,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   successContainer: {
     alignItems: 'center',
     paddingVertical: theme.spacing.md,
   },
   successIconBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#1987541A',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: theme.spacing.md,
   },
   successTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#198754',
     marginBottom: theme.spacing.sm,
@@ -313,24 +614,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.textMuted,
     textAlign: 'center',
-  },
-  successEmail: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginVertical: theme.spacing.xs,
-  },
-  successHint: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-    textAlign: 'center',
-    lineHeight: 16,
-    marginTop: theme.spacing.sm,
+    lineHeight: 18,
   },
   footerContainer: {
     flexDirection: 'row',
     marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.xl,
+    marginBottom: theme.spacing.md,
   },
   backToLoginText: {
     fontSize: 13,

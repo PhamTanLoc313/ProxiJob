@@ -408,10 +408,7 @@ export default function StudentChat() {
             {/* Input Bar */}
             <View style={[
               styles.inputBar,
-              { paddingBottom: Math.max(12, insets.bottom) },
-              Platform.OS === 'android' && keyboardHeight > 0 && {
-                paddingBottom: Math.max(20, androidKeyboardPadding + 24),
-              }
+              { paddingBottom: Math.max(12, insets.bottom) }
             ]}>
               <TouchableOpacity style={styles.attachBtn} activeOpacity={0.7} onPress={() => {}}>
                 <Ionicons name="add-circle" size={26} color="#FF6B00" />

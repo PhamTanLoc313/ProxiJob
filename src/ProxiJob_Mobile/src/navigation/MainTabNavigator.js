@@ -18,6 +18,7 @@ import StudentCalendar from '../screens/student/StudentCalendar';
 import StudentCheckIn from '../screens/student/StudentCheckIn';
 import StudentPortfolio from '../screens/student/StudentPortfolio';
 import StudentChat from '../screens/student/StudentChat';
+import StudentUpgradeScreen from '../screens/student/StudentUpgradeScreen';
 
 // Employer Screens
 import EmployerApprovals from '../screens/employer/EmployerApprovals';
@@ -44,6 +45,8 @@ export default function MainTabNavigator({ isStudent }) {
     'candidate_list',
     'upgrade_package',
     'job_detail',
+    'student_upgrade',
+    'payment_qr',
     ...(hasStandard ? ['employer_profile'] : [])
   ];
   const showTabBar = !hideTabBarScreens.includes(currentScreen) && !isChatRoomActive;
@@ -63,6 +66,10 @@ export default function MainTabNavigator({ isStudent }) {
         return <StudentChat />;
       case 'student_portfolio':
         return <StudentPortfolio />;
+      case 'student_upgrade':
+        return <StudentUpgradeScreen />;
+      case 'payment_qr':
+        return <PaymentQRScreen />;
       default:
         return <StudentDashboard />;
     }

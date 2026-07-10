@@ -123,10 +123,10 @@ export default function EmployerMonitor() {
     try {
       const actual = new Date(person.rawCheckInTime);
       const scheduled = new Date(person.scheduledStartTime);
-      
+
       const diffMs = actual.getTime() - scheduled.getTime();
       const diffMins = Math.round(diffMs / 60000);
-      
+
       if (diffMins <= 5) {
         return {
           status: 'on_time',
@@ -154,10 +154,15 @@ export default function EmployerMonitor() {
     try {
       const actual = new Date(person.rawCheckOutTime);
       const scheduled = new Date(person.scheduledEndTime);
-      
+
       const diffMs = scheduled.getTime() - actual.getTime(); // positive means left early
-      const diffMins = Math.round(diffMs / 60000);
-      
+      let diffMins = Math.round(diffMs / 60000);
+
+      // Adjust for UTC+7 timezone discrepancy where scheduledEndTime represents local time but has Z suffix
+      if (Math.abs(diffMins - 420) <= 15) {
+        diffMins -= 420;
+      }
+
       if (diffMins > 5) {
         return {
           status: 'early',
@@ -232,7 +237,7 @@ export default function EmployerMonitor() {
             if (latVal !== null && lngVal !== null) {
               setShopLat(latVal);
               setShopLng(lngVal);
-              
+
               // Auto-sync shop coordinates to QR code for accurate GPS distance checks
               try {
                 await updateQrLocation(latVal, lngVal);
@@ -279,7 +284,7 @@ export default function EmployerMonitor() {
       if (Platform.OS === 'web') {
         alert('Mã QR đã được làm mới thành công! Token mới đã được cập nhật.');
       } else {
-        Alert.alert('Thành công', 'Mã QR đã được làm mới thành công! Token mới đã được cập nhật.');
+        showToast('Mã QR đã được làm mới thành công! Token mới đã được cập nhật.', 'success');
       }
     } catch (err) {
       console.log('Error generating QR code:', err);
@@ -329,7 +334,7 @@ export default function EmployerMonitor() {
       let targetLat = shopLat;
       let targetLng = shopLng;
       let targetAddress = businessProfile?.address || 'Cửa hàng';
-      
+
       if (isExternal && log.jobShiftId) {
         const matchingShift = employerShifts.find(s => s.id === log.jobShiftId);
         if (matchingShift) {
@@ -719,30 +724,30 @@ export default function EmployerMonitor() {
 
                   {/* Center: Info */}
                   <View style={styles.staffInfoContainer}>
-                     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-                       <Text style={styles.staffName}>{person.name}</Text>
-                       {(() => {
-                         const punct = getPunctualityStatus(person);
-                         if (!punct) return null;
-                         return (
-                           <View style={{
-                             backgroundColor: punct.bg,
-                             paddingHorizontal: 6,
-                             paddingVertical: 2,
-                             borderRadius: 6,
-                           }}>
-                             <Text style={{ fontSize: 9, fontWeight: '800', color: punct.color }}>
-                               {punct.text.toUpperCase()}
-                             </Text>
-                           </View>
-                         );
-                       })()}
-                       <Ionicons
-                         name={isExpanded ? "chevron-up" : "chevron-down"}
-                         size={14}
-                         color="#94A3B8"
-                       />
-                     </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                      <Text style={styles.staffName}>{person.name}</Text>
+                      {(() => {
+                        const punct = getPunctualityStatus(person);
+                        if (!punct) return null;
+                        return (
+                          <View style={{
+                            backgroundColor: punct.bg,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                          }}>
+                            <Text style={{ fontSize: 9, fontWeight: '800', color: punct.color }}>
+                              {punct.text.toUpperCase()}
+                            </Text>
+                          </View>
+                        );
+                      })()}
+                      <Ionicons
+                        name={isExpanded ? "chevron-up" : "chevron-down"}
+                        size={14}
+                        color="#94A3B8"
+                      />
+                    </View>
                     <View style={styles.staffStatusRow}>
                       <View style={[
                         styles.statusIndicatorDot,
@@ -776,7 +781,7 @@ export default function EmployerMonitor() {
                             setNavigationParams({ ...navigationParams });
                             navigateTo('employer_chat');
                           } else {
-                            Alert.alert('Không thể nhắn tin', 'Không tìm thấy tài khoản liên kết với nhân sự này.');
+                            showToast('Không thể nhắn tin: Không tìm thấy tài khoản liên kết với nhân sự này.', 'warning');
                           }
                         }}
                       >
@@ -796,9 +801,9 @@ export default function EmployerMonitor() {
                     </View>
                     <Text style={styles.checkInTimeText}>
                       {isNotCheckedIn ? 'Chưa Điểm Danh' :
-                       isAbsent ? 'Vắng Mặt' :
-                       isCompleted ? `Ra ca: ${person.checkOutTime}` :
-                       `Check-in: ${person.checkInTime}`}
+                        isAbsent ? 'Vắng Mặt' :
+                          isCompleted ? `Ra ca: ${person.checkOutTime}` :
+                            `Check-in: ${person.checkInTime}`}
                     </Text>
                   </View>
                 </View>
@@ -828,7 +833,7 @@ export default function EmployerMonitor() {
                         <View style={styles.logStepNumber}><Text style={styles.logStepText}>1</Text></View>
                         <Text style={styles.logSectionTitle}>CHI TIẾT CHECK-IN</Text>
                       </View>
-                      
+
                       {person.rawStatus === 'not_checked_in' || person.rawStatus === 'absent' ? (
                         <Text style={styles.logEmptyText}>Chưa thực hiện check-in</Text>
                       ) : (
@@ -999,7 +1004,7 @@ export default function EmployerMonitor() {
                 onPress={handleGenerateQr}
               >
                 <Text style={styles.regenerateQrBtnText}>
-                  {generatingQr ? 'Đang tạo mới...' : '🔄 Làm mới Mã QR (Đổi Token)'}
+                  {generatingQr ? 'Đang tạo mới...' : '🔄 Làm mới mã QR'}
                 </Text>
               </TouchableOpacity>
 

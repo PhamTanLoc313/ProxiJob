@@ -31,6 +31,9 @@ namespace ProxiJob.Identity.Application.Services
                 ReviewCount = profile.ReviewCount,
                 ReadyForWorkAt = profile.ReadyForWorkAt,
                 CompletionPercent = StudentProfileCompletion.GetCompletionPercent(profile.User, profile),
+                AppliesLimit = profile.AppliesLimit,
+                AppliesUsed = profile.AppliesUsed,
+                AppliesRemaining = Math.Max(0, profile.AppliesLimit - profile.AppliesUsed),
                 MissingFields = missing
             };
         }

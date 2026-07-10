@@ -10,7 +10,9 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
-  Alert
+  Alert,
+  KeyboardAvoidingView,
+  Keyboard
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../styles/theme';
@@ -26,13 +28,13 @@ import { getMyApplications } from '../../api/jobs';
 
 const { width } = Dimensions.get('window');
 
-function getCurrentWeekDays() {
+function getWeekDaysForDate(referenceDate) {
   const today = new Date();
-  const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
+  const currentDay = referenceDate.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
   const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
 
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + distanceToMonday);
+  const monday = new Date(referenceDate);
+  monday.setDate(referenceDate.getDate() + distanceToMonday);
 
   const days = [];
   const dayNames = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
@@ -61,6 +63,20 @@ const getDistrict = (address) => {
   if (!address) return '';
   const match = address.match(/(Quận \d+|Q\.\s*\d+|Quận [a-zA-ZÀ-ỹ\s]+|Bình Thạnh|Gò Vấp|Thủ Đức|Phú Nhuận|Tân Bình|Tân Phú|Bình Tân)/i);
   return match ? match[0] : address;
+};
+
+const formatHoursAndMinutes = (totalHours) => {
+  if (!totalHours || isNaN(totalHours)) return '0 phút';
+  const hrs = Math.floor(totalHours);
+  const mins = Math.round((totalHours - hrs) * 60);
+
+  if (hrs === 0) {
+    return `${mins} phút`;
+  }
+  if (mins === 0) {
+    return `${hrs} giờ`;
+  }
+  return `${hrs} giờ ${mins} phút`;
 };
 
 const getShiftDateLabel = (startTime) => {
@@ -99,9 +115,42 @@ export default function StudentCalendar() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [rating, setRating] = useState(5);
   const [comments, setComments] = useState('');
+  const [isConfirmedCheckbox, setIsConfirmedCheckbox] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  React.useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
   const [weekDays, setWeekDays] = useState([]);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' | 'completed'
+  const [referenceDate, setReferenceDate] = useState(new Date());
+
+  const handlePrevWeek = () => {
+    const prev = new Date(referenceDate);
+    prev.setDate(prev.getDate() - 7);
+    setReferenceDate(prev);
+  };
+
+  const handleNextWeek = () => {
+    const next = new Date(referenceDate);
+    next.setDate(next.getDate() + 7);
+    setReferenceDate(next);
+  };
+
+  const handleGoToToday = () => {
+    setReferenceDate(new Date());
+  };
 
   // Trạng thái Yêu cầu Xin nghỉ / Đổi ca
   const [requestModalVisible, setRequestModalVisible] = useState(false);
@@ -110,16 +159,18 @@ export default function StudentCalendar() {
   const [isSwapRequest, setIsSwapRequest] = useState(false);
   const [historyFilter, setHistoryFilter] = useState('day'); // 'day', 'week', 'month'
   const [requestReason, setRequestReason] = useState('');
+  const [reasonError, setReasonError] = useState('');
 
   const handleOpenConfirmModal = (payroll) => {
     setSelectedPayroll(payroll);
     setRating(5);
     setComments('');
+    setIsConfirmedCheckbox(false);
     setIsModalVisible(true);
   };
 
   const handleSubmitConfirm = () => {
-    if (!selectedPayroll) return;
+    if (!selectedPayroll || !isConfirmedCheckbox) return;
 
     confirmReceiptMutation.mutateAsync({
       payrollId: selectedPayroll.id || selectedPayroll.Id,
@@ -137,22 +188,26 @@ export default function StudentCalendar() {
 
   const handleShiftOptions = (shift) => {
     if (shift.status !== 'approved') {
-      Alert.alert(
-        'Thông báo',
-        'Ca làm này ở trạng thái chờ duyệt hoặc đã hoàn thành, không thể thực hiện yêu cầu xin nghỉ hay đổi ca.'
-      );
+      showToast('Ca làm này ở trạng thái chờ duyệt hoặc đã hoàn thành, không thể xin nghỉ hay đổi ca.', 'warning');
       return;
     }
     setSelectedShiftForRequest(shift);
+    setRequestReason('');
+    setReasonError('');
     setOptionsModalVisible(true);
   };
 
   const handleSubmitRequest = async () => {
     if (!selectedShiftForRequest) return;
     if (!requestReason.trim()) {
-      showToast('Lỗi: Vui lòng nhập lý do cụ thể.', 'warning');
+      setReasonError('Vui lòng nhập lý do cụ thể.');
       return;
     }
+    if (requestReason.trim().length < 10) {
+      setReasonError('Lý do phải ghi cụ thể ít nhất 10 ký tự.');
+      return;
+    }
+    setReasonError('');
 
     let appId = selectedShiftForRequest.applicationId;
     const bizId = selectedShiftForRequest.businessId;
@@ -163,10 +218,10 @@ export default function StudentCalendar() {
       try {
         const appsRes = await getMyApplications(user.id);
         const apps = Array.isArray(appsRes) ? appsRes : (Array.isArray(appsRes?.data) ? appsRes.data : (appsRes?.items || appsRes?.Items || appsRes?.data?.items || appsRes?.data?.Items || []));
-        
+
         // For virtual schedule shifts (sched_*), use jobShiftId to match
         const realShiftId = selectedShiftForRequest.jobShiftId || shiftId;
-        
+
         const matchedApp = apps.find(a => {
           const aShiftId = a.shiftId !== undefined ? a.shiftId : a.ShiftId;
           // Match by numeric shift ID
@@ -210,11 +265,11 @@ export default function StudentCalendar() {
   };
 
   React.useEffect(() => {
-    const days = getCurrentWeekDays();
+    const days = getWeekDaysForDate(referenceDate);
     setWeekDays(days);
     const todayIdx = days.findIndex(d => d.isToday);
     setSelectedDayIndex(todayIdx >= 0 ? todayIdx : 0);
-  }, []);
+  }, [referenceDate]);
 
   const isSameDate = (shiftStartTime, apiDateStr) => {
     if (!shiftStartTime || !apiDateStr) return false;
@@ -233,13 +288,16 @@ export default function StudentCalendar() {
 
   const now = new Date();
 
+  // Filter only student's own shifts (where they applied or were assigned)
+  const myShifts = shifts.filter(s => s.applicationId !== undefined || String(s.id).startsWith('sched_'));
+
   // Filter completed shifts globally (or shifts that are in the past)
-  const completedShiftsGlobal = shifts.filter(
+  const completedShiftsGlobal = myShifts.filter(
     (s) => s.status === 'completed' || s.status === 'absent' || new Date(s.endTime) < now
   );
 
   // Filter approved/active/applied shifts globally (which are in the future)
-  const upcomingShiftsGlobal = shifts.filter(
+  const upcomingShiftsGlobal = myShifts.filter(
     (s) => !completedShiftsGlobal.some(cs => cs.id === s.id) && (s.status === 'approved' || s.status === 'checkin_active' || s.status === 'applied')
   );
 
@@ -263,6 +321,17 @@ export default function StudentCalendar() {
   }).sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
 
   const getShiftHours = (shift) => {
+    // If completed and has actual checkin/checkout times, calculate actual hours
+    if (shift.status === 'completed' && shift.actualCheckInTime && shift.actualCheckOutTime) {
+      try {
+        const diffMs = new Date(shift.actualCheckOutTime) - new Date(shift.actualCheckInTime);
+        const diffHrs = diffMs / (1000 * 60 * 60);
+        return diffHrs > 0 ? diffHrs : 0;
+      } catch (e) {
+        console.log('Error calculating actual shift hours:', e);
+      }
+    }
+    // Fallback to scheduled time
     if (!shift.startTime || !shift.endTime) return 4;
     try {
       const diffMs = new Date(shift.endTime) - new Date(shift.startTime);
@@ -286,15 +355,15 @@ export default function StudentCalendar() {
       const d = new Date(s.startTime);
       return (d.getMonth() + 1) === currentMonth && d.getFullYear() === currentYear;
     })
-    .reduce((sum, s) => sum + s.hourlyRate * getShiftHours(s), 0);
+    .reduce((sum, s) => sum + Math.round(s.hourlyRate * getShiftHours(s)), 0);
 
   const upcomingShiftsValue = upcomingShiftsGlobal
     .filter(s => {
       const d = new Date(s.startTime);
       return s.status !== 'applied' && (d.getMonth() + 1) === currentMonth && d.getFullYear() === currentYear;
     })
-    .reduce((sum, s) => sum + s.hourlyRate * getShiftHours(s), 0);
-  
+    .reduce((sum, s) => sum + Math.round(s.hourlyRate * getShiftHours(s)), 0);
+
   // Total value is all worked shifts + all upcoming approved shifts in this month
   const totalValue = completedShiftsValue + upcomingShiftsValue;
 
@@ -319,13 +388,13 @@ export default function StudentCalendar() {
 
   const renderShiftItem = (shift) => {
     const isPast = new Date(shift.endTime) < now;
-    const isWorking = (shift.status === 'checkin_active' || 
-                      (activeShift && (
-                        activeShift.id === shift.id || 
-                        activeShift.jobShiftId === shift.id ||
-                        `sched_${activeShift.id}` === shift.id ||
-                        activeShift.id === `sched_${shift.id}`
-                      ))) && !isPast;
+    const isWorking = (shift.status === 'checkin_active' ||
+      (activeShift && (
+        activeShift.id === shift.id ||
+        activeShift.jobShiftId === shift.id ||
+        `sched_${activeShift.id}` === shift.id ||
+        activeShift.id === `sched_${shift.id}`
+      ))) && !isPast;
     const isCompleted = shift.status === 'completed';
     const isApplied = shift.status === 'applied' && !isPast;
     const isApproved = shift.status === 'approved' && !isWorking && !isPast;
@@ -378,8 +447,8 @@ export default function StudentCalendar() {
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusText, { color: badgeText }]}>{statusText}</Text>
           </View>
-          <TouchableOpacity 
-            style={styles.ellipsisButton} 
+          <TouchableOpacity
+            style={styles.ellipsisButton}
             activeOpacity={0.6}
             onPress={() => handleShiftOptions(shift)}
           >
@@ -419,9 +488,17 @@ export default function StudentCalendar() {
             <Text style={styles.timeText}>{shift.time}</Text>
           </View>
           <View style={styles.earningsWrapper}>
-            <Text style={styles.earningsLabelText}>Lương ước tính</Text>
+            <Text style={styles.earningsLabelText}>
+              {isCompleted ? 'Lương thực nhận' : 'Lương ước tính'}
+            </Text>
             <Text style={styles.earningsValueText}>
-              {(shift.hourlyRate * getShiftHours(shift)).toLocaleString('vi-VN')}đ
+              {(() => {
+                const matchedPayroll = (payrolls || []).find(p => p.adjustmentNote === `TimekeepingId:${shift.timekeepingId}` || p.AdjustmentNote === `TimekeepingId:${shift.timekeepingId}`);
+                if (matchedPayroll && (matchedPayroll.status === 'Paid' || matchedPayroll.Status === 'Paid' || matchedPayroll.status === 2 || matchedPayroll.Status === 2 || matchedPayroll.status === 'PendingStudentConfirmation' || matchedPayroll.Status === 'PendingStudentConfirmation')) {
+                  return (matchedPayroll.finalAmount !== undefined ? matchedPayroll.finalAmount : matchedPayroll.FinalAmount || 0).toLocaleString('vi-VN') + 'đ';
+                }
+                return Math.round(shift.hourlyRate * getShiftHours(shift)).toLocaleString('vi-VN') + 'đ';
+              })()}
             </Text>
           </View>
         </View>
@@ -457,18 +534,17 @@ export default function StudentCalendar() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right", "bottom"]}>
-      {/* Sleek Custom Top Navigation Bar */}
-      <View style={styles.headerContainer}>
-        <View>
-          <Text style={styles.headerTitle}>Lịch làm việc</Text>
-          <Text style={styles.headerSubtitle}>Chào ngày mới! Xem lịch trình của bạn</Text>
-        </View>
-        <TouchableOpacity style={styles.headerBadge} activeOpacity={0.7} onPress={() => loadMyApplications()}>
-          <Text style={styles.headerBadgeText}>Làm mới</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Sleek Custom Top Navigation Bar */}
+        <View style={styles.headerContainer}>
+          <View>
+            <Text style={styles.headerTitle}>Lịch làm việc</Text>
+            <Text style={styles.headerSubtitle}>Chào ngày mới! Xem lịch trình của bạn</Text>
+          </View>
+          <TouchableOpacity style={styles.headerBadge} activeOpacity={0.7} onPress={() => loadMyApplications()}>
+            <Text style={styles.headerBadgeText}>Làm mới</Text>
+          </TouchableOpacity>
+        </View>
         {/* Earnings Card with Modern FinTech Styling */}
         <View style={styles.earningsCard}>
           {/* Abstract backgrounds bubbles for visual depth */}
@@ -478,24 +554,24 @@ export default function StudentCalendar() {
           <View style={styles.earningsHeader}>
             <View>
               <Text style={styles.earningsTitle}>Thu nhập tháng này</Text>
-              <Text style={styles.earningsSubTitle}>Tổng thu nhập ước tính của bạn</Text>
+              <Text style={styles.earningsSubTitle}>Tổng thu nhập tháng này của bạn</Text>
             </View>
             <View style={styles.walletIconContainer}>
               <Ionicons name="wallet" size={24} color="#FFFFFF" />
             </View>
           </View>
 
-          <Text style={styles.earningsMainValue}>{totalEarnings.toLocaleString('vi-VN')}đ</Text>
+          <Text style={styles.earningsMainValue}>{Math.round(totalEarnings).toLocaleString('vi-VN')}đ</Text>
 
           <View style={styles.earningsFooter}>
             <View style={styles.earningsSplit}>
               <Ionicons name="checkmark-circle" size={14} color="rgba(255,255,255,0.7)" style={{ marginRight: 4 }} />
-              <Text style={styles.earningsSplitText}>Đã nhận: {completedEarnings.toLocaleString('vi-VN')}đ</Text>
+              <Text style={styles.earningsSplitText}>Đã nhận: {Math.round(completedEarnings).toLocaleString('vi-VN')}đ</Text>
             </View>
             <View style={styles.earningsSplitDivider} />
             <View style={styles.earningsSplit}>
               <Ionicons name="calendar" size={14} color="rgba(255,255,255,0.7)" style={{ marginRight: 4 }} />
-              <Text style={styles.earningsSplitText}>Chờ nhận: {projectedEarnings.toLocaleString('vi-VN')}đ</Text>
+              <Text style={styles.earningsSplitText}>Chờ nhận: {Math.round(projectedEarnings).toLocaleString('vi-VN')}đ</Text>
             </View>
           </View>
         </View>
@@ -508,36 +584,108 @@ export default function StudentCalendar() {
               </View>
               <Text style={styles.pendingSectionTitle}>BẢNG LƯƠNG CHỜ BẠN XÁC NHẬN</Text>
             </View>
-            
-            {pendingConfirmationPayrolls.map((payroll) => (
-              <View key={payroll.id || payroll.Id} style={styles.pendingCard}>
-                <View style={styles.pendingCardHeader}>
-                  <View style={styles.pendingStoreInfo}>
-                    <Text style={styles.pendingStoreName}>{payroll.employeeName || payroll.EmployeeName || 'Cửa hàng ProxiJob'}</Text>
-                    <Text style={styles.pendingShiftMeta}>Tổng: {payroll.totalHours || payroll.TotalHours || 4} giờ làm</Text>
+
+            {pendingConfirmationPayrolls.map((payroll) => {
+              const storeName = payroll.shopName || payroll.ShopName || 'Cửa hàng ProxiJob';
+              const initialChar = storeName.charAt(0).toUpperCase();
+
+              return (
+                <View key={payroll.id || payroll.Id} style={styles.pendingReceiptCard}>
+                  {/* Left & Right Circular Cutouts for ticket/receipt look */}
+                  <View style={styles.cutoutLeft} />
+                  <View style={styles.cutoutRight} />
+
+                  {/* Receipt Header */}
+                  <Text style={styles.receiptTitleHeader}>BIÊN LAI ĐỐI SOÁT CA</Text>
+
+                  <View style={styles.pendingCardHeader}>
+                    <View style={styles.storeAvatarBg}>
+                      <Text style={styles.storeAvatarText}>{initialChar}</Text>
+                    </View>
+                    <View style={styles.pendingStoreInfo}>
+                      <Text style={styles.pendingStoreName} numberOfLines={1}>{storeName}</Text>
+                      <Text style={styles.pendingOrderId}>Mã hóa đơn: #{payroll.id || payroll.Id}</Text>
+                    </View>
+                    <View style={styles.pendingBadge}>
+                      <View style={styles.pendingBadgeDot} />
+                      <Text style={styles.pendingBadgeText}>Chờ xác nhận</Text>
+                    </View>
                   </View>
-                  <Text style={styles.pendingAmount}>{payroll.finalAmount ? (payroll.finalAmount.toLocaleString('vi-VN') + ' đ') : '0 đ'}</Text>
+
+                  {/* Dashed Separator */}
+                  <View style={styles.receiptDashedLine} />
+
+                  {/* Receipt Key-Value Details */}
+                  <View style={styles.receiptDetailsContainer}>
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptRowLabel}>Thời gian làm việc</Text>
+                      <Text style={styles.receiptRowValue}>
+                        {formatHoursAndMinutes(payroll.totalHours || payroll.TotalHours)}
+                      </Text>
+                    </View>
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptRowLabel}>Hình thức thanh toán</Text>
+                      <Text style={[styles.receiptRowValue, { color: '#059669' }]}>
+                        Ví MoMo / Tiền mặt
+                      </Text>
+                    </View>
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptRowLabel}>Trạng thái đối soát</Text>
+                      <Text style={[styles.receiptRowValue, { color: '#FF6B00' }]}>
+                        Chủ quán đã chuyển tiền
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Dashed Separator */}
+                  <View style={styles.receiptDashedLine} />
+
+                  {/* Payout Summary */}
+                  <View style={styles.receiptAmountContainer}>
+                    <Text style={styles.receiptAmountLabel}>THỰC NHẬN (VND)</Text>
+                    <Text style={styles.receiptAmountValue}>
+                      {payroll.finalAmount ? (Math.round(payroll.finalAmount).toLocaleString('vi-VN') + ' đ') : '0 đ'}
+                    </Text>
+                  </View>
+
+                  {/* Payment Alert Banner */}
+                  <View style={styles.paymentAlertBanner}>
+                    <Ionicons name="information-circle" size={14} color="#D97706" style={{ marginRight: 6 }} />
+                    <Text style={styles.paymentAlertText}>
+                      Hãy kiểm tra ví trước khi bấm xác nhận nhé!
+                    </Text>
+                  </View>
+
+
+
+                  {/* Premium Solid Action Button */}
+                  <TouchableOpacity
+                    style={styles.pendingActionBtn}
+                    onPress={() => handleOpenConfirmModal(payroll)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="checkmark-circle-sharp" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.pendingActionBtnText}>Đã nhận tiền & Đánh giá chủ quán </Text>
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.pendingCardDivider} />
-                <TouchableOpacity 
-                  style={styles.pendingActionBtn}
-                  onPress={() => handleOpenConfirmModal(payroll)}
-                >
-                  <Text style={styles.pendingActionBtnText}>Xác nhận đã nhận tiền & Đánh giá chéo ⚡</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
         {/* Elegant Week Timeline Navigation */}
         <View style={styles.timelineSection}>
           <View style={styles.timelineHeader}>
-            <Text style={styles.timelineHeading}>{getTimelineLabel()}</Text>
-            <TouchableOpacity style={styles.todayButton} onPress={() => {
-              const todayIdx = weekDays.findIndex(d => d.isToday);
-              if (todayIdx >= 0) setSelectedDayIndex(todayIdx);
-            }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity onPress={handlePrevWeek} style={styles.navWeekBtn} activeOpacity={0.6}>
+                <Ionicons name="chevron-back" size={16} color="#64748B" />
+              </TouchableOpacity>
+              <Text style={styles.timelineHeading}>{getTimelineLabel()}</Text>
+              <TouchableOpacity onPress={handleNextWeek} style={styles.navWeekBtn} activeOpacity={0.6}>
+                <Ionicons name="chevron-forward" size={16} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.todayButton} onPress={handleGoToToday} activeOpacity={0.7}>
               <Text style={styles.todayButtonText}>Hôm nay</Text>
             </TouchableOpacity>
           </View>
@@ -545,7 +693,7 @@ export default function StudentCalendar() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daysScroll}>
             {weekDays.map((day, idx) => {
               const isSelected = selectedDayIndex === idx;
-              const dayHasShift = shifts.some(s => isSameDate(s.startTime, day.apiDateStr));
+              const dayHasShift = myShifts.some(s => isSameDate(s.startTime, day.apiDateStr));
               return (
                 <TouchableOpacity
                   key={idx}
@@ -571,7 +719,7 @@ export default function StudentCalendar() {
                   ]}>
                     {day.date.split('/')[0]}
                   </Text>
-                  
+
                   {dayHasShift && (
                     <View style={[
                       styles.shiftIndicatorDot,
@@ -618,7 +766,7 @@ export default function StudentCalendar() {
 
         {activeTab === 'completed' && (
           <View style={styles.historyFilterContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.historyFilterBtn, historyFilter === 'day' && styles.historyFilterBtnActive]}
               activeOpacity={0.8}
               onPress={() => setHistoryFilter('day')}
@@ -627,7 +775,7 @@ export default function StudentCalendar() {
                 Ngày
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.historyFilterBtn, historyFilter === 'week' && styles.historyFilterBtnActive]}
               activeOpacity={0.8}
               onPress={() => setHistoryFilter('week')}
@@ -636,7 +784,7 @@ export default function StudentCalendar() {
                 Tuần
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.historyFilterBtn, historyFilter === 'month' && styles.historyFilterBtnActive]}
               activeOpacity={0.8}
               onPress={() => setHistoryFilter('month')}
@@ -682,80 +830,134 @@ export default function StudentCalendar() {
       <Modal
         visible={isModalVisible}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalHeading}>Xác nhận nhận lương</Text>
-            <Text style={styles.modalSubheading}>
-              Đang đối soát nhận tiền từ chủ quán. Vui lòng xác thực giao dịch chuyển khoản/tiền mặt ở đời thực.
-            </Text>
+        <View
+          style={{ flex: 1 }}
+        >
+          <View style={styles.dialogOverlay}>
+            {/* Backdrop Touch to dismiss keyboard */}
+            <TouchableOpacity 
+              style={StyleSheet.absoluteFillObject} 
+              activeOpacity={1} 
+              onPress={Keyboard.dismiss} 
+            />
+            <View style={styles.dialogContent}>
+            {/* Close Button Top Right */}
+            <TouchableOpacity
+              style={styles.dialogCloseHeaderBtn}
+              onPress={() => setIsModalVisible(false)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={18} color="#94A3B8" />
+            </TouchableOpacity>
 
-            <View style={styles.modalDivider} />
-
-            {/* Checkbox (Mandatory/Informational) */}
-            <View style={styles.checkboxRow}>
-              <View style={[styles.checkboxBox, { backgroundColor: '#FF6B00', borderColor: '#FF6B00' }]}>
-                <Text style={styles.checkboxTick}>✓</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{
+                alignItems: 'center',
+                paddingBottom: keyboardHeight > 0 ? keyboardHeight - 20 : 10
+              }}
+              keyboardShouldPersistTaps="handled"
+              style={{ width: '100%' }}
+            >
+              {/* Decorative Header Icon */}
+              <View style={styles.dialogHeaderIconBg}>
+                <Ionicons name="cash" size={28} color="#10B981" />
               </View>
-              <Text style={styles.checkboxText}>
-                Tôi xác nhận đã nhận đủ số tiền <Text style={{ fontWeight: '800', color: '#FF6B00' }}>{selectedPayroll?.finalAmount ? (selectedPayroll.finalAmount.toLocaleString('vi-VN') + ' đ') : '0 đ'}</Text> từ chủ cửa hàng.
+
+              <Text style={styles.dialogHeading}>Xác nhận đã nhận lương</Text>
+              <Text style={styles.dialogSubheading}>
+                Xác thực việc nhận tiền thanh toán trực tiếp/chuyển khoản từ chủ quán.
               </Text>
-            </View>
 
-            {/* Star Rating Section */}
-            <Text style={styles.modalLabel}>ĐÁNH GIÁ CHẤT LƯỢNG MÔI TRƯỜNG LÀM VIỆC (BẮT BUỘC)</Text>
-            <View style={styles.starRow}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity 
-                  key={star}
-                  onPress={() => setRating(star)}
-                >
-                  <Text style={[styles.starIcon, star <= rating && styles.starIconActive]}>★</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              {/* Receipt Summary Card inside Modal */}
+              <View style={styles.dialogSummaryCard}>
+                <Text style={styles.dialogSummaryLabel}>SỐ TIỀN THANH TOÁN</Text>
+                <Text style={styles.dialogSummaryAmount}>
+                  {selectedPayroll?.finalAmount ? (Math.round(selectedPayroll.finalAmount).toLocaleString('vi-VN') + ' đ') : '0 đ'}
+                </Text>
+                <View style={styles.dialogStoreBadge}>
+                  <Ionicons name="storefront" size={12} color="#475569" style={{ marginRight: 4 }} />
+                  <Text style={styles.dialogStoreName} numberOfLines={1}>
+                    {selectedPayroll?.shopName || selectedPayroll?.ShopName || 'Cửa hàng ProxiJob'}
+                  </Text>
+                </View>
+              </View>
 
-            {/* Feedback Comments Text Input */}
-            <Text style={styles.modalLabel}>Ý KIẾN ĐÓNG GÓP, NHẬN XÉT VỀ CỬA HÀNG (TÙY CHỌN)</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.feedbackInput}
-                value={comments}
-                onChangeText={(text) => setComments(text)}
-                placeholder="Ví dụ: Chủ quán rất thân thiện, môi trường làm việc thoải mái, hỗ trợ nhiệt tình..."
-                multiline={true}
-                numberOfLines={3}
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.modalActionRow}>
+              {/* Checkbox (Secure Confirmation) */}
               <TouchableOpacity
-                style={styles.modalSubmitBtn}
-                disabled={confirmReceiptMutation.isPending}
+                style={styles.dialogCheckboxRow}
+                onPress={() => setIsConfirmedCheckbox(!isConfirmedCheckbox)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.dialogCheckboxActive}>
+                  <Ionicons
+                    name={isConfirmedCheckbox ? "checkmark-circle" : "ellipse-outline"}
+                    size={20}
+                    color={isConfirmedCheckbox ? "#10B981" : "#94A3B8"}
+                  />
+                </View>
+                <Text style={styles.dialogCheckboxText}>
+                  Tôi cam đoan đã nhận đủ và chính xác số tiền trên.
+                </Text>
+              </TouchableOpacity>
+
+              {/* Star Rating Section */}
+              <Text style={styles.dialogLabel}>ĐÁNH GIÁ MÔI TRƯỜNG LÀM VIỆC</Text>
+              <View style={styles.dialogStarRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity
+                    key={star}
+                    onPress={() => setRating(star)}
+                    activeOpacity={0.7}
+                    style={styles.dialogStarWrapper}
+                  >
+                    <Ionicons
+                      name={star <= rating ? "star" : "star-outline"}
+                      size={30}
+                      color={star <= rating ? "#F59E0B" : "#CBD5E1"}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Feedback Comments Text Input */}
+              <Text style={styles.dialogLabel}>NHẬN XÉT VỀ CỬA HÀNG (TÙY CHỌN)</Text>
+              <View style={styles.dialogInputContainer}>
+                <TextInput
+                  style={styles.dialogFeedbackInput}
+                  value={comments}
+                  onChangeText={(text) => setComments(text)}
+                  placeholder="Chủ quán thân thiện, môi trường làm việc thoải mái..."
+                  multiline={true}
+                  numberOfLines={2}
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              {/* Action Buttons */}
+              <TouchableOpacity
+                style={[styles.dialogSubmitBtn, !isConfirmedCheckbox && styles.dialogSubmitBtnDisabled]}
+                disabled={confirmReceiptMutation.isPending || !isConfirmedCheckbox}
                 onPress={handleSubmitConfirm}
+                activeOpacity={0.8}
               >
                 {confirmReceiptMutation.isPending ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.modalSubmitBtnText}>Xác nhận & Gửi đánh giá chéo ⚡</Text>
+                  <>
+                    <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.dialogSubmitBtnText}>Xác nhận & Gửi đánh giá</Text>
+                  </>
                 )}
               </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.modalCloseBtn}
-                onPress={() => setIsModalVisible(false)}
-              >
-                <Text style={styles.modalCloseBtnText}>Đóng</Text>
-              </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
         </View>
+        </View>
       </Modal>
-
       {/* Leave/Swap Request Modal */}
       <Modal
         visible={requestModalVisible}
@@ -764,62 +966,78 @@ export default function StudentCalendar() {
         onRequestClose={() => setRequestModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalHeading}>
-              {isSwapRequest ? 'Yêu cầu đổi ca làm việc' : 'Yêu cầu xin nghỉ phép'}
-            </Text>
-            <Text style={styles.modalSubheading}>
-              {isSwapRequest 
-                ? 'Gửi yêu cầu xin chuyển đổi sang một ca làm việc khác đến Chủ quán. Vui lòng ghi rõ thông tin chi tiết.'
-                : 'Xin nghỉ phép cho ca làm việc đã được duyệt này. Yêu cầu của bạn cần được Chủ quán phê duyệt.'}
-            </Text>
-
-            <View style={styles.modalDivider} />
-
-            <View style={styles.checkboxRow}>
-              <View style={[styles.checkboxBox, { backgroundColor: '#EF4444', borderColor: '#EF4444' }]}>
-                <Text style={styles.checkboxTick}>✓</Text>
-              </View>
-              <Text style={styles.checkboxText}>
-                Ca làm: <Text style={{ fontWeight: '800', color: '#1F2937' }}>{selectedShiftForRequest?.title}</Text> ({selectedShiftForRequest?.time})
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight + 10 : 20 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.modalHeading}>
+                {isSwapRequest ? 'Yêu cầu đổi ca làm việc' : 'Yêu cầu xin nghỉ phép'}
               </Text>
-            </View>
+              <Text style={styles.modalSubheading}>
+                {isSwapRequest
+                  ? 'Gửi yêu cầu xin chuyển đổi sang một ca làm việc khác đến Chủ quán. Vui lòng ghi rõ thông tin chi tiết.'
+                  : 'Xin nghỉ phép cho ca làm việc đã được duyệt này. Yêu cầu của bạn cần được Chủ quán phê duyệt.'}
+              </Text>
 
-            <Text style={styles.modalLabel}>LÝ DO CHI TIẾT (BẮT BUỘC)</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.feedbackInput}
-                value={requestReason}
-                onChangeText={(text) => setRequestReason(text)}
-                placeholder={isSwapRequest 
-                  ? "Ví dụ: Tôi muốn đổi sang ca chiều ngày mai 05/07 từ 13h-17h vì có lịch học đột xuất..."
-                  : "Ví dụ: Em có lịch thi học kỳ đột xuất tại trường nên không thể tham gia ca làm này..."}
-                multiline={true}
-                numberOfLines={3}
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
+              <View style={styles.modalDivider} />
 
-            <View style={styles.modalActionRow}>
-              <TouchableOpacity
-                style={[styles.modalSubmitBtn, { backgroundColor: '#EF4444' }]}
-                disabled={cancelMutation.isPending}
-                onPress={handleSubmitRequest}
-              >
-                {cancelMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.modalSubmitBtnText}>Gửi yêu cầu duyệt ⚡</Text>
-                )}
-              </TouchableOpacity>
+              <View style={styles.checkboxRow}>
+                <View style={[styles.checkboxBox, { backgroundColor: '#EF4444', borderColor: '#EF4444' }]}>
+                  <Text style={styles.checkboxTick}>✓</Text>
+                </View>
+                <Text style={styles.checkboxText}>
+                  Ca làm: <Text style={{ fontWeight: '800', color: '#1F2937' }}>{selectedShiftForRequest?.title}</Text> ({selectedShiftForRequest?.time})
+                </Text>
+              </View>
 
-              <TouchableOpacity 
-                style={styles.modalCloseBtn}
-                onPress={() => setRequestModalVisible(false)}
-              >
-                <Text style={styles.modalCloseBtnText}>Hủy</Text>
-              </TouchableOpacity>
-            </View>
+              <Text style={styles.modalLabel}>LÝ DO CHI TIẾT (BẮT BUỘC)</Text>
+              <View style={[styles.inputContainer, reasonError ? { borderColor: '#EF4444', borderWidth: 1 } : {}]}>
+                <TextInput
+                  style={styles.feedbackInput}
+                  value={requestReason}
+                  onChangeText={(text) => {
+                    setRequestReason(text);
+                    if (text.trim().length >= 10) {
+                      setReasonError('');
+                    }
+                  }}
+                  placeholder={isSwapRequest
+                    ? "Ví dụ: Tôi muốn đổi sang ca chiều ngày mai 05/07 từ 13h-17h vì có lịch học đột xuất..."
+                    : "Ví dụ: Em có lịch thi học kỳ đột xuất tại trường nên không thể tham gia ca làm này..."}
+                  multiline={true}
+                  numberOfLines={3}
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+              {reasonError ? (
+                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: -4, marginBottom: 12, fontWeight: '600' }}>
+                  {reasonError}
+                </Text>
+              ) : null}
+
+              <View style={styles.modalActionRow}>
+                <TouchableOpacity
+                  style={[styles.modalSubmitBtn, { backgroundColor: '#EF4444' }]}
+                  disabled={cancelMutation.isPending}
+                  onPress={handleSubmitRequest}
+                >
+                  {cancelMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.modalSubmitBtnText}>Gửi yêu cầu duyệt ⚡</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setRequestModalVisible(false)}
+                >
+                  <Text style={styles.modalCloseBtnText}>Hủy</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -831,9 +1049,9 @@ export default function StudentCalendar() {
         animationType="fade"
         onRequestClose={() => setOptionsModalVisible(false)}
       >
-        <TouchableOpacity 
-          style={styles.bottomSheetOverlay} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.bottomSheetOverlay}
+          activeOpacity={1}
           onPress={() => setOptionsModalVisible(false)}
         >
           <View style={styles.bottomSheetContent}>
@@ -847,7 +1065,7 @@ export default function StudentCalendar() {
 
             <View style={styles.bottomSheetButtons}>
               {/* Option 1: Xin nghỉ phép */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.bottomSheetBtn, { borderLeftColor: theme.colors.danger }]}
                 onPress={() => {
                   setOptionsModalVisible(false);
@@ -867,7 +1085,7 @@ export default function StudentCalendar() {
               </TouchableOpacity>
 
               {/* Option 2: Xin đổi ca */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.bottomSheetBtn, { borderLeftColor: theme.colors.primary }]}
                 onPress={() => {
                   setOptionsModalVisible(false);
@@ -887,7 +1105,7 @@ export default function StudentCalendar() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.bottomSheetCancelBtn}
               onPress={() => setOptionsModalVisible(false)}
             >
@@ -981,15 +1199,15 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   earningsTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 30,
+    fontWeight: '900',
     color: '#FFFFFF',
-    opacity: 0.95,
+    opacity: 0.98,
   },
   earningsSubTitle: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.75)',
-    fontWeight: '500',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontWeight: '600',
     marginTop: 1,
   },
   walletIconContainer: {
@@ -1001,12 +1219,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   earningsMainValue: {
-    fontSize: 30,
-    fontWeight: '900',
+    fontSize: 36,
+    fontWeight: '950',
     color: '#FFFFFF',
-    marginVertical: 14,
+    marginVertical: 12,
     zIndex: 2,
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
   },
   earningsFooter: {
     flexDirection: 'row',
@@ -1374,58 +1592,260 @@ const styles = StyleSheet.create({
     color: '#FF6B00',
     letterSpacing: 1,
   },
-  pendingCard: {
+  pendingReceiptCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#FFDBCC',
-    padding: 16,
-    shadowColor: '#FF6B00',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-    marginBottom: 12,
+    borderColor: '#E2E8F0',
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 3,
+    marginBottom: 16,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  pendingCardHeader: {
+  cutoutLeft: {
+    position: 'absolute',
+    left: -10,
+    top: '30%',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    zIndex: 10,
+  },
+  cutoutRight: {
+    position: 'absolute',
+    right: -10,
+    top: '30%',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    zIndex: 10,
+  },
+  receiptTitleHeader: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 1.5,
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  receiptDetailsContainer: {
+    marginVertical: 4,
+    gap: 10,
+  },
+  receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  receiptRowLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  receiptRowValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  receiptAmountContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 4,
+    paddingHorizontal: 2,
+  },
+  receiptAmountLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  receiptAmountValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FF6B00',
+  },
+  barcodeWrapper: {
+    alignItems: 'center',
+    marginTop: 18,
+    marginBottom: 18,
+    opacity: 0.8,
+  },
+  barcodeContainer: {
+    flexDirection: 'row',
+    height: 30,
+    alignItems: 'stretch',
+  },
+  barcodeBar: {
+    height: '100%',
+  },
+  barcodeText: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: '#94A3B8',
+    letterSpacing: 1,
+    marginTop: 6,
+  },
+  pendingCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  storeAvatarBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: '#FFEFEB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  storeAvatarText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FF6B00',
+  },
   pendingStoreInfo: {
     flex: 1,
+    marginRight: 8,
   },
   pendingStoreName: {
     fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
   },
-  pendingShiftMeta: {
+  pendingOrderId: {
     fontSize: 11,
-    color: '#64748B',
-    marginTop: 3,
+    color: '#94A3B8',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  pendingBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pendingBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D97706',
+    marginRight: 6,
+  },
+  pendingBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  receiptDashedLine: {
+    height: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    marginVertical: 4,
+    marginBottom: 14,
+  },
+  receiptBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  receiptBadgeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 99,
+  },
+  receiptBadgeVal: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  paymentAlertBanner: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: 'row',
+    marginBottom: 16,
+    alignItems: 'flex-start',
+  },
+  paymentAlertText: {
+    fontSize: 10,
+    color: '#B45309',
     fontWeight: '600',
+    flex: 1,
+    lineHeight: 14,
+  },
+  pendingAmountContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFF5F0',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    marginBottom: 16,
+  },
+  pendingAmountRowLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#9E4A28',
+    letterSpacing: 0.5,
   },
   pendingAmount: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
     color: '#FF6B00',
   },
   pendingCardDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginVertical: 12,
+    marginVertical: 14,
   },
   pendingActionBtn: {
     backgroundColor: '#FF6B00',
-    paddingVertical: 10,
-    borderRadius: 99,
+    paddingVertical: 12,
+    borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: '#FF6B00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   pendingActionBtnText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '800',
+  },
+  navWeekBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -1655,5 +2075,174 @@ const styles = StyleSheet.create({
   },
   historyFilterBtnTextActive: {
     color: '#FF6B00',
+  },
+  dialogOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    padding: 16,
+  },
+  dialogContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 380,
+    padding: 24,
+    alignItems: 'center',
+    position: 'relative',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+    maxHeight: Dimensions.get('window').height * 0.85,
+    marginBottom: Platform.OS === 'ios' ? 24 : 10,
+  },
+  dialogCloseHeaderBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  dialogHeaderIconBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  dialogHeading: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  dialogSubheading: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
+    paddingHorizontal: 10,
+    marginBottom: 16,
+  },
+  dialogSummaryCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    width: '100%',
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  dialogSummaryLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.8,
+  },
+  dialogSummaryAmount: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#10B981',
+    marginVertical: 4,
+  },
+  dialogStoreBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E2E8F0',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginTop: 2,
+    maxWidth: '90%',
+  },
+  dialogStoreName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  dialogCheckboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  dialogCheckboxActive: {
+    marginRight: 8,
+  },
+  dialogCheckboxText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+    flex: 1,
+  },
+  dialogLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.5,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  dialogStarRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  dialogStarWrapper: {
+    padding: 4,
+  },
+  dialogInputContainer: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+    marginBottom: 18,
+  },
+  dialogFeedbackInput: {
+    height: 60,
+    textAlignVertical: 'top',
+    fontSize: 12,
+    color: '#0F172A',
+    fontWeight: '500',
+  },
+  dialogSubmitBtn: {
+    width: '100%',
+    height: 48,
+    backgroundColor: '#10B981',
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  dialogSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  dialogSubmitBtnDisabled: {
+    backgroundColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
   },
 });

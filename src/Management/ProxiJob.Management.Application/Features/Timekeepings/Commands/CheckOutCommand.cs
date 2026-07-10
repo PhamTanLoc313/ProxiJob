@@ -43,9 +43,10 @@ public class CheckOutCommandHandler : IRequestHandler<CheckOutCommand, bool>
             throw new Exception("Already checked out.");
         }
 
-        var nowLocal = DateTime.UtcNow.AddHours(7);
-        if (timekeeping.WorkSchedule != null && nowLocal < timekeeping.WorkSchedule.EndTime.AddMinutes(-5))
+        var nowUtc = DateTime.UtcNow;
+        if (timekeeping.WorkSchedule != null && nowUtc < timekeeping.WorkSchedule.EndTime.AddMinutes(-5))
         {
+            var nowLocal = nowUtc.AddHours(7);
             var earlyMsg = $"Ra sớm lúc {nowLocal:HH:mm}";
             if (string.IsNullOrEmpty(timekeeping.Note))
             {

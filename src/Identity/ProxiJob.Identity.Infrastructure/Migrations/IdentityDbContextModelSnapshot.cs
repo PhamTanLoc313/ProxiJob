@@ -481,6 +481,18 @@ namespace ProxiJob.Identity.Infrastructure.Migrations
                         .HasColumnType("character varying(300)")
                         .HasColumnName("address");
 
+                    b.Property<int>("AppliesLimit")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3)
+                        .HasColumnName("applieslimit");
+
+                    b.Property<int>("AppliesUsed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("appliesused");
+
                     b.Property<string>("Bio")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
@@ -870,6 +882,14 @@ namespace ProxiJob.Identity.Infrastructure.Migrations
                     b.Property<string>("PhoneNumber")
                         .HasColumnType("text")
                         .HasColumnName("phonenumber");
+
+                    b.Property<string>("ResetToken")
+                        .HasColumnType("text")
+                        .HasColumnName("resettoken");
+
+                    b.Property<DateTime?>("ResetTokenExpiry")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resettokenexpiry");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")

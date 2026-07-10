@@ -26,6 +26,12 @@ service IdentityGrpcService {
 
   // Job Service: trừ 1 lượt đăng tin sau khi tạo bài thành công
   rpc ConsumeJobPostQuota (ConsumeJobPostQuotaRequest) returns (ConsumeJobPostQuotaResponse);
+
+  // Student: kiểm tra hạn mức ứng tuyển của sinh viên
+  rpc CheckStudentApplyQuota (CheckStudentApplyQuotaRequest) returns (CheckStudentApplyQuotaResponse);
+
+  // Student: trừ 1 lượt ứng tuyển sau khi ứng tuyển thành công
+  rpc ConsumeStudentApplyQuota (ConsumeStudentApplyQuotaRequest) returns (ConsumeStudentApplyQuotaResponse);
 }
 
 message GetStudentCvForApplicationRequest {
@@ -129,5 +135,27 @@ message ConsumeJobPostQuotaRequest {
 message ConsumeJobPostQuotaResponse {
   bool success = 1;
   int32 job_posts_remaining = 2;
+  string message = 3;
+}
+
+message CheckStudentApplyQuotaRequest {
+  int32 user_id = 1;
+}
+
+message CheckStudentApplyQuotaResponse {
+  bool can_apply = 1;
+  int32 applies_limit = 2;
+  int32 applies_used = 3;
+  int32 applies_remaining = 4;
+  string message = 5;
+}
+
+message ConsumeStudentApplyQuotaRequest {
+  int32 user_id = 1;
+}
+
+message ConsumeStudentApplyQuotaResponse {
+  bool success = 1;
+  int32 applies_remaining = 2;
   string message = 3;
 }

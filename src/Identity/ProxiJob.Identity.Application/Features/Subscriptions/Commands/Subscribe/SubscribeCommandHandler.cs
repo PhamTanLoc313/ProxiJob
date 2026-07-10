@@ -23,10 +23,10 @@ namespace ProxiJob.Identity.Application.Features.Subscriptions.Commands.Subscrib
             if (_currentUser.UserId is not int userId)
                 throw new UnauthorizedAccessException(BusinessMessages.NotAuthenticated);
 
-            if (_currentUser.Role != RoleNames.Business)
-                throw new ForbiddenAccessException(BusinessMessages.BusinessSubscribeOnly);
+            if (_currentUser.Role != RoleNames.Business && _currentUser.Role != RoleNames.Student)
+                throw new ForbiddenAccessException("Chỉ tài khoản sinh viên hoặc doanh nghiệp mới có thể đăng ký gói.");
 
-            return await _paymentService.InitiatePurchaseAsync(userId, request.PlanId, cancellationToken);
+            return await _paymentService.InitiatePurchaseAsync(userId, request.PlanId, _currentUser.Role, cancellationToken);
         }
     }
 }

@@ -610,6 +610,7 @@ export const useShifts = ({
         requirements,
         categoryId,
         salary,
+        slots,
         skillNames,
         address,
         latitude,
@@ -660,7 +661,7 @@ export const useShifts = ({
         startTime: startIso.toISOString(),
         endTime: endIso.toISOString(),
         salary: parseInt(salary, 10),
-        slots: 1,
+        slots: slots !== undefined ? parseInt(slots, 10) : 1,
         createdBy: user.name
       });
 

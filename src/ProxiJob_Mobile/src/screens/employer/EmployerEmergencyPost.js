@@ -626,6 +626,7 @@ export default function EmployerEmergencyPost() {
   const [isAddressFocused, setIsAddressFocused] = useState(false);
 
   const [salary, setSalary] = useState('');
+  const [slots, setSlots] = useState('1');
   const [selectedSkills, setSelectedSkills] = useState([]); // Default 'Giao tiếp'
   const [customSkillInput, setCustomSkillInput] = useState('');
 
@@ -1118,6 +1119,10 @@ export default function EmployerEmergencyPost() {
       if (isNaN(parsedSalary) || parsedSalary < 20000) {
         newErrors.salary = 'Mức lương đề xuất tối thiểu là 20.000 đ/h!';
       }
+      const parsedSlots = parseInt(slots, 10);
+      if (isNaN(parsedSlots) || parsedSlots < 1) {
+        newErrors.slots = 'Số lượng tuyển dụng tối thiểu là 1 người!';
+      }
       if (showCustomSkillInput && !customSkillInput.trim()) {
         newErrors.customSkillInput = 'Vui lòng nhập ít nhất một kỹ năng khác hoặc bỏ chọn mục này!';
       }
@@ -1238,6 +1243,7 @@ export default function EmployerEmergencyPost() {
         requirements,
         categoryId: finalCategoryId,
         salary: isEmergency ? Math.round((parseFloat(salary.replace(/,/g, '')) || 0) * 1.3).toString() : salary,
+        slots: parseInt(slots, 10) || 1,
         skillNames: finalSelectedSkills,
         address,
         latitude,
@@ -1476,6 +1482,20 @@ export default function EmployerEmergencyPost() {
                       </View>
                     </View>
                   )}
+
+                  <Text style={styles.inputLabel}>Số lượng cần tuyển (người)</Text>
+                  <View style={styles.salaryInputContainer}>
+                    <TextInput
+                      style={[styles.premiumInput, styles.salaryInput]}
+                      placeholder="1"
+                      placeholderTextColor={theme.colors.textLight}
+                      keyboardType="numeric"
+                      value={slots}
+                      onChangeText={setSlots}
+                    />
+                    <Text style={styles.salaryCurrency}>Người</Text>
+                  </View>
+                  {errors.slots && <Text style={styles.errorText}>{errors.slots}</Text>}
 
                   <Text style={styles.inputLabel}>Kỹ năng cần thiết</Text>
                   <View style={styles.skillsContainer}>
