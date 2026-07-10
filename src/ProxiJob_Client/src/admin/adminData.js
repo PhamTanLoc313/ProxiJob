@@ -1,6 +1,8 @@
 // ============================================================
 // ProxiJob Admin — Mock Data & Helpers
 // ============================================================
+import { IDENTITY_API_URL } from '../apiConfig';
+
 
 // ---------- USERS ----------
 export const mockUsers = [
@@ -568,7 +570,7 @@ export const ADMIN_CREDENTIALS = {
 
 export async function adminLogin(email, password) {
   try {
-    const res = await fetch("http://localhost:5231/api/auth/login", {
+    const res = await fetch(`${IDENTITY_API_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password })

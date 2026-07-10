@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Search, Eye, Ban, CheckCircle, Briefcase, Plus, Edit2, Trash2, X } from "lucide-react";
 import { getAdminSession, formatDate } from "./adminData";
+import { JOB_API_URL } from "../apiConfig";
+
 
 export default function JobManagement() {
   const [jobs, setJobs] = useState([]);
@@ -33,7 +35,7 @@ export default function JobManagement() {
         setError("Chưa đăng nhập admin hoặc phiên làm việc hết hạn.");
         return;
       }
-      const res = await fetch("http://localhost:5021/api/admin/jobs");
+      const res = await fetch(`${JOB_API_URL}/admin/jobs`);
       if (!res.ok) {
         setError("Không thể tải danh sách việc làm: " + res.status);
         return;
@@ -49,7 +51,7 @@ export default function JobManagement() {
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch("http://localhost:5021/api/Categories");
+      const res = await fetch(`${JOB_API_URL}/categories`);
       if (res.ok) {
         const data = await res.json();
         setCategories(data || []);
@@ -70,7 +72,7 @@ export default function JobManagement() {
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch("http://localhost:5021/api/admin/jobs", {
+      const res = await fetch(`${JOB_API_URL}/admin/jobs`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -101,7 +103,7 @@ export default function JobManagement() {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`http://localhost:5021/api/admin/jobs/${selectedJob.id}`, {
+      const res = await fetch(`${JOB_API_URL}/admin/jobs/${selectedJob.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -132,7 +134,7 @@ export default function JobManagement() {
   const handleDeleteJob = async (jobId) => {
     if (!confirm("Bạn có chắc chắn muốn xóa bài tuyển dụng này?")) return;
     try {
-      const res = await fetch(`http://localhost:5021/api/admin/jobs/${jobId}`, {
+      const res = await fetch(`${JOB_API_URL}/admin/jobs/${jobId}`, {
         method: "DELETE"
       });
       const data = await res.json();
@@ -149,7 +151,7 @@ export default function JobManagement() {
   const toggleJobStatus = async (jobId, currentStatus) => {
     const newStatus = currentStatus === "Published" ? "Closed" : "Published";
     try {
-      const res = await fetch(`http://localhost:5021/api/admin/jobs/${jobId}/status`, {
+      const res = await fetch(`${JOB_API_URL}/admin/jobs/${jobId}/status`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
