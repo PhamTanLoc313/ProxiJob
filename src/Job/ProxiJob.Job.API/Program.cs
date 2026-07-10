@@ -83,6 +83,10 @@ app.UseMiddleware<ProxiJob.Job.API.Middleware.IdentityUserContextMiddleware>();
 
 app.UseAuthorization();
 
+await ProxiJob.Job.Infrastructure.Data.JobDatabaseInitializer.InitializeAsync(
+    app.Services,
+    app.Logger);
+
 app.MapControllers();
 app.MapGrpcService<ProxiJob.Job.Infrastructure.Services.JobGrpcService>();
 

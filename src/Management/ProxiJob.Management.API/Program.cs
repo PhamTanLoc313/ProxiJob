@@ -94,6 +94,10 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
+await ProxiJob.Management.Infrastructure.Data.ManagementDatabaseInitializer.InitializeAsync(
+    app.Services,
+    app.Logger);
+
 app.MapControllers();
 
 if (!string.IsNullOrEmpty(urls))

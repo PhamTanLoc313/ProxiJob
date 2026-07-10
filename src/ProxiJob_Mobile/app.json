@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ProxiJob_Mobile",
+    "name": "ProxiJob",
     "slug": "proxijob-mobile",
     "scheme": "proxijob",
     "version": "1.0.0",
@@ -11,13 +11,11 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.team04.proxijob",
+      "package": "vn.io.proxijob",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "permissions": [
         "android.permission.RECORD_AUDIO"
