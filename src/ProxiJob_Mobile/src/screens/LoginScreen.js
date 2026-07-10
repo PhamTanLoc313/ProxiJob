@@ -36,34 +36,7 @@ export default function LoginScreen() {
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedGoogleRole, setSelectedGoogleRole] = useState(null);
 
-  // WebView states for Google Login fallback
-  const [showGoogleWebView, setShowGoogleWebView] = useState(false);
-  const [webViewUrl, setWebViewUrl] = useState('');
-  const [targetRole, setTargetRole] = useState('student');
 
-  const handleWebViewNavigationStateChange = async (navState) => {
-    const { url } = navState;
-    console.log('[LoginScreen] WebView navigating to:', url);
-
-    // Check if the URL starts with the redirect URI
-    if (url.startsWith('https://auth.expo.io/@anonymous/ProxiJob_Mobile')) {
-      setShowGoogleWebView(false);
-
-      // Extract parameters from fragment (#) or query (?)
-      const paramsStr = url.split('#')[1] || url.split('?')[1] || '';
-      const params = new URLSearchParams(paramsStr);
-      const idToken = params.get('id_token') || params.get('credential');
-
-      if (idToken) {
-        console.log('[LoginScreen] WebView OAuth resolved token successfully.');
-        showToast('Đăng nhập Google thành công!', 'success');
-        await loginWithGoogle(idToken, targetRole);
-      } else {
-        console.log('[LoginScreen] Token not found in WebView URL:', url);
-        showToast('Không lấy được token từ Google.', 'error');
-      }
-    }
-  };
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     androidClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
@@ -176,11 +149,10 @@ export default function LoginScreen() {
         console.log('[LoginScreen] Native GoogleSignin check failed. Falling back to browser AuthSession...', nativeErr.message);
       }
 
-      // 2. Custom WebView-based Google Login for Expo Go (bypasses browser redirect blocks)
+      // 2. Secure WebBrowser-based Google Login for Expo Go (shares system browser session and is safe)
       showToast('Đang mở đăng nhập Google...', 'info');
-      setTargetRole(role);
 
-      const expoProxyUrl = 'https://auth.expo.io/@anonymous/ProxiJob_Mobile';
+      const expoProxyUrl = makeRedirectUri({ useProxy: true });
       const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
         `client_id=761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com` +
         `&redirect_uri=${encodeURIComponent(expoProxyUrl)}` +
@@ -188,9 +160,30 @@ export default function LoginScreen() {
         `&scope=openid%20profile%20email` +
         `&nonce=nonce_${Math.random().toString(36).substring(2)}`;
 
-      console.log('[LoginScreen] Opening Google Login in WebView:', googleAuthUrl);
-      setWebViewUrl(googleAuthUrl);
-      setShowGoogleWebView(true);
+      console.log('[LoginScreen] Opening Google Login in secure WebBrowser:', googleAuthUrl);
+      
+      const authResult = await WebBrowser.openAuthSessionAsync(googleAuthUrl, expoProxyUrl);
+      
+      if (authResult.type === 'success' && authResult.url) {
+        const redirectUrl = authResult.url;
+        console.log('[LoginScreen] WebBrowser OAuth resolved URL:', redirectUrl);
+        
+        // Extract parameters from fragment (#) or query (?)
+        const paramsStr = redirectUrl.split('#')[1] || redirectUrl.split('?')[1] || '';
+        const params = new URLSearchParams(paramsStr);
+        const idToken = params.get('id_token') || params.get('credential');
+        
+        if (idToken) {
+          console.log('[LoginScreen] WebBrowser OAuth resolved token successfully.');
+          showToast('Đăng nhập Google thành công!', 'success');
+          await loginWithGoogle(idToken, role);
+        } else {
+          console.log('[LoginScreen] Token not found in WebBrowser redirect URL:', redirectUrl);
+          showToast('Không lấy được token từ Google.', 'error');
+        }
+      } else {
+        console.log('[LoginScreen] WebBrowser authentication cancelled or failed:', authResult);
+      }
     } catch (err) {
       console.log('Google Sign-in failed', err);
       showToast(err.message || 'Đăng nhập bằng Google thất bại.', 'error');
@@ -417,41 +410,7 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Google WebView Modal Fallback for Expo Go */}
-      <Modal
-        visible={showGoogleWebView}
-        animationType="slide"
-        onRequestClose={() => setShowGoogleWebView(false)}
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-          <View style={{
-            height: 92,
-            paddingTop: 40,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: '#E5E7EB',
-            backgroundColor: '#F9FAFB'
-          }}>
-            <TouchableOpacity onPress={() => setShowGoogleWebView(false)} style={{ paddingVertical: 8 }}>
-              <Text style={{ color: theme.colors.primary || '#FF6B00', fontSize: 16, fontWeight: '600' }}>Hủy</Text>
-            </TouchableOpacity>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#111827' }}>Đăng nhập Google</Text>
-            <View style={{ width: 40 }} />
-          </View>
-          <WebView
-            source={{ uri: webViewUrl }}
-            onNavigationStateChange={handleWebViewNavigationStateChange}
-            userAgent="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-            style={{ flex: 1 }}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            incognito={true}
-          />
-        </SafeAreaView>
-      </Modal>
+
     </SafeAreaView>
   );
 }
