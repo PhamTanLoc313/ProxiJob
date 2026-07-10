@@ -17,6 +17,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../styles/theme';
 import { AppContext } from '../context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
+import * as Linking from 'expo-linking';
+import { WebView } from 'react-native-webview';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { login, loginWithGoogle, navigateTo, authLoading, showToast } = useContext(AppContext);
@@ -27,11 +34,71 @@ export default function LoginScreen() {
   const [errors, setErrors] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [selectedGoogleRole, setSelectedGoogleRole] = useState(null);
+
+  // WebView states for Google Login fallback
+  const [showGoogleWebView, setShowGoogleWebView] = useState(false);
+  const [webViewUrl, setWebViewUrl] = useState('');
+  const [targetRole, setTargetRole] = useState('student');
+
+  const handleWebViewNavigationStateChange = async (navState) => {
+    const { url } = navState;
+    console.log('[LoginScreen] WebView navigating to:', url);
+
+    // Check if the URL starts with the redirect URI
+    if (url.startsWith('https://auth.expo.io/@anonymous/ProxiJob_Mobile')) {
+      setShowGoogleWebView(false);
+
+      // Extract parameters from fragment (#) or query (?)
+      const paramsStr = url.split('#')[1] || url.split('?')[1] || '';
+      const params = new URLSearchParams(paramsStr);
+      const idToken = params.get('id_token') || params.get('credential');
+
+      if (idToken) {
+        console.log('[LoginScreen] WebView OAuth resolved token successfully.');
+        showToast('Đăng nhập Google thành công!', 'success');
+        await loginWithGoogle(idToken, targetRole);
+      } else {
+        console.log('[LoginScreen] Token not found in WebView URL:', url);
+        showToast('Không lấy được token từ Google.', 'error');
+      }
+    }
+  };
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
+    iosClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
+    webClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
+    useProxy: true,
+    redirectUri: makeRedirectUri({
+      useProxy: true
+    })
+  });
+
+  React.useEffect(() => {
+    if (response?.type === 'success') {
+      const { idToken } = response.authentication || response.params || {};
+      const actualToken = idToken || response.authentication?.idToken;
+      if (actualToken && selectedGoogleRole) {
+        console.log('[LoginScreen] Browser Google Login success. Token resolved.');
+        loginWithGoogle(actualToken, selectedGoogleRole);
+      } else {
+        console.log('[LoginScreen] Browser Google Login success, but token not found in response details.', response);
+        // Fallback to access_token if no idToken is present (some web configs)
+        const tokenVal = response.authentication?.accessToken || response.params?.access_token;
+        if (tokenVal) {
+          loginWithGoogle(tokenVal, selectedGoogleRole);
+        }
+      }
+    }
+  }, [response]);
+
+
 
   const validateForm = () => {
     let tempErrors = {};
 
-    if (!email.trim()) {
+    if (!email || !email.trim()) {
       tempErrors.email = 'Email không được để trống.';
     } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -40,9 +107,9 @@ export default function LoginScreen() {
       }
     }
 
-    if (!password) {
+    if (!password || !password.trim()) {
       tempErrors.password = 'Mật khẩu không được để trống.';
-    } else if (password.length < 8) {
+    } else if (password.trim().length < 8) {
       tempErrors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
     }
 
@@ -55,7 +122,7 @@ export default function LoginScreen() {
       return;
     }
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password.trim());
     } catch (err) {
       setErrors({
         email: ' ',
@@ -69,30 +136,65 @@ export default function LoginScreen() {
     setShowRoleModal(true);
   };
 
-  const handleRoleSelect = (role) => {
+  const handleRoleSelect = async (role) => {
     setShowRoleModal(false);
+    setSelectedGoogleRole(role);
 
     // =========================================================================
-    // --- WORKFLOW TO INTEGRATE @react-native-google-signin/google-signin ---
-    // 1. Install dependency: npm install @react-native-google-signin/google-signin
-    // 2. Import GoogleSignin in this file:
-    //    import { GoogleSignin } from '@react-native-google-signin/google-signin';
-    // 3. Configure it on app load (e.g. inside a useEffect):
-    //    GoogleSignin.configure({ webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com' });
-    // 4. Implement the actual signing process:
-    //    try {
-    //      await GoogleSignin.hasPlayServices();
-    //      const response = await GoogleSignin.signIn();
-    //      const idToken = response.data.idToken; // Get ID Token
-    //      loginWithGoogle(idToken, role);
-    //    } catch (err) {
-    //      console.log('Google Sign-in failed', err);
-    //    }
+    // --- GOOGLE SIGN-IN INTEGRATION FLOW ---
+    // Client ID: 761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com
     // =========================================================================
+    try {
+      try {
+        const Constants = require('expo-constants').default;
+        const isExpoGo = Constants?.appOwnership === 'expo';
 
-    // Trigger context callback using a mock Google ID Token for testing/development
-    console.log('[LoginScreen] Initiating Google Sign-In with mock token and role:', role);
-    loginWithGoogle('mock-google-id-token-xyz789', role);
+        if (!isExpoGo) {
+          const { NativeModules } = require('react-native');
+          if (NativeModules.RNGoogleSignin) {
+            const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+            GoogleSignin.configure({
+              webClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
+              offlineAccess: true
+            });
+
+            await GoogleSignin.hasPlayServices();
+            const userInfo = await GoogleSignin.signIn();
+            const idToken = userInfo.idToken || userInfo.data?.idToken;
+            if (idToken) {
+              console.log('[LoginScreen] Native Google Sign-In success.');
+              await loginWithGoogle(idToken, role);
+              return;
+            }
+          } else {
+            console.log('[LoginScreen] Native RNGoogleSignin module not present in this build.');
+          }
+        } else {
+          console.log('[LoginScreen] Running inside Expo Go. Bypassing native Google Sign-In to prevent crash.');
+        }
+      } catch (nativeErr) {
+        console.log('[LoginScreen] Native GoogleSignin check failed. Falling back to browser AuthSession...', nativeErr.message);
+      }
+
+      // 2. Custom WebView-based Google Login for Expo Go (bypasses browser redirect blocks)
+      showToast('Đang mở đăng nhập Google...', 'info');
+      setTargetRole(role);
+
+      const expoProxyUrl = 'https://auth.expo.io/@anonymous/ProxiJob_Mobile';
+      const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com` +
+        `&redirect_uri=${encodeURIComponent(expoProxyUrl)}` +
+        `&response_type=id_token` +
+        `&scope=openid%20profile%20email` +
+        `&nonce=nonce_${Math.random().toString(36).substring(2)}`;
+
+      console.log('[LoginScreen] Opening Google Login in WebView:', googleAuthUrl);
+      setWebViewUrl(googleAuthUrl);
+      setShowGoogleWebView(true);
+    } catch (err) {
+      console.log('Google Sign-in failed', err);
+      showToast(err.message || 'Đăng nhập bằng Google thất bại.', 'error');
+    }
   };
 
   return (
@@ -312,9 +414,44 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Google WebView Modal Fallback for Expo Go */}
+      <Modal
+        visible={showGoogleWebView}
+        animationType="slide"
+        onRequestClose={() => setShowGoogleWebView(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{
+            height: 92,
+            paddingTop: 40,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: '#E5E7EB',
+            backgroundColor: '#F9FAFB'
+          }}>
+            <TouchableOpacity onPress={() => setShowGoogleWebView(false)} style={{ paddingVertical: 8 }}>
+              <Text style={{ color: theme.colors.primary || '#FF6B00', fontSize: 16, fontWeight: '600' }}>Hủy</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#111827' }}>Đăng nhập Google</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <WebView
+            source={{ uri: webViewUrl }}
+            onNavigationStateChange={handleWebViewNavigationStateChange}
+            userAgent="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            style={{ flex: 1 }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            incognito={true}
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }

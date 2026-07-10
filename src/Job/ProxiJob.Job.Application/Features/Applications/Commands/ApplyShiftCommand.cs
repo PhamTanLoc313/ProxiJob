@@ -57,6 +57,13 @@ namespace ProxiJob.Job.Application.Features.Applications.Commands
             if (conflictingApp != null)
                 throw new Exception("Bạn đã có ca làm khác trùng khung giờ với ca làm này.");
 
+            // Kiểm tra hạn mức ứng tuyển của sinh viên
+            var quotaCheck = await _identityGrpc.CheckStudentApplyQuotaAsync(request.StudentId, cancellationToken);
+            if (!quotaCheck.CanApply)
+            {
+                throw new Exception(quotaCheck.Message ?? "Bạn đã sử dụng hết lượt ứng tuyển. Vui lòng mua thêm gói ứng tuyển.");
+            }
+
             var cvUrl = await _identityGrpc.GetStudentCVUrlAsync(request.StudentId, cancellationToken);
 
             var application = new Domain.Models.Application
@@ -82,6 +89,9 @@ namespace ProxiJob.Job.Application.Features.Applications.Commands
 
             _context.Applications.Add(application);
             await _context.SaveChangesAsync(cancellationToken);
+
+            // Trừ 1 lượt ứng tuyển của sinh viên
+            await _identityGrpc.ConsumeStudentApplyQuotaAsync(request.StudentId, cancellationToken);
 
             try 
             {

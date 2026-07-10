@@ -2,9 +2,22 @@ import { useState, useCallback } from 'react';
 
 export const useNavigation = (isEnterprise, showToast, user) => {
   const [currentScreen, setCurrentScreen] = useState('student_dashboard');
-  const [navigationStack, setNavigationStack] = useState([]);
+  const [navigationStack, _setNavigationStack] = useState([]);
   const [navigationParams, setNavigationParams] = useState({});
   const [upgradeRedirectScreen, setUpgradeRedirectScreen] = useState(null);
+
+  const setNavigationStack = useCallback((stackOrFunc) => {
+    _setNavigationStack((prev) => {
+      const resolved = typeof stackOrFunc === 'function' ? stackOrFunc(prev) : stackOrFunc;
+      if (!Array.isArray(resolved)) return prev;
+      return resolved.map(item => {
+        if (typeof item === 'string') {
+          return { screen: item, params: {} };
+        }
+        return item;
+      });
+    });
+  }, []);
 
   const navigateTo = useCallback((screenName, params = {}) => {
     // Guest protection for student screens
@@ -17,7 +30,7 @@ export const useNavigation = (isEnterprise, showToast, user) => {
     if (protectedStudentScreens.includes(screenName) && !user) {
       showToast('Vui lòng đăng nhập để sử dụng chức năng này!', 'warning');
       setNavigationParams(params);
-      setNavigationStack(prev => [...prev, currentScreen]);
+      _setNavigationStack(prev => [...prev, { screen: currentScreen, params: navigationParams }]);
       setCurrentScreen('login');
       return;
     }
@@ -51,23 +64,24 @@ export const useNavigation = (isEnterprise, showToast, user) => {
     if (restrictedScreens.includes(screenName) && !isEnterprise) {
       setUpgradeRedirectScreen(screenName);
       setNavigationParams(params);
-      setNavigationStack(prev => [...prev, currentScreen]);
+      _setNavigationStack(prev => [...prev, { screen: currentScreen, params: navigationParams }]);
       setCurrentScreen('upgrade_package');
       showToast('Vui lòng nâng cấp gói HRM Basic (199.000đ) hoặc Enterprise để sử dụng tính năng!', 'warning');
       return;
     }
 
     setNavigationParams(params);
-    setNavigationStack(prev => [...prev, currentScreen]);
+    _setNavigationStack(prev => [...prev, { screen: currentScreen, params: navigationParams }]);
     setCurrentScreen(screenName);
-  }, [currentScreen, isEnterprise, showToast, user]);
+  }, [currentScreen, navigationParams, isEnterprise, showToast, user]);
 
   const goBack = useCallback(() => {
     if (navigationStack.length > 0) {
       const nextStack = [...navigationStack];
-      const prevScreen = nextStack.pop();
-      setNavigationStack(nextStack);
-      setCurrentScreen(prevScreen);
+      const prev = nextStack.pop();
+      _setNavigationStack(nextStack);
+      setCurrentScreen(prev.screen);
+      setNavigationParams(prev.params || {});
     }
   }, [navigationStack]);
 

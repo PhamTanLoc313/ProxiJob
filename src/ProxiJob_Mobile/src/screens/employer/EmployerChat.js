@@ -477,10 +477,7 @@ export default function EmployerChat() {
             {/* Input Bar */}
             <View style={[
               styles.inputBar,
-              { paddingBottom: Math.max(12, insets.bottom) },
-              Platform.OS === 'android' && keyboardHeight > 0 && {
-                paddingBottom: Math.max(20, androidKeyboardPadding + 24),
-              }
+              { paddingBottom: Math.max(12, insets.bottom) }
             ]}>
               <TextInput
                 style={styles.input}

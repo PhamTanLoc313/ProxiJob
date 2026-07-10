@@ -91,6 +91,11 @@ export default function StudentCheckIn() {
       setActiveShift(null);
       return true;
     } catch (e) {
+      const errorMsg = e?.message || e?.response?.data?.message || e?.toString() || '';
+      if (errorMsg.toLowerCase().includes('already checked out')) {
+        setActiveShift(null);
+        return true;
+      }
       return false;
     }
   };
@@ -150,6 +155,11 @@ export default function StudentCheckIn() {
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [successInfo, setSuccessInfo] = useState(null);
+
+  // Early check-out warning modal states
+  const [showEarlyCheckOutModal, setShowEarlyCheckOutModal] = useState(false);
+  const [earlyCheckOutTimeStr, setEarlyCheckOutTimeStr] = useState('');
+  const isProcessingScan = useRef(false);
 
   // Animated values
   const laserAnim = useRef(new Animated.Value(0)).current;
@@ -324,6 +334,7 @@ export default function StudentCheckIn() {
   }, [selectedShiftForCheckIn]);
 
   const handleTriggerQRScan = async () => {
+    isProcessingScan.current = false;
     setShowQRScanner(true);
     
     // Try to auto-request permission
@@ -412,27 +423,48 @@ export default function StudentCheckIn() {
         // Early threshold: more than 5 minutes before scheduled end
         if (now < new Date(schedEnd.getTime() - 5 * 60 * 1000)) {
           const timeEndStr = schedEnd.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-          if (Platform.OS === 'web') {
-            const confirmLeave = window.confirm(`⚠️ Cảnh báo ra sớm!\nBạn đang check-out sớm hơn giờ kết thúc ca làm việc dự kiến (${timeEndStr}). Bạn có chắc chắn muốn kết thúc ca làm sớm không?`);
-            if (confirmLeave) {
-              triggerCheckOut();
-            }
-          } else {
-            Alert.alert(
-              "Cảnh Báo Ra Sớm ⏰",
-              `Bạn đang thực hiện ra ca sớm hơn giờ kết thúc ca làm việc dự kiến (${timeEndStr}). Bạn có chắc chắn muốn kết thúc ca làm sớm không?`,
-              [
-                { text: "Hủy bỏ", style: "cancel" },
-                { text: "Xác nhận ra sớm", onPress: triggerCheckOut }
-              ]
-            );
-          }
+          setEarlyCheckOutTimeStr(timeEndStr);
+          setShowEarlyCheckOutModal(true);
           return;
         }
       }
 
       // If not early, just run checkout
       triggerCheckOut();
+    }
+  };
+
+  const confirmEarlyCheckOut = async () => {
+    setShowEarlyCheckOutModal(false);
+    const lat = studentCoords?.latitude || 10.8265;
+    const lng = studentCoords?.longitude || 106.6302;
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    const success = await checkOutShift(
+      selectedShiftForCheckIn.id,
+      lat,
+      lng,
+      ''
+    );
+    if (success) {
+      setSuccessInfo({
+        type: 'CHECK-OUT',
+        title: 'CHECK-OUT THÀNH CÔNG 🎉',
+        timestamp: timeStr,
+        status: 'Hoàn Thành',
+        statusColor: '#0052CC',
+        shopName: selectedShiftForCheckIn.shopName,
+        shiftTitle: selectedShiftForCheckIn.title
+      });
+      
+      // Reset coordinates to far away after a small delay
+      setTimeout(() => {
+        const farCoords = { latitude: 10.8550, longitude: 106.6300 };
+        setStudentCoords(farCoords);
+      }, 800);
+
+      setShowSuccessCard(true);
     }
   };
 
@@ -547,109 +579,112 @@ export default function StudentCheckIn() {
           </View>
         </View>
         
-        {/* If no approved/active shifts, show empty check-in screen */}
+        {/* 1. Shift Brief Card (Only shown if selectedShiftForCheckIn is NOT null) */}
+        {selectedShiftForCheckIn && (
+          <View style={[styles.briefCard, theme.shadows.light]}>
+            <View style={styles.briefHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="storefront-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
+                <Text style={styles.briefShop}>{selectedShiftForCheckIn.shopName}</Text>
+              </View>
+              {getShiftBadge()}
+            </View>
+            <Text style={styles.briefTitle}>{selectedShiftForCheckIn.title}</Text>
+            
+            <View style={styles.briefDivider} />
+            
+            <View style={styles.briefMetaRow}>
+              <View style={styles.briefMetaCol}>
+                <Text style={styles.briefMetaLabel}>CA LÀM VIỆC</Text>
+                <View style={styles.briefMetaValRow}>
+                  <Ionicons name="time-outline" size={14} color="#64748B" style={{ marginRight: 4 }} />
+                  <Text style={styles.briefMetaVal}>{selectedShiftForCheckIn.time}</Text>
+                </View>
+              </View>
+              <View style={styles.briefMetaCol}>
+                <Text style={styles.briefMetaLabel}>LƯƠNG ĐỀ XUẤT</Text>
+                <View style={styles.briefMetaValRow}>
+                  <Ionicons name="cash-outline" size={14} color="#10B981" style={{ marginRight: 4 }} />
+                  <Text style={[styles.briefMetaVal, { color: '#10B981', fontWeight: 'bold' }]}>
+                    {(selectedShiftForCheckIn.hourlyRate || 0).toLocaleString('vi-VN')} đ/h
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* 2. Interactive Leaflet Map Card (ALWAYS SHOWN) */}
+        <View style={[styles.mapCard, theme.shadows.light]}>
+          <View style={styles.mapHeader}>
+            <Ionicons name="map-outline" size={16} color="#FF6B00" style={{ marginRight: 6 }} />
+            <Text style={styles.mapCardTitle}>Định vị thực tế (Leaflet Map API)</Text>
+          </View>
+          
+          <View style={styles.mapOuterWrapper}>
+            {Platform.OS === 'web' ? (
+              <iframe
+                srcDoc={mapHtml}
+                style={styles.webMap}
+                title="Bản đồ định vị GPS"
+              />
+            ) : (
+              <WebView
+                originWhitelist={['*']}
+                source={{ html: mapHtml }}
+                style={styles.mobileMap}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+              />
+            )}
+          </View>
+          
+          <View style={styles.mapLegends}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+              <Text style={styles.legendText}>Cửa hàng</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+              <Text style={styles.legendText}>Bạn</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#FF6B00', borderRadius: 0, width: 14, height: 2, top: 4 }]} />
+              <Text style={styles.legendText}>Bán kính 100m</Text>
+            </View>
+          </View>
+
+          {/* Location Controls Row */}
+          <View style={styles.locationControlsRow}>
+            <TouchableOpacity
+              style={styles.gpsUpdateBtn}
+              onPress={getDeviceLocation}
+              disabled={loadingGPS}
+            >
+              {loadingGPS ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="location-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.locationBtnText}>📍 Cập Nhật Vị Trí GPS</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 3. If there is NO shift, show the empty info card below the map */}
         {!selectedShiftForCheckIn ? (
-          <View style={styles.emptyContainer}>
+          <View style={[styles.emptyContainer, { marginTop: 12 }]}>
             <View style={styles.emptyIconContainer}>
-              <Ionicons name="time-outline" size={64} color="#64748B" />
+              <Ionicons name="time-outline" size={54} color="#64748B" />
             </View>
             <Text style={styles.emptyText}>Hôm nay bạn chưa có ca làm nào được duyệt.</Text>
             <Text style={styles.emptySub}>Hãy ứng tuyển các ca làm việc gần bạn trên trang chủ và chờ chủ quán phê duyệt nhé!</Text>
           </View>
         ) : (
-          <View style={styles.checkInConsole}>
-            {/* Shift Brief Card */}
-            <View style={[styles.briefCard, theme.shadows.light]}>
-              <View style={styles.briefHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="storefront-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
-                  <Text style={styles.briefShop}>{selectedShiftForCheckIn.shopName}</Text>
-                </View>
-                {getShiftBadge()}
-              </View>
-              <Text style={styles.briefTitle}>{selectedShiftForCheckIn.title}</Text>
-              
-              <View style={styles.briefDivider} />
-              
-              <View style={styles.briefMetaRow}>
-                <View style={styles.briefMetaCol}>
-                  <Text style={styles.briefMetaLabel}>CA LÀM VIỆC</Text>
-                  <View style={styles.briefMetaValRow}>
-                    <Ionicons name="time-outline" size={14} color="#64748B" style={{ marginRight: 4 }} />
-                    <Text style={styles.briefMetaVal}>{selectedShiftForCheckIn.time}</Text>
-                  </View>
-                </View>
-                <View style={styles.briefMetaCol}>
-                  <Text style={styles.briefMetaLabel}>LƯƠNG ĐỀ XUẤT</Text>
-                  <View style={styles.briefMetaValRow}>
-                    <Ionicons name="cash-outline" size={14} color="#10B981" style={{ marginRight: 4 }} />
-                    <Text style={[styles.briefMetaVal, { color: '#10B981', fontWeight: 'bold' }]}>
-                      {(selectedShiftForCheckIn.hourlyRate || 0).toLocaleString('vi-VN')} đ/h
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Interactive Leaflet Map Card */}
-            <View style={[styles.mapCard, theme.shadows.light]}>
-              <View style={styles.mapHeader}>
-                <Ionicons name="map-outline" size={16} color="#FF6B00" style={{ marginRight: 6 }} />
-                <Text style={styles.mapCardTitle}>Định vị thực tế (Leaflet Map API)</Text>
-              </View>
-              
-              <View style={styles.mapOuterWrapper}>
-                {Platform.OS === 'web' ? (
-                  <iframe
-                    srcDoc={mapHtml}
-                    style={styles.webMap}
-                    title="Bản đồ định vị GPS"
-                  />
-                ) : (
-                  <WebView
-                    originWhitelist={['*']}
-                    source={{ html: mapHtml }}
-                    style={styles.mobileMap}
-                    javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                  />
-                )}
-              </View>
-              
-              <View style={styles.mapLegends}>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
-                  <Text style={styles.legendText}>Cửa hàng</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                  <Text style={styles.legendText}>Bạn</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#FF6B00', borderRadius: 0, width: 14, height: 2, top: 4 }]} />
-                  <Text style={styles.legendText}>Bán kính 100m</Text>
-                </View>
-              </View>
-
-              {/* Location Controls Row */}
-              <View style={styles.locationControlsRow}>
-                <TouchableOpacity
-                  style={styles.gpsUpdateBtn}
-                  onPress={getDeviceLocation}
-                  disabled={loadingGPS}
-                >
-                  {loadingGPS ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="location-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                      <Text style={styles.locationBtnText}>📍 Cập Nhật Vị Trí GPS</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-
+          /* 4. If there IS a shift, show GPS Radius Status Ring and the QR Actions button below the map */
+          <>
             {/* GPS Radius Status Ring */}
             <View style={styles.statusSection}>
               <View style={[
@@ -720,8 +755,7 @@ export default function StudentCheckIn() {
                 )}
               </View>
             </View>
-
-          </View>
+          </>
         )}
       </ScrollView>
 
@@ -903,6 +937,42 @@ export default function StudentCheckIn() {
               <Text style={styles.successOkBtnText}>Xác nhận & Đóng</Text>
             </TouchableOpacity>
           </Animated.View>
+        </View>
+      </Modal>
+
+      {/* Early Check-Out Warning Modal */}
+      <Modal
+        visible={showEarlyCheckOutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEarlyCheckOutModal(false)}
+      >
+        <View style={styles.successOverlay}>
+          <View style={styles.earlyCheckOutCard}>
+            <View style={styles.earlyHeaderCircle}>
+              <Ionicons name="time" size={40} color="#EF4444" />
+            </View>
+            <Text style={styles.earlyTitle}>Cảnh Báo Ra Sớm ⏰</Text>
+            <Text style={styles.earlyDescription}>
+              Bạn đang thực hiện ra ca sớm hơn giờ kết thúc ca làm việc dự kiến ({earlyCheckOutTimeStr}). Bạn có chắc chắn muốn kết thúc ca làm sớm không?
+            </Text>
+            <View style={styles.earlyButtonGroup}>
+              <TouchableOpacity
+                style={styles.earlyCancelBtn}
+                activeOpacity={0.8}
+                onPress={() => setShowEarlyCheckOutModal(false)}
+              >
+                <Text style={styles.earlyCancelBtnText}>Hủy bỏ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.earlyConfirmBtn}
+                activeOpacity={0.8}
+                onPress={confirmEarlyCheckOut}
+              >
+                <Text style={styles.earlyConfirmBtnText}>Xác nhận</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1292,7 +1362,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    marginTop: Platform.OS === 'ios' ? 0 : 20,
+    marginTop: Platform.OS === 'ios' ? 45 : 20,
   },
   scannerTitle: {
     color: '#FFF',
@@ -1549,6 +1619,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingBottom: 16,
+    marginTop: 12,
     gap: 8,
   },
   gpsUpdateBtn: {
@@ -1583,5 +1654,75 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  earlyCheckOutCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 320,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  earlyHeaderCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  earlyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  earlyDescription: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+  },
+  earlyButtonGroup: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  earlyCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  earlyCancelBtnText: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  earlyConfirmBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  earlyConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
