@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Check, X, Search, Filter, Eye, CreditCard } from "lucide-react";
 import { getAdminSession, formatCurrency, formatDateTime } from "./adminData";
+import { IDENTITY_API_URL } from "../apiConfig";
+
 
 export default function PaymentManagement() {
   const [orders, setOrders] = useState([]);
@@ -21,7 +23,7 @@ export default function PaymentManagement() {
         setError("Chưa đăng nhập admin hoặc phiên làm việc hết hạn.");
         return;
       }
-      const res = await fetch("http://localhost:5231/api/admin/payments", {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/payments`, {
         headers: {
           "Authorization": `Bearer ${session.token}`
         }
@@ -63,7 +65,7 @@ export default function PaymentManagement() {
       return;
     }
     try {
-      const res = await fetch(`http://localhost:5231/api/admin/payments/${selectedOrder.orderId}/confirm`, {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/payments/${selectedOrder.orderId}/confirm`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -91,7 +93,7 @@ export default function PaymentManagement() {
       return;
     }
     try {
-      const res = await fetch(`http://localhost:5231/api/admin/payments/${selectedOrder.orderId}/reject`, {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/payments/${selectedOrder.orderId}/reject`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

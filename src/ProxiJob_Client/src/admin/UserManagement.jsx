@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Search, Eye, UserX, UserCheck, Users, Plus, Edit2, Trash2, X } from "lucide-react";
 import { getAdminSession, formatDateTime } from "./adminData";
+import { IDENTITY_API_URL } from "../apiConfig";
+
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -30,7 +32,7 @@ export default function UserManagement() {
         setError("Chưa đăng nhập admin hoặc phiên làm việc hết hạn.");
         return;
       }
-      const res = await fetch("http://localhost:5231/api/admin/users", {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/users`, {
         headers: {
           "Authorization": `Bearer ${session.token}`
         }
@@ -58,7 +60,7 @@ export default function UserManagement() {
     if (!session?.token) return;
 
     try {
-      const res = await fetch("http://localhost:5231/api/admin/users", {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/users`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -85,7 +87,7 @@ export default function UserManagement() {
     if (!session?.token) return;
 
     try {
-      const res = await fetch(`http://localhost:5231/api/admin/users/${selectedUser.id}`, {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/users/${selectedUser.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -119,7 +121,7 @@ export default function UserManagement() {
     if (!session?.token) return;
 
     try {
-      const res = await fetch(`http://localhost:5231/api/admin/users/${userId}`, {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/users/${userId}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${session.token}`
@@ -141,7 +143,7 @@ export default function UserManagement() {
     if (!session?.token) return;
 
     try {
-      const res = await fetch(`http://localhost:5231/api/admin/users/${user.id}`, {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/users/${user.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

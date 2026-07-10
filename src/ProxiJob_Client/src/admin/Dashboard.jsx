@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Users, Briefcase, CreditCard, DollarSign, Calendar, TrendingUp } from "lucide-react";
 import { getAdminSession, formatCurrency } from "./adminData";
+import { IDENTITY_API_URL, JOB_API_URL } from "../apiConfig";
+
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -31,7 +33,7 @@ export default function Dashboard() {
 
       // Fetch users from Identity Service
       try {
-        const res = await fetch("http://localhost:5231/api/admin/users", {
+        const res = await fetch(`${IDENTITY_API_URL}/admin/users`, {
           headers: { "Authorization": `Bearer ${session.token}` }
         });
         if (res.ok) {
@@ -47,7 +49,7 @@ export default function Dashboard() {
 
       // Fetch jobs from Job Service
       try {
-        const res = await fetch("http://localhost:5021/api/admin/jobs");
+        const res = await fetch(`${JOB_API_URL}/admin/jobs`);
         if (res.ok) {
           const jobs = await res.json();
           setRawJobs(jobs || []);
@@ -60,7 +62,7 @@ export default function Dashboard() {
 
       // Fetch payments from Identity Service
       try {
-        const res = await fetch("http://localhost:5231/api/admin/payments", {
+        const res = await fetch(`${IDENTITY_API_URL}/admin/payments`, {
           headers: { "Authorization": `Bearer ${session.token}` }
         });
         if (res.ok) {
