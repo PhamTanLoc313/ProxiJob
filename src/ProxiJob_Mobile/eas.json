@@ -18,6 +18,15 @@
         "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_1btZMmp5iHdaV3cGWuZwKw_TCK0vWf0"
       }
     },
-    "production": {}
+    "production": {
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.proxijob.io.vn/api",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://jjruquhoqcwcmogpfvhf.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_1btZMmp5iHdaV3cGWuZwKw_TCK0vWf0"
+      }
+    }
   }
 }

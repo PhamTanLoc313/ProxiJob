@@ -190,6 +190,66 @@ namespace ProxiJob.Identity.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Google OAuth callback endpoint.
+        /// Google redirects here after user authenticates. Since the id_token arrives in the
+        /// URL fragment (#), we serve a small HTML page that reads the fragment client-side
+        /// and redirects to the mobile app's custom scheme (proxijob://).
+        /// This removes the dependency on Expo auth proxy (auth.expo.io).
+        /// </summary>
+        [HttpGet("google-callback")]
+        [AllowAnonymous]
+        public IActionResult GoogleCallback()
+        {
+            var html = @"<!DOCTYPE html>
+<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>ProxiJob - Đang chuyển hướng...</title>
+<style>
+body{font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f8fafc;color:#334155}
+.container{text-align:center;padding:2rem}
+.spinner{width:40px;height:40px;border:4px solid #e2e8f0;border-top:4px solid #3b82f6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style></head><body>
+<div class='container'>
+<div class='spinner'></div>
+<p>Đang chuyển hướng về ProxiJob...</p>
+<p id='error' style='color:#ef4444;display:none'></p>
+</div>
+<script>
+(function(){
+  try {
+    var hash = window.location.hash.substring(1);
+    var params = new URLSearchParams(hash);
+    var idToken = params.get('id_token');
+    var accessToken = params.get('access_token');
+    var token = idToken || accessToken;
+    if (token) {
+      window.location.href = 'proxijob://google-callback?id_token=' + encodeURIComponent(token);
+      setTimeout(function(){
+        document.getElementById('error').style.display='block';
+        document.getElementById('error').textContent='Nếu không tự chuyển, vui lòng mở lại ứng dụng ProxiJob.';
+      }, 3000);
+    } else {
+      // Check query params as fallback (authorization code flow)
+      var qp = new URLSearchParams(window.location.search);
+      var error = qp.get('error');
+      if (error) {
+        document.getElementById('error').style.display='block';
+        document.getElementById('error').textContent='Đăng nhập thất bại: ' + (qp.get('error_description') || error);
+      } else {
+        document.getElementById('error').style.display='block';
+        document.getElementById('error').textContent='Không nhận được token từ Google. Vui lòng thử lại.';
+      }
+    }
+  } catch(e) {
+    document.getElementById('error').style.display='block';
+    document.getElementById('error').textContent='Lỗi: ' + e.message;
+  }
+})();
+</script></body></html>";
+            return Content(html, "text/html");
+        }
+
         /// <summary>Seed test accounts dynamically for plan and logic testing</summary>
         [HttpGet("seed-test-accounts")]
         [AllowAnonymous]
