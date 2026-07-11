@@ -10,7 +10,7 @@ import Constants from 'expo-constants';
 // ============================================
 
 const PRODUCTION_API_BASE_URL = 'https://api.proxijob.io.vn/api';
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+const isDev = false; // Tạm thời set false để test kết nối trực tiếp qua VPS online
 
 const getHostIp = () => {
   if (isDev && Platform.OS !== 'web') {
