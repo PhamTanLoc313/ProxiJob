@@ -18,12 +18,7 @@ import { theme } from '../styles/theme';
 import { AppContext } from '../context/AppContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri } from 'expo-auth-session';
 import * as Linking from 'expo-linking';
-import { WebView } from 'react-native-webview';
-
-WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { login, loginWithGoogle, navigateTo, authLoading, showToast } = useContext(AppContext);
@@ -36,35 +31,12 @@ export default function LoginScreen() {
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedGoogleRole, setSelectedGoogleRole] = useState(null);
 
+  // Google OAuth Client ID (Web Application type - cần cho cả native SDK lẫn browser flow)
+  const GOOGLE_WEB_CLIENT_ID = '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com';
 
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
-    iosClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
-    webClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
-    useProxy: true,
-    redirectUri: makeRedirectUri({
-      useProxy: true
-    })
-  });
-
-  React.useEffect(() => {
-    if (response?.type === 'success') {
-      const { idToken } = response.authentication || response.params || {};
-      const actualToken = idToken || response.authentication?.idToken;
-      if (actualToken && selectedGoogleRole) {
-        console.log('[LoginScreen] Browser Google Login success. Token resolved.');
-        loginWithGoogle(actualToken, selectedGoogleRole);
-      } else {
-        console.log('[LoginScreen] Browser Google Login success, but token not found in response details.', response);
-        // Fallback to access_token if no idToken is present (some web configs)
-        const tokenVal = response.authentication?.accessToken || response.params?.access_token;
-        if (tokenVal) {
-          loginWithGoogle(tokenVal, selectedGoogleRole);
-        }
-      }
-    }
-  }, [response]);
+  // Backend callback URL - LUÔN dùng production URL vì Google redirect browser đến đây
+  // (URL này phải public và đã đăng ký trên Google Console)
+  const GOOGLE_REDIRECT_URI = 'https://api.proxijob.io.vn/api/auth/google-callback';
 
 
 
@@ -114,10 +86,12 @@ export default function LoginScreen() {
     setSelectedGoogleRole(role);
 
     // =========================================================================
-    // --- GOOGLE SIGN-IN INTEGRATION FLOW ---
-    // Client ID: 761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com
+    // --- GOOGLE SIGN-IN FLOW (PRODUCTION - KHÔNG QUA BÊN THỨ 3) ---
+    // 1. Ưu tiên: Native Google Sign-In SDK (nhanh nhất, UX tốt nhất)
+    // 2. Fallback: WebBrowser → Backend callback → Custom scheme redirect
     // =========================================================================
     try {
+      // === BƯỚC 1: Thử Native Google Sign-In (cho production APK) ===
       try {
         const Constants = require('expo-constants').default;
         const isExpoGo = Constants?.appOwnership === 'expo';
@@ -127,7 +101,7 @@ export default function LoginScreen() {
           if (NativeModules.RNGoogleSignin) {
             const { GoogleSignin } = require('@react-native-google-signin/google-signin');
             GoogleSignin.configure({
-              webClientId: '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com',
+              webClientId: GOOGLE_WEB_CLIENT_ID,
               offlineAccess: true
             });
 
@@ -135,7 +109,7 @@ export default function LoginScreen() {
             const userInfo = await GoogleSignin.signIn();
             const idToken = userInfo.idToken || userInfo.data?.idToken;
             if (idToken) {
-              console.log('[LoginScreen] Native Google Sign-In success.');
+              console.log('[LoginScreen] ✅ Native Google Sign-In success.');
               await loginWithGoogle(idToken, role);
               return;
             }
@@ -143,49 +117,57 @@ export default function LoginScreen() {
             console.log('[LoginScreen] Native RNGoogleSignin module not present in this build.');
           }
         } else {
-          console.log('[LoginScreen] Running inside Expo Go. Bypassing native Google Sign-In to prevent crash.');
+          console.log('[LoginScreen] Running inside Expo Go. Bypassing native Google Sign-In.');
         }
       } catch (nativeErr) {
-        console.log('[LoginScreen] Native GoogleSignin check failed. Falling back to browser AuthSession...', nativeErr.message);
+        console.log('[LoginScreen] Native GoogleSignin failed, falling back to WebBrowser...', nativeErr.message);
       }
 
-      // 2. Secure WebBrowser-based Google Login for Expo Go (shares system browser session and is safe)
+      // === BƯỚC 2: Fallback - WebBrowser trực tiếp (KHÔNG qua Expo proxy) ===
+      // Luồng: Browser → Google OAuth → redirect về backend → backend redirect về proxijob://
       showToast('Đang mở đăng nhập Google...', 'info');
 
-      const expoProxyUrl = makeRedirectUri({ useProxy: true });
+      const nonce = `nonce_${Date.now()}_${Math.random().toString(36).substring(2)}`;
       const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com` +
-        `&redirect_uri=${encodeURIComponent(expoProxyUrl)}` +
+        `client_id=${GOOGLE_WEB_CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(GOOGLE_REDIRECT_URI)}` +
         `&response_type=id_token` +
         `&scope=openid%20profile%20email` +
-        `&nonce=nonce_${Math.random().toString(36).substring(2)}`;
+        `&nonce=${nonce}`;
 
-      console.log('[LoginScreen] Opening Google Login in secure WebBrowser:', googleAuthUrl);
-      
-      const authResult = await WebBrowser.openAuthSessionAsync(googleAuthUrl, expoProxyUrl);
-      
+      console.log('[LoginScreen] Opening Google Login via WebBrowser (no proxy):', googleAuthUrl);
+
+      // Lắng nghe redirect về custom scheme proxijob://google-callback
+      const authResult = await WebBrowser.openAuthSessionAsync(
+        googleAuthUrl,
+        'proxijob://google-callback'
+      );
+
       if (authResult.type === 'success' && authResult.url) {
         const redirectUrl = authResult.url;
-        console.log('[LoginScreen] WebBrowser OAuth resolved URL:', redirectUrl);
-        
-        // Extract parameters from fragment (#) or query (?)
-        const paramsStr = redirectUrl.split('#')[1] || redirectUrl.split('?')[1] || '';
-        const params = new URLSearchParams(paramsStr);
-        const idToken = params.get('id_token') || params.get('credential');
-        
+        console.log('[LoginScreen] WebBrowser redirect captured:', redirectUrl);
+
+        // Parse token từ URL: proxijob://google-callback?id_token=xxx
+        const urlParts = redirectUrl.split('?');
+        const queryStr = urlParts[1] || '';
+        const params = new URLSearchParams(queryStr);
+        const idToken = params.get('id_token');
+
         if (idToken) {
-          console.log('[LoginScreen] WebBrowser OAuth resolved token successfully.');
+          console.log('[LoginScreen] ✅ WebBrowser OAuth token resolved successfully.');
           showToast('Đăng nhập Google thành công!', 'success');
           await loginWithGoogle(idToken, role);
         } else {
-          console.log('[LoginScreen] Token not found in WebBrowser redirect URL:', redirectUrl);
-          showToast('Không lấy được token từ Google.', 'error');
+          console.log('[LoginScreen] Token not found in redirect URL:', redirectUrl);
+          showToast('Không lấy được token từ Google. Vui lòng thử lại.', 'error');
         }
+      } else if (authResult.type === 'cancel') {
+        console.log('[LoginScreen] User cancelled Google login.');
       } else {
-        console.log('[LoginScreen] WebBrowser authentication cancelled or failed:', authResult);
+        console.log('[LoginScreen] WebBrowser auth result:', authResult);
       }
     } catch (err) {
-      console.log('Google Sign-in failed', err);
+      console.log('[LoginScreen] Google Sign-in failed:', err);
       showToast(err.message || 'Đăng nhập bằng Google thất bại.', 'error');
     }
   };

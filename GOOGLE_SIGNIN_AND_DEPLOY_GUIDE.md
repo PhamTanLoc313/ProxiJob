@@ -1,71 +1,182 @@
-# HƯỚNG DẪN CẤP NHẬT CẤU HÌNH & BẢO MẬT ĐĂNG NHẬP GOOGLE
+# HƯỚNG DẪN CẤU HÌNH GOOGLE SIGN-IN CHO PRODUCTION
 
-Tài liệu này tổng hợp lại các công việc bạn đã thực hiện sửa đổi trong mã nguồn và hướng dẫn cụ thể những việc người bạn (chủ sở hữu tài khoản Google API) cần làm để hoàn tất việc sửa lỗi đăng nhập bằng Google trên file APK.
-
----
-
-## PHẦN 1: Những thay đổi bạn đã thực hiện trong Code (Local)
-
-### 1. Cấu hình Backend (Identity API)
-* **File chỉnh sửa:** [src/Identity/ProxiJob.Identity.API/appsettings.json](file:///d:/ProxiJob/src/Identity/ProxiJob.Identity.API/appsettings.json)
-* **Nội dung:** Đã tích hợp cụm cấu hình gửi mail `SmtpSettings` (Gmail và mật khẩu ứng dụng) mà bạn cung cấp.
-* **Mục đích:** Sửa lỗi không gửi được mail OTP khi người dùng chọn tính năng **Quên mật khẩu**.
-
-### 2. Sửa bảo mật Google Login (Mobile App)
-* **File chỉnh sửa:** [src/ProxiJob_Mobile/src/screens/LoginScreen.js](file:///d:/ProxiJob/src/ProxiJob_Mobile/src/screens/LoginScreen.js)
-* **Nội dung:** 
-  * Thay thế WebView nhúng (kém bảo mật, bắt nhập mật khẩu và bị Google chặn) bằng trình duyệt **WebBrowser bảo mật của hệ thống** (`expo-web-browser`).
-  * Sửa lỗi hardcode địa chỉ redirect của Expo từ `@anonymous/ProxiJob_Mobile` thành lệnh gọi động `makeRedirectUri({ useProxy: true })` để lấy đúng thông tin dự án thực tế (`@proxijob-team/proxijob-mobile`).
-* **Mục đích:** Khi chạy ở bản APK (hoặc bản thử nghiệm), nếu phát sinh lỗi native nó sẽ nhảy sang trình duyệt hệ thống và tự động nhận diện tài khoản Google có sẵn trên máy để đăng nhập luôn, đảm bảo an toàn tuyệt đối.
+Tài liệu này hướng dẫn cấu hình đăng nhập Google trên mobile app ProxiJob cho bản **production** (APK).
 
 ---
 
-## PHẦN 2: Việc người bạn (Chủ tài khoản Google API) cần làm
+## TỔNG QUAN KIẾN TRÚC (Đã cập nhật - KHÔNG còn dùng Expo Proxy)
 
-Do mã Client ID Google `761339432164-...` được tạo bằng tài khoản Google của bạn của bạn, bạn cần gửi cho họ yêu cầu sau để họ thêm cấu hình:
+```
+[Mobile App] → [System Browser] → [Google OAuth]
+                                        ↓
+                              redirect_uri = https://api.proxijob.io.vn/api/auth/google-callback
+                                        ↓
+                              [Backend HTML page đọc #id_token]
+                                        ↓
+                              redirect → proxijob://google-callback?id_token=xxx
+                                        ↓
+                              [App nhận token → gửi POST /api/auth/google]
+```
 
-### ✉️ Nội dung gửi cho bạn của bạn:
-> "Cậu truy cập vào trang quản trị **[Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials)** của dự án ProxiJob và thêm cấu hình này giúp tớ nhé:
->
-> 1. Bấm nút **Create Credentials** ở trên cùng -> Chọn **OAuth client ID**.
-> 2. Chọn **Application type** là **Android**.
-> 3. Điền các thông tin sau:
->    * **Package name (Tên gói):** `vn.io.proxijob`
->    * **SHA-1 certificate fingerprint (Mã vân tay SHA-1):** `4E:94:5F:88:A9:E4:2D:1E:6E:3E:0F:34:30:28:F9:09:C6:0B:F5:AE`
-> 4. Nhấn **Create** để lưu lại.
->
-> *(Lưu ý: Không cần build lại app hay sửa code nữa, chỉ cần thêm mã này trên web Google Console là bản APK của tớ ở điện thoại sẽ tự động đăng nhập Google mượt mà luôn)*"
+**KHÔNG CÒN** phụ thuộc vào `auth.expo.io` (Expo proxy bên thứ 3).
 
 ---
 
-## PHẦN 3: Quy trình nén và Deploy bản mới lên VPS của bạn
+## PHẦN 1: Thay đổi trong Code (Đã thực hiện)
 
-Sau khi bạn của bạn đã cấu hình xong trên Google Console, và bạn đã có file APK mới nhất copy vào thư mục [src/ProxiJob_LandingPage/public/Proxijob_version1.apk](file:///d:/ProxiJob/src/ProxiJob_LandingPage/public/Proxijob_version1.apk):
+### 1. Mobile - LoginScreen.js
+* **File:** [LoginScreen.js](file:///d:/Proxijob/src/ProxiJob_Mobile/src/screens/LoginScreen.js)
+* **Đã bỏ:**
+  - `expo-auth-session` (proxy `useProxy: true`)
+  - `makeRedirectUri({ useProxy: true })` → không còn redirect qua `auth.expo.io`
+  - `Google.useAuthRequest` hook
+  - Import `react-native-webview` (không cần WebView)
+* **Giữ lại:**
+  - `expo-web-browser` (`WebBrowser.openAuthSessionAsync`) cho fallback browser flow
+  - `@react-native-google-signin/google-signin` cho native sign-in (ưu tiên #1)
 
-### Bước 1: Thực hiện tại PowerShell máy Local (Windows)
+### 2. Backend - AuthController.cs  
+* **File:** [AuthController.cs](file:///d:/Proxijob/src/Identity/ProxiJob.Identity.API/Controllers/AuthController.cs)
+* **Thêm mới:** Endpoint `GET /api/auth/google-callback`
+  - Nhận redirect từ Google OAuth (id_token ở URL fragment)
+  - Serve HTML page đọc fragment và redirect về `proxijob://google-callback?id_token=xxx`
+  - Mobile app bắt redirect này và lấy token
+
+### 3. EAS Build Config
+* **File:** [eas.json](file:///d:/Proxijob/src/ProxiJob_Mobile/eas.json)
+* **Thêm:** Profile `production` với `buildType: "apk"` và env variables
+
+---
+
+## PHẦN 2: Cấu hình Google Cloud Console (BẠN CẦN LÀM)
+
+### Bước 1: Kiểm tra OAuth Client ID hiện tại
+
+1. Truy cập [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials)
+2. Tìm Client ID: `761339432164-gth4e77gocarke99gj3vk38ti5bkcull`
+3. Kiểm tra **Application type** của nó (Web / Android / iOS)
+
+### Bước 2: Cấu hình theo loại Client ID
+
+#### Nếu Client ID hiện tại là loại **"Web application"**:
+- Vào phần **Authorized redirect URIs**
+- Thêm: `https://api.proxijob.io.vn/api/auth/google-callback`
+- Nhấn **Save**
+
+#### Nếu Client ID hiện tại là loại **"Android"**:
+- Bạn cần tạo thêm 1 **Web application** Client ID:
+  1. Bấm **Create Credentials** → **OAuth client ID**
+  2. Chọn **Application type** = **Web application**
+  3. Đặt tên: `ProxiJob Web (for mobile OAuth)`
+  4. Thêm **Authorized redirect URIs**: `https://api.proxijob.io.vn/api/auth/google-callback`
+  5. Nhấn **Create**
+  6. **Copy Client ID mới** và gửi lại cho tôi để update trong code
+
+### Bước 3: Tạo Android OAuth Client ID (cho Native Sign-In)
+
+Tạo thêm 1 OAuth Client ID loại **Android** (nếu chưa có):
+1. Bấm **Create Credentials** → **OAuth client ID**
+2. Chọn **Application type** = **Android**
+3. Điền:
+   - **Package name:** `vn.io.proxijob`
+   - **SHA-1 certificate fingerprint (Debug):** `E4:A9:49:03:47:36:C6:13:46:F6:2A:6C:BF:47:69:69:AC:B2:C7:72`
+4. Nhấn **Create**
+
+> **LƯU Ý:** SHA-1 ở trên là từ **debug keystore** của máy local. Khi build production qua EAS, cần thêm SHA-1 của **production keystore** nữa (xem Phần 3).
+
+---
+
+## PHẦN 3: Lấy SHA-1 Production (cho EAS Build)
+
+### Cách 1: Từ EAS CLI (đề xuất)
 ```powershell
-# 1. Di chuyển vào thư mục dự án
+cd d:\Proxijob\src\ProxiJob_Mobile
+
+# Đăng nhập EAS (nếu chưa)
+npx eas-cli login
+
+# Xem credentials (sẽ hiển thị SHA-1 production keystore)
+npx eas-cli credentials -p android
+```
+
+### Cách 2: Từ file APK đã build
+```powershell
+# Nếu đã có file APK, dùng apksigner:
+& "$env:LOCALAPPDATA\Android\Sdk\build-tools\34.0.0\apksigner.bat" verify --print-certs .\Proxijob_version1.apk 2>&1 | Select-String "SHA-1"
+```
+
+### Cách 3: Build production rồi xem
+```powershell
+# Build production APK
+npx eas-cli build -p android --profile production
+
+# Sau khi build xong, xem SHA-1
+npx eas-cli credentials -p android
+```
+
+**Sau khi có SHA-1 production**, vào Google Console → Android Client ID → thêm SHA-1 mới.
+
+---
+
+## PHẦN 4: Test Production
+
+### Build APK Production
+```powershell
+cd d:\Proxijob\src\ProxiJob_Mobile
+npx eas-cli build -p android --profile production
+```
+
+### Kiểm tra luồng đăng nhập
+1. Cài APK production lên điện thoại
+2. Bấm **"Tiếp tục với Google"**
+3. Chọn vai trò (Sinh viên / Chủ quán)
+4. Browser hệ thống mở ra → Chọn tài khoản Google
+5. Tự redirect về app → Đăng nhập thành công
+
+### Checklist xác nhận
+- [ ] Không có redirect qua `auth.expo.io`
+- [ ] Browser mở trực tiếp Google OAuth
+- [ ] Redirect về `https://api.proxijob.io.vn/api/auth/google-callback`
+- [ ] Tự chuyển về app ProxiJob (scheme `proxijob://`)
+- [ ] Token gửi lên backend thành công
+- [ ] User được tạo/đăng nhập đúng vai trò
+
+---
+
+## PHẦN 5: Deploy lên VPS
+
+### Bước 1: Nén và gửi lên VPS
+```powershell
 cd d:\ProxiJob
 
-# 2. Nén toàn bộ mã nguồn sạch (đã loại bỏ thư mục rác)
+# Nén mã nguồn
 tar --exclude="node_modules" --exclude="bin" --exclude="obj" --exclude=".git" -czf ProxiJob.tar.gz src deploy docker-compose.yml .env
 
-# 3. Gửi file nén lên VPS qua SCP (Nhập mật khẩu VPS của bạn)
+# Gửi lên VPS
 scp ProxiJob.tar.gz root@180.93.59.204:/root/ProxiJob/
 ```
 
-### Bước 2: Thực hiện trên VPS (Linux)
+### Bước 2: Deploy trên VPS
 ```bash
-# 1. Đăng nhập SSH vào VPS
 ssh root@180.93.59.204
-
-# 2. Di chuyển vào thư mục dự án
 cd /root/ProxiJob
-
-# 3. Giải nén đè file mới
 tar -xzf ProxiJob.tar.gz
 
-# 4. Deploy lại Landing Page để đưa file APK mới lên trang web
+# Deploy Identity API (để endpoint google-callback hoạt động)
+chmod +x deploy/deploy_identity.sh
+./deploy/deploy_identity.sh
+
+# Deploy Landing Page (để cập nhật APK mới)
 chmod +x deploy/deploy_landing.sh
 ./deploy/deploy_landing.sh
 ```
+
+---
+
+## THÔNG TIN SHA-1
+
+| Loại | SHA-1 | Ghi chú |
+|------|-------|---------|
+| **Debug keystore** | `E4:A9:49:03:47:36:C6:13:46:F6:2A:6C:BF:47:69:69:AC:B2:C7:72` | Máy local (Windows) |
+| **Production (EAS)** | _Cần chạy `eas credentials`_ | Keystore do EAS quản lý |
+| **SHA-1 cũ (guide cũ)** | `4E:94:5F:88:A9:E4:2D:1E:6E:3E:0F:34:30:28:F9:09:C6:0B:F5:AE` | ⚠️ Không dùng nữa |
