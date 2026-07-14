@@ -21,7 +21,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
 export default function LoginScreen() {
-  const { login, loginWithGoogle, navigateTo, authLoading, showToast } = useContext(AppContext);
+  const { login, loginWithGoogle, loginWithSession, navigateTo, authLoading, showToast } = useContext(AppContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isEmailFocused, setIsEmailFocused] = useState(false);
@@ -86,89 +86,173 @@ export default function LoginScreen() {
     setSelectedGoogleRole(role);
 
     // =========================================================================
-    // --- GOOGLE SIGN-IN FLOW (PRODUCTION - KHÔNG QUA BÊN THỨ 3) ---
-    // 1. Ưu tiên: Native Google Sign-In SDK (nhanh nhất, UX tốt nhất)
-    // 2. Fallback: WebBrowser → Backend callback → Custom scheme redirect
+    // --- GOOGLE SIGN-IN: SERVER-SIDE FLOW ---
+    // App mở URL backend → Backend redirect tới Google → Google xác thực →
+    // Backend nhận code, đổi lấy token, tạo user/profile, phát hành JWT →
+    // Backend redirect về proxijob://auth-callback?token=xxx&refreshToken=yyy →
+    // App bắt redirect, lưu session, chuyển đến Dashboard.
     // =========================================================================
     try {
-      // === BƯỚC 1: Thử Native Google Sign-In (cho production APK) ===
-      try {
-        const Constants = require('expo-constants').default;
-        const isExpoGo = Constants?.appOwnership === 'expo';
+      showToast('Đang kết nối cổng xác thực Google...', 'info');
 
-        if (!isExpoGo) {
-          const { NativeModules } = require('react-native');
-          if (NativeModules.RNGoogleSignin) {
-            const { GoogleSignin } = require('@react-native-google-signin/google-signin');
-            GoogleSignin.configure({
-              webClientId: GOOGLE_WEB_CLIENT_ID,
-              offlineAccess: true
-            });
+      // Mở browser đến backend endpoint - backend sẽ redirect tới Google
+      const backendLoginUrl = `https://api.proxijob.io.vn/api/auth/google-login?role=${encodeURIComponent(role)}`;
+      
+      console.log('[LoginScreen] Opening server-side Google login:', backendLoginUrl);
 
-            await GoogleSignin.hasPlayServices();
-            const userInfo = await GoogleSignin.signIn();
-            const idToken = userInfo.idToken || userInfo.data?.idToken;
-            if (idToken) {
-              console.log('[LoginScreen] ✅ Native Google Sign-In success.');
-              await loginWithGoogle(idToken, role);
-              return;
+      let token = null;
+      let refreshToken = null;
+
+      if (Platform.OS === 'web') {
+        // === WEB: Use window.open + postMessage ===
+        console.log('[LoginScreen] Web platform detected, using postMessage flow');
+        
+        const authData = await new Promise((resolve) => {
+          const handler = (event) => {
+            console.log('[LoginScreen] postMessage received:', event.data?.type);
+            if (event.data?.type === 'proxijob-google-auth') {
+              window.removeEventListener('message', handler);
+              resolve(event.data);
+            } else if (event.data?.type === 'proxijob-google-auth-error') {
+              window.removeEventListener('message', handler);
+              resolve({ error: decodeURIComponent(event.data.message || '') });
             }
-          } else {
-            console.log('[LoginScreen] Native RNGoogleSignin module not present in this build.');
-          }
-        } else {
-          console.log('[LoginScreen] Running inside Expo Go. Bypassing native Google Sign-In.');
+          };
+          window.addEventListener('message', handler);
+          
+          // Open popup
+          const popup = window.open(backendLoginUrl, 'google-login', 'width=500,height=700,left=200,top=100');
+          
+          // Fallback timeout (5 min)
+          setTimeout(() => {
+            window.removeEventListener('message', handler);
+            resolve(null);
+          }, 300000);
+
+          // Poll for popup close (user cancelled)
+          const pollClose = setInterval(() => {
+            try {
+              if (popup && popup.closed) {
+                clearInterval(pollClose);
+                window.removeEventListener('message', handler);
+                resolve(null);
+              }
+            } catch (e) { /* COOP may block this, ignore */ }
+          }, 1000);
+        });
+        
+        if (!authData) {
+          console.log('[LoginScreen] Web Google login cancelled or timed out');
+          showToast('Đăng nhập Google đã bị hủy hoặc hết thời gian.', 'info');
+          return;
         }
-      } catch (nativeErr) {
-        console.log('[LoginScreen] Native GoogleSignin failed, falling back to WebBrowser...', nativeErr.message);
-      }
 
-      // === BƯỚC 2: Fallback - WebBrowser trực tiếp (KHÔNG qua Expo proxy) ===
-      // Luồng: Browser → Google OAuth → redirect về backend → backend redirect về proxijob://
-      showToast('Đang mở đăng nhập Google...', 'info');
+        if (authData.error) {
+          console.log('[LoginScreen] Web Google login error:', authData.error);
+          showToast(`Lỗi: ${authData.error}`, 'error');
+          return;
+        }
+        
+        token = authData.token ? decodeURIComponent(authData.token) : null;
+        refreshToken = authData.refreshToken ? decodeURIComponent(authData.refreshToken) : null;
+        console.log('[LoginScreen] Web postMessage token received:', !!token);
+        
+      } else {
+        // === MOBILE: Use WebBrowser.openAuthSessionAsync ===
+        const authResult = await WebBrowser.openAuthSessionAsync(
+          backendLoginUrl,
+          'proxijob://auth-callback'
+        );
 
-      const nonce = `nonce_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-      const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${GOOGLE_WEB_CLIENT_ID}` +
-        `&redirect_uri=${encodeURIComponent(GOOGLE_REDIRECT_URI)}` +
-        `&response_type=id_token` +
-        `&scope=openid%20profile%20email` +
-        `&nonce=${nonce}`;
+        console.log('[LoginScreen] WebBrowser result type:', authResult.type);
+        console.log('[LoginScreen] WebBrowser result url:', authResult.url || 'N/A');
 
-      console.log('[LoginScreen] Opening Google Login via WebBrowser (no proxy):', googleAuthUrl);
+        if (authResult.type === 'cancel') {
+          console.log('[LoginScreen] User cancelled Google login.');
+          showToast('Bạn đã hủy đăng nhập bằng Google.', 'info');
+          return;
+        }
 
-      // Lắng nghe redirect về custom scheme proxijob://google-callback
-      const authResult = await WebBrowser.openAuthSessionAsync(
-        googleAuthUrl,
-        'proxijob://google-callback'
-      );
+        if (authResult.type !== 'success' || !authResult.url) {
+          console.log('[LoginScreen] Unexpected auth result:', JSON.stringify(authResult));
+          showToast('Có lỗi xảy ra khi xác thực Google. Vui lòng thử lại.', 'error');
+          return;
+        }
 
-      if (authResult.type === 'success' && authResult.url) {
         const redirectUrl = authResult.url;
-        console.log('[LoginScreen] WebBrowser redirect captured:', redirectUrl);
+        console.log('[LoginScreen] Auth callback URL captured:', redirectUrl);
 
-        // Parse token từ URL: proxijob://google-callback?id_token=xxx
+        if (redirectUrl.includes('auth-error')) {
+          const errParts = redirectUrl.split('?');
+          const errQuery = errParts[1] || '';
+          const errPairs = errQuery.split('&');
+          let errorMsg = 'Xác thực tài khoản Google thất bại.';
+          for (const p of errPairs) {
+            const [k, v] = p.split('=');
+            if (k === 'message') errorMsg = decodeURIComponent(v || '');
+          }
+          showToast(`Lỗi: ${errorMsg}`, 'error');
+          return;
+        }
+
+        // Parse JWT tokens from URL safely (handle = in JWT base64)
         const urlParts = redirectUrl.split('?');
         const queryStr = urlParts[1] || '';
-        const params = new URLSearchParams(queryStr);
-        const idToken = params.get('id_token');
-
-        if (idToken) {
-          console.log('[LoginScreen] ✅ WebBrowser OAuth token resolved successfully.');
-          showToast('Đăng nhập Google thành công!', 'success');
-          await loginWithGoogle(idToken, role);
-        } else {
-          console.log('[LoginScreen] Token not found in redirect URL:', redirectUrl);
-          showToast('Không lấy được token từ Google. Vui lòng thử lại.', 'error');
+        const pairs = queryStr.split('&');
+        
+        for (const pair of pairs) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = pair.substring(0, eqIdx);
+          const val = pair.substring(eqIdx + 1);
+          if (key === 'token') token = decodeURIComponent(val || '');
+          if (key === 'refreshToken') refreshToken = decodeURIComponent(val || '');
         }
-      } else if (authResult.type === 'cancel') {
-        console.log('[LoginScreen] User cancelled Google login.');
+      }
+
+      // === COMMON: Process token (both web and mobile) ===
+      if (token) {
+        console.log('[LoginScreen] ✅ Server-side Google login success! JWT received.');
+        console.log('[LoginScreen] Token length:', token.length);
+        
+        // Decode JWT to get user info
+        const { decodeJwt } = require('../api/auth');
+        const decoded = decodeJwt(token);
+        console.log('[LoginScreen] Decoded JWT payload:', JSON.stringify(decoded));
+
+        if (!decoded) {
+          console.log('[LoginScreen] ❌ Failed to decode JWT token!');
+          showToast('Lỗi giải mã token. Vui lòng thử lại.', 'error');
+          return;
+        }
+
+        const rawRole = decoded['role'] || decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || '';
+        const roleStr = (Array.isArray(rawRole) ? rawRole[0] : rawRole).toString();
+        const mappedRole = roleStr.toLowerCase() === 'student' ? 'student' : 'employer';
+        const userId = parseInt(decoded.sub || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] || 1, 10);
+        const subTier = decoded['subscription_tier'] || 'Free';
+        const avatarUrl = decoded['avatar_url'] || '';
+
+        const user = {
+          id: userId,
+          email: decoded.email || '',
+          name: decoded.name || decoded.unique_name || (mappedRole === 'student' ? 'Sinh viên Google' : 'Chủ quán Google'),
+          role: mappedRole,
+          subscriptionTier: subTier,
+          avatarUrl: avatarUrl,
+        };
+
+        console.log('[LoginScreen] User object:', JSON.stringify(user));
+        showToast(`Đăng nhập thành công! Chào mừng ${user.name}.`, 'success');
+        await loginWithSession(token, refreshToken || '', user);
+        console.log('[LoginScreen] ✅ loginWithSession completed successfully!');
       } else {
-        console.log('[LoginScreen] WebBrowser auth result:', authResult);
+        console.log('[LoginScreen] ❌ Token not found in callback!');
+        showToast('Không nhận được token đăng nhập từ máy chủ. Vui lòng thử lại.', 'error');
       }
     } catch (err) {
       console.log('[LoginScreen] Google Sign-in failed:', err);
-      showToast(err.message || 'Đăng nhập bằng Google thất bại.', 'error');
+      showToast(`Đăng nhập Google thất bại: ${err.message || 'Lỗi kết nối mạng'}`, 'error');
     }
   };
 

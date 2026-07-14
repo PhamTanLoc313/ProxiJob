@@ -168,6 +168,37 @@ export const useAuth = ({
     }
   }, [showToast, addNotification]);
 
+  // Login with pre-authenticated JWT (used by server-side Google OAuth flow)
+  // The backend already processed Google auth, created user/profile, and issued JWT.
+  // This function just saves session and navigates - NO API call needed.
+  const loginWithSession = useCallback(async (token, refreshToken, userInfo) => {
+    try {
+      setAuthLoading(true);
+      await saveAuthSession(token, refreshToken, userInfo);
+      setUser(userInfo);
+
+      const userRole = userInfo?.role || 'student';
+      const mappedRoleValue = userRole === 'student' ? 0 : 1;
+      setSelectedRole(mappedRoleValue);
+
+      if (userRole === 'student') {
+        setCurrentScreenRef.current?.('student_dashboard');
+        setNavigationStackRef.current?.(['student_dashboard']);
+      } else {
+        setCurrentScreenRef.current?.('employer_approvals');
+        setNavigationStackRef.current?.(['employer_approvals']);
+      }
+
+      addNotification('Bảo mật', `Đăng nhập bằng Google thành công với vai trò ${userRole === 'student' ? 'Sinh viên' : 'Chủ quán'}`, 'Vừa xong');
+    } catch (error) {
+      console.log('[ProxiJob Login Session] Error:', error.message);
+      const friendlyMsg = translateError(error);
+      showToast(friendlyMsg, 'error');
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [showToast, addNotification]);
+
   const register = useCallback(async (fullName, email, password, confirmPassword, role) => {
     try {
       setAuthLoading(true);
@@ -282,6 +313,7 @@ export const useAuth = ({
     setIsEnterprise,
     login,
     loginWithGoogle,
+    loginWithSession,
     register,
     logout
   };

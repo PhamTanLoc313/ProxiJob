@@ -37,34 +37,34 @@ function atobPolyfill(input) {
   }
 
   for (
-    let bc = 0, bs = 0, rut, idx = 0;
-    (rut = str.charAt(idx++));
-    ~rut && ((bs = bc % 4 ? bs * 64 + rut : rut), bc++ % 4)
+    let bc = 0, bs = 0, buffer, idx = 0;
+    (buffer = str.charAt(idx++));
+    ~buffer && ((bs = bc % 4 ? bs * 64 + buffer : buffer), bc++ % 4)
       ? (output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6))))
       : 0
   ) {
-    rut = chars.indexOf(rut);
+    buffer = chars.indexOf(buffer);
   }
-
   return output;
 }
 
-// Simple pure JS JWT decoder
-function decodeJwt(token) {
+export function decodeJwt(token) {
   try {
     const base64Url = token.split('.')[1];
-    if (!base64Url) return {};
+    if (!base64Url) return null;
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const raw = atobPolyfill(base64);
-
-    let jsonPayload = '';
-    for (let i = 0; i < raw.length; i++) {
-      jsonPayload += '%' + ('00' + raw.charCodeAt(i).toString(16)).slice(-2);
-    }
-    return JSON.parse(decodeURIComponent(jsonPayload));
+    const _atob = typeof atob !== 'undefined' ? atob : atobPolyfill;
+    
+    const jsonPayload = decodeURIComponent(
+      _atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
   } catch (error) {
-    console.log('[ProxiJob JWT] Decode failed:', error);
-    return {};
+    console.log('[ProxiJob Auth] Error decoding JWT:', error.message);
+    return null;
   }
 }
 
