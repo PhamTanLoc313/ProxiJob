@@ -1,0 +1,434 @@
+﻿[
+    {
+        "No":  1,
+        "Category":  "AUTH",
+        "Name":  "Student Login (locptse184400@fpt.edu.vn)",
+        "Status":  "PASS",
+        "Detail":  "statusCode=200, token_len=759, expiration=2026-07-06T10:45:31.9915831Z",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  2,
+        "Category":  "AUTH",
+        "Name":  "Student Login WRONG PASSWORD",
+        "Status":  "PASS",
+        "Detail":  "Correctly returned 401 Unauthorized",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  3,
+        "Category":  "AUTH",
+        "Name":  "Non-existent Account Login",
+        "Status":  "PASS",
+        "Detail":  "Correctly rejected: The remote server returned an error: (401) Unauthorized.",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  4,
+        "Category":  "AUTH",
+        "Name":  "Trial Employer Login",
+        "Status":  "PASS",
+        "Detail":  "statusCode=200",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  5,
+        "Category":  "AUTH",
+        "Name":  "Recruit Employer Login",
+        "Status":  "PASS",
+        "Detail":  "statusCode=200",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  6,
+        "Category":  "AUTH",
+        "Name":  "HRM Employer Login",
+        "Status":  "PASS",
+        "Detail":  "statusCode=200",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  7,
+        "Category":  "AUTH",
+        "Name":  "Refresh Token (Student)",
+        "Status":  "PASS",
+        "Detail":  "New token issued successfully",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  8,
+        "Category":  "AUTH",
+        "Name":  "Invalid Refresh Token",
+        "Status":  "PASS",
+        "Detail":  "Correctly rejected invalid refresh token",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  9,
+        "Category":  "PROFILE",
+        "Name":  "GET Student Profile",
+        "Status":  "PASS",
+        "Detail":  "fullName=Phạm Tấn Lộc, readiness=ReadyForWork, reputation=4.50, reviewCount=2",
+        "ResponseSnippet":  "{\"userId\":16,\"fullName\":\"Phạm Tấn Lộc\",\"email\":\"locptse184400@fpt.edu.vn\",\"phoneNumber\":\"0373097930\",\"avatarUrl\":\"https://jjruquhoqcwcmogpfvhf.supabase.co/storage/v1/object/public/avatars/avatars/avatar_16.jpeg?t=1783321907717\",\"readinessStatus\":\"ReadyForWork\",\"dateOfBirth\":\"2004-08-22T00:00:00Z\",\"gender\":\"Nam\",\"address\":\"Kopa Bình Chánh, C14/428, Bình Chánh, Hồ Chí Minh\",\"city\":\"TP. Hồ Chí Minh\",\"latitude\":10.7142283,\"longitude\":106.5301817,\"school\":\"Đại học FPT\",\"major\":\"Công nghệ thông tin\",\"yearOfStudy\":4,\"bio\":\"Có kinh nghiệm trong việc phục vụ\",\"skills\":\"Phục vụ, Rửa chén, Lái xe\",\"reputationScore\":4.50,\"reviewCount\":2,\"readyForWorkAt\":\"2026-06-25T16:51:34.486514Z\",\"completionPercent\":100,\"missingFields\":[]}"
+    },
+    {
+        "No":  10,
+        "Category":  "PROFILE",
+        "Name":  "GET Student Profile NO AUTH",
+        "Status":  "PASS",
+        "Detail":  "Correctly returned 401",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  11,
+        "Category":  "PROFILE",
+        "Name":  "GET Student Active Status",
+        "Status":  "PASS",
+        "Detail":  "response=[{\"userId\":4,\"fullName\":\"SV Test ProxiJob\",\"email\":\"student@proxijob.test\",\"phoneNumber\":\"0900000000\",\"avatarUrl\":\"null\",\"readinessStatus\":\"ReadyForWork\",\"dateOfBirth\":\"2004-08-23T00:00:00Z\",\"gender\":\"Nữ\",\"address\":\"123 Nguyen Van Cu\",\"city\":\"Ho Chi Minh\",\"latitude\":null,\"longitude\":null,\"school\":\"UEH\",\"major\":\"Quan tri kinh doanh\",\"yearOfStudy\":3,\"bio\":\"Sinh viên năm 3 UEH, có 1 năm kinh nghiệm phục vụ F\\u0026B, linh hoạt ca tối và cuối tuần.\",\"skills\":\"Giao tiep, Phuc vu\",\"reputationScore\":0,\"reviewCount\":0,\"readyForWorkAt\":\"2026-06-02T15:30:33.831642Z\",\"completionPercent\":100,\"missingFields\":[]},{\"userId\":1,\"fullName\":\"khoi\",\"email\":\"khoi@gmail.com\",\"phoneNumber\":\"0909762882\",\"avatarUrl\":\"https://jjruquhoqcwcmogpfvhf.supabase.co/storage/v1/object/public/avatars/avatars/avatar_1.png?t=1783067261105\",\"readinessStatus\":\"ReadyForWork\",\"dateOfBirth\":\"2004-11-04T00:00:00Z\",\"gender\":\"Nam\",\"address\":\"19 Hẻm 50 Đường Số 6, Phường Trường Thọ, Thành Phố Thủ Đức, Thành Phố Hồ Chí Minh\",\"city\":\"Thành phố Hồ Chí Minh\",\"latitude\":10.841935,\"longitude\":106.759536,\"school\":\"FPT\",\"major\":\"KTPM\",\"yearOfStudy\":4,\"bio\":\"Đẹp trai dễ thương cute phô mai que\",\"skills\":\"Co tu, á đù\",\"reputationScore\":0,\"reviewCount\":0,\"readyForWorkAt\":\"2026-05-30T18:07:06.450181Z\",\"completionPercent\":100,\"missingFields\":[]},{\"userId\":16,\"fullName\":\"Phạm Tấn Lộc\",\"email\":\"locptse184400@fpt.edu.vn\",\"phoneNumber\":\"0373097930\",\"avatarUrl\":\"https://jjruquhoqcwcmogpfvhf.supabase.co/storage/v1/object/public/avatars/avatars/avatar_16.jpeg?t=1783321907717\",\"readinessStatus\":\"ReadyForWork\",\"dateOfBirth\":\"2004-08-22T00:00:00Z\",\"gender\":\"Nam\",\"address\":\"Kopa Bình Chánh, C14/428, Bình Chánh, Hồ Chí Minh\",\"city\":\"TP. Hồ Chí Minh\",\"latitude\":10.7142283,\"longitude\":106.5301817,\"school\":\"Đại học FPT\",\"major\":\"Công nghệ thông tin\",\"yearOfStudy\":4,\"bio\":\"Có kinh nghiệm trong việc phục vụ\",\"skills\":\"Phục vụ, Rửa chén, Lái xe\",\"reputationScore\":4.50,\"reviewCount\":2,\"readyForWorkAt\":\"2026-06-25T16:51:34.486514Z\",\"completionPercent\":100,\"missingFields\":[]}]",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  12,
+        "Category":  "PROFILE",
+        "Name":  "GET Business Profile (Trial)",
+        "Status":  "PASS",
+        "Detail":  "businessName=Chủ Quán Trial, readiness=ProfileComplete, address=123 Đường Test, Quận 1, TP. HCM",
+        "ResponseSnippet":  "{\"userId\":29,\"fullName\":\"Chủ Quán Trial\",\"email\":\"business_trial@proxijob.test\",\"phoneNumber\":null,\"avatarUrl\":null,\"readinessStatus\":\"ProfileComplete\",\"businessName\":\"Chủ Quán Trial\",\"businessType\":null,\"address\":\"123 Đường Test, Quận 1, TP. HCM\",\"city\":null,\"taxCode\":null,\"description\":null,\"reputationScore\":5.00,\"reviewCount\":0,\"profileCompleteAt\":null,\"completionPercent\":33,\"missingFields\":[\"phoneNumber\",\"businessType\",\"city\",\"description\"]}"
+    },
+    {
+        "No":  13,
+        "Category":  "PROFILE",
+        "Name":  "GET Business Profile (Recruit)",
+        "Status":  "PASS",
+        "Detail":  "businessName=Chủ Quán Recruit, readiness=ProfileComplete",
+        "ResponseSnippet":  "{\"userId\":30,\"fullName\":\"Chủ Quán Recruit\",\"email\":\"business_recruit@proxijob.test\",\"phoneNumber\":null,\"avatarUrl\":null,\"readinessStatus\":\"ProfileComplete\",\"businessName\":\"Chủ Quán Recruit\",\"businessType\":null,\"address\":\"123 Đường Test, Quận 1, TP. HCM\",\"city\":null,\"taxCode\":null,\"description\":null,\"reputationScore\":5.00,\"reviewCount\":0,\"profileCompleteAt\":null,\"completionPercent\":33,\"missingFields\":[\"phoneNumber\",\"businessType\",\"city\",\"description\"]}"
+    },
+    {
+        "No":  14,
+        "Category":  "PROFILE",
+        "Name":  "GET Business Profile (HRM)",
+        "Status":  "PASS",
+        "Detail":  "businessName=Chủ Quán HRM Basic, readiness=ProfileComplete",
+        "ResponseSnippet":  "{\"userId\":31,\"fullName\":\"Chủ Quán HRM Basic\",\"email\":\"business_hrm@proxijob.test\",\"phoneNumber\":null,\"avatarUrl\":null,\"readinessStatus\":\"ProfileComplete\",\"businessName\":\"Chủ Quán HRM Basic\",\"businessType\":null,\"address\":\"123 Đường Test, Quận 1, TP. HCM\",\"city\":null,\"taxCode\":null,\"description\":null,\"reputationScore\":5.00,\"reviewCount\":0,\"profileCompleteAt\":null,\"completionPercent\":33,\"missingFields\":[\"phoneNumber\",\"businessType\",\"city\",\"description\"]}"
+    },
+    {
+        "No":  15,
+        "Category":  "PLANS",
+        "Name":  "GET Plans List",
+        "Status":  "PASS",
+        "Detail":  "count=4, names=[, , , ]",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  16,
+        "Category":  "PLANS",
+        "Name":  "GET Quota (Trial)",
+        "Status":  "PASS",
+        "Detail":  "tier=Trial, limit=3, used=3, remaining=0, canPost=False",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  17,
+        "Category":  "PLANS",
+        "Name":  "GET Quota (Recruit)",
+        "Status":  "PASS",
+        "Detail":  "tier=Recruit, limit=33, used=0, remaining=33, canPost=True",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  18,
+        "Category":  "PLANS",
+        "Name":  "GET Quota (HRM)",
+        "Status":  "PASS",
+        "Detail":  "tier=Trial, limit=3, used=0, remaining=3, canPost=True",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  19,
+        "Category":  "PLANS",
+        "Name":  "GET Current Plan (Trial)",
+        "Status":  "PASS",
+        "Detail":  "response={\"planId\":null,\"role\":\"Business\",\"subscriptionTier\":\"Trial\",\"jobPostLimit\":3,\"jobPostsUsed\":3,\"jobPostsRemaining\":0,\"canPostJob\":false,\"mustPurchasePlan\":true,\"price\":0,\"startDate\":null,\"endDate\":null,\"status\":\"None\",\"hasPriorityDisplay\":false,\"hasHrManagement\":false}",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  20,
+        "Category":  "JOB",
+        "Name":  "GET Categories",
+        "Status":  "PASS",
+        "Detail":  "count=6, names=[Giao hàng, Dịch vụ thú cưng, Gia sư, Sửa chữa, Phục vụ, Khác]",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  21,
+        "Category":  "JOB",
+        "Name":  "GET Skills",
+        "Status":  "PASS",
+        "Detail":  "count=13",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  22,
+        "Category":  "JOB",
+        "Name":  "GET Published Jobs",
+        "Status":  "PASS",
+        "Detail":  "count=10, totalPages=4, totalCount=32",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  23,
+        "Category":  "JOB",
+        "Name":  "GET Published Jobs with GPS",
+        "Status":  "PASS",
+        "Detail":  "count=10",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  24,
+        "Category":  "JOB",
+        "Name":  "GET Jobs by Business (Trial, id=29)",
+        "Status":  "PASS",
+        "Detail":  "count=3",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  25,
+        "Category":  "JOB",
+        "Name":  "GET Jobs by Business (Recruit, id=30)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  26,
+        "Category":  "JOB",
+        "Name":  "GET Single Job Post (id=203)",
+        "Status":  "PASS",
+        "Detail":  "title=Test case, status=Published, businessId=",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  27,
+        "Category":  "APP",
+        "Name":  "GET My Applications (Student)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  28,
+        "Category":  "APP",
+        "Name":  "GET Shift Applications (shiftId=202)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  29,
+        "Category":  "MGMT",
+        "Name":  "GET Employees (Trial)",
+        "Status":  "PASS",
+        "Detail":  "count=0, names=[]",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  30,
+        "Category":  "MGMT",
+        "Name":  "GET Employees (HRM)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  31,
+        "Category":  "MGMT",
+        "Name":  "GET Schedules (Trial, date=2026-07-06)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  32,
+        "Category":  "MGMT",
+        "Name":  "GET My Schedules (Student)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  33,
+        "Category":  "MGMT",
+        "Name":  "GET Timekeeping Logs (Trial)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  34,
+        "Category":  "MGMT",
+        "Name":  "GET Suspicious Timekeeping (Trial)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  35,
+        "Category":  "MGMT",
+        "Name":  "Check-in Invalid QR",
+        "Status":  "PASS",
+        "Detail":  "Correctly rejected: The remote server returned an error: (400) Bad Request.",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  36,
+        "Category":  "MGMT",
+        "Name":  "GET Payrolls (Trial Business)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  37,
+        "Category":  "MGMT",
+        "Name":  "GET Payrolls Analytics (Trial)",
+        "Status":  "PASS",
+        "Detail":  "response={\"totalDisbursedThisMonth\":0.0,\"pendingApprovalAmount\":0.0,\"activeEmployees\":0,\"chartData\":{\"labels\":[\"T2\",\"T3\",\"T4\",\"T5\",\"T6\",\"T7\",\"CN\"],\"datasets\":[{\"data\":\"0 0 0 0 0 0 0\"}]}}",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  38,
+        "Category":  "MGMT",
+        "Name":  "GET Payrolls (Student)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  39,
+        "Category":  "QR",
+        "Name":  "Generate QR Token (Trial)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (403) Forbidden.",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  40,
+        "Category":  "QR",
+        "Name":  "GET QR Settings (Trial)",
+        "Status":  "FAIL",
+        "Detail":  "The remote server returned an error: (404) Not Found.",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  41,
+        "Category":  "CHAT",
+        "Name":  "GET Conversations (Student)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  42,
+        "Category":  "CHAT",
+        "Name":  "GET Conversations (Trial Employer)",
+        "Status":  "PASS",
+        "Detail":  "count=0",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  43,
+        "Category":  "PUBLIC",
+        "Name":  "GET Student CV (id=16)",
+        "Status":  "PASS",
+        "Detail":  "fullName=Phạm Tấn Lộc, bio=Có kinh nghiệm trong việc phục vụ, skills=Phục vụ, Rửa chén, Lái xe",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  44,
+        "Category":  "PUBLIC",
+        "Name":  "GET Non-existent Student CV",
+        "Status":  "PASS",
+        "Detail":  "Correctly returned 404",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  45,
+        "Category":  "PUBLIC",
+        "Name":  "Admin Payments NO AUTH",
+        "Status":  "PASS",
+        "Detail":  "Correctly denied: The remote server returned an error: (401) Unauthorized.",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  46,
+        "Category":  "PUBLIC",
+        "Name":  "Identity Service Health",
+        "Status":  "PASS",
+        "Detail":  "status=200",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  47,
+        "Category":  "PUBLIC",
+        "Name":  "Job Service Health",
+        "Status":  "PASS",
+        "Detail":  "status=200",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  48,
+        "Category":  "PUBLIC",
+        "Name":  "Management Service Health",
+        "Status":  "PASS",
+        "Detail":  "status=200",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  49,
+        "Category":  "SECURITY",
+        "Name":  "Fake JWT Token",
+        "Status":  "PASS",
+        "Detail":  "Correctly rejected",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  50,
+        "Category":  "SECURITY",
+        "Name":  "SQL Injection Login",
+        "Status":  "PASS",
+        "Detail":  "Correctly rejected",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  51,
+        "Category":  "SECURITY",
+        "Name":  "Student Access Employees",
+        "Status":  "PASS",
+        "Detail":  "Correctly denied",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  52,
+        "Category":  "SECURITY",
+        "Name":  "Employer Access Student Profile",
+        "Status":  "PASS",
+        "Detail":  "Correctly denied",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  53,
+        "Category":  "ADMIN",
+        "Name":  "Student Access Admin Payments",
+        "Status":  "PASS",
+        "Detail":  "Correctly denied",
+        "ResponseSnippet":  null
+    },
+    {
+        "No":  54,
+        "Category":  "ADMIN",
+        "Name":  "Employer Access Admin Payments",
+        "Status":  "PASS",
+        "Detail":  "Correctly denied",
+        "ResponseSnippet":  null
+    }
+]

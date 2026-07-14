@@ -51,48 +51,77 @@ namespace ProxiJob.Identity.Infrastructure.Data
                     DurationDays = 1,
                     HasPriorityDisplay = false,
                     HasHrManagement = false,
+                    MaxEmployees = 0,
+                    MaxActiveQrs = 0,
+                    MaxSearchRadius = 3,
                     CreatedBy = "System"
                 },
                 new Subscription
                 {
-                    Name = SubscriptionNames.Basic,
-                    Description = "Gói tháng cơ bản",
+                    Name = SubscriptionNames.Recruit,
+                    Description = "Gói tuyển dụng cơ bản",
                     Price = 99_000,
                     VariableCost = 30_000,
                     GrossMargin = 69_000,
                     BillingType = BillingType.Monthly,
-                    JobPostLimit = 15,
+                    JobPostLimit = 30,
                     DurationDays = 30,
                     HasPriorityDisplay = false,
                     HasHrManagement = false,
+                    MaxEmployees = 0,
+                    MaxActiveQrs = 0,
+                    MaxSearchRadius = 7,
                     CreatedBy = "System"
                 },
                 new Subscription
                 {
-                    Name = SubscriptionNames.Standard,
-                    Description = "Gói tháng không giới hạn đăng tin (Web)",
+                    Name = SubscriptionNames.HrmBasic,
+                    Description = "Gói HRM cơ bản",
                     Price = 199_000,
                     VariableCost = 50_000,
                     GrossMargin = 149_000,
                     BillingType = BillingType.Monthly,
-                    JobPostLimit = 999,
+                    JobPostLimit = 60,
                     DurationDays = 30,
                     HasPriorityDisplay = false,
-                    HasHrManagement = false,
+                    HasHrManagement = true,
+                    MaxEmployees = 15,
+                    MaxActiveQrs = 1,
+                    MaxSearchRadius = 10,
                     CreatedBy = "System"
                 },
                 new Subscription
                 {
-                    Name = SubscriptionNames.Premium,
-                    Description = "Gói ưu tiên hiển thị + quản lý nhân sự",
+                    Name = SubscriptionNames.Enterprise,
+                    Description = "Gói doanh nghiệp toàn diện",
                     Price = 299_000,
                     VariableCost = 70_000,
                     GrossMargin = 229_000,
                     BillingType = BillingType.Monthly,
-                    JobPostLimit = 999,
+                    JobPostLimit = 9999,
                     DurationDays = 30,
                     HasPriorityDisplay = true,
                     HasHrManagement = true,
+                    MaxEmployees = 9999,
+                    MaxActiveQrs = 9999,
+                    MaxSearchRadius = 9999,
+                    CreatedBy = "System"
+                },
+                new Subscription
+                {
+                    Name = SubscriptionNames.Student10,
+                    Description = "Gói 10 lượt ứng tuyển dành cho sinh viên",
+                    Price = 10_000,
+                    VariableCost = 1_000,
+                    GrossMargin = 9_000,
+                    BillingType = BillingType.PerShift,
+                    JobPostLimit = 0,
+                    DurationDays = 30,
+                    HasPriorityDisplay = false,
+                    HasHrManagement = false,
+                    MaxEmployees = 0,
+                    MaxActiveQrs = 0,
+                    MaxSearchRadius = 0,
                     CreatedBy = "System"
                 }
             };
@@ -115,6 +144,9 @@ namespace ProxiJob.Identity.Infrastructure.Data
                 existing.DurationDays = plan.DurationDays;
                 existing.HasPriorityDisplay = plan.HasPriorityDisplay;
                 existing.HasHrManagement = plan.HasHrManagement;
+                existing.MaxEmployees = plan.MaxEmployees;
+                existing.MaxActiveQrs = plan.MaxActiveQrs;
+                existing.MaxSearchRadius = plan.MaxSearchRadius;
                 existing.UpdatedAt = DateTime.UtcNow;
                 existing.UpdatedBy = "System";
             }
@@ -133,10 +165,14 @@ namespace ProxiJob.Identity.Infrastructure.Data
                 await EnsureFeatureAsync(context, plan.Id, FeatureCodes.WebPostJob,
                     "Đăng tin tuyển dụng qua Web Dashboard", ClientChannels.Web);
 
-                if (plan.Name == SubscriptionNames.Premium)
+                if (plan.Name == SubscriptionNames.HrmBasic || plan.Name == SubscriptionNames.Enterprise)
                 {
                     await EnsureFeatureAsync(context, plan.Id, FeatureCodes.HrManagement,
                         "Công cụ quản lý nhân sự", ClientChannels.Management);
+                }
+
+                if (plan.Name == SubscriptionNames.Enterprise)
+                {
                     await EnsureFeatureAsync(context, plan.Id, FeatureCodes.PriorityListing,
                         "Ưu tiên hiển thị tin tuyển dụng", ClientChannels.Web);
                 }

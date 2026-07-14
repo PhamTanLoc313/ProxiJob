@@ -9,32 +9,251 @@ import {
   SafeAreaView,
   TextInput,
   Image,
-  Platform
+  Platform,
+  Alert
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../../styles/theme';
 import { AppContext } from '../../context/AppContext';
 import { getAvatarSource } from '../../utils/avatarHelper';
+import {
+  useSchedulesQuery,
+  useAddEmployeeScheduleMutation,
+  useRemoveEmployeeScheduleMutation,
+  useStaffListQuery
+} from '../../hooks/queries';
+
+const EMPTY_ARRAY = [];
+
+const pickerModalStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerContainer: {
+    width: '100%',
+    maxWidth: 300,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+  pickerColumnsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  pickerColumnWrapper: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  columnLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 8,
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+  columnScrollView: {
+    height: 150,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  timeItem: {
+    paddingVertical: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  timeItemSelected: {
+    backgroundColor: '#FF6B00',
+  },
+  timeItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular',
+  },
+  timeItemTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+  pickerSeparator: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#475569',
+    marginHorizontal: 12,
+    marginTop: 20,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: '#F1F5F9',
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+  confirmBtn: {
+    backgroundColor: '#FF6B00',
+  },
+  confirmBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold',
+  },
+});
+
+const CustomTimePickerModal = ({ visible, value, onClose, onSelect, title }) => {
+  let initialHour = 8;
+  let initialMinute = 0;
+  if (value) {
+    const parts = value.split(':');
+    if (parts.length === 2) {
+      initialHour = parseInt(parts[0]);
+      initialMinute = parseInt(parts[1]);
+    }
+  }
+
+  const [selectedHour, setSelectedHour] = useState(initialHour);
+  const [selectedMinute, setSelectedMinute] = useState(initialMinute);
+
+  React.useEffect(() => {
+    if (value) {
+      const parts = value.split(':');
+      if (parts.length === 2) {
+        setSelectedHour(parseInt(parts[0]));
+        setSelectedMinute(parseInt(parts[1]));
+      }
+    }
+  }, [value, visible]);
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
+
+  const handleConfirm = () => {
+    const h = String(selectedHour).padStart(2, '0');
+    const m = String(selectedMinute).padStart(2, '0');
+    onSelect(`${h}:${m}`);
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={pickerModalStyles.modalOverlay}>
+        <View style={pickerModalStyles.pickerContainer}>
+          <Text style={pickerModalStyles.modalTitle}>{title || 'Chọn thời gian'}</Text>
+          
+          <View style={pickerModalStyles.pickerColumnsRow}>
+            <View style={pickerModalStyles.pickerColumnWrapper}>
+              <Text style={pickerModalStyles.columnLabel}>Giờ</Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={pickerModalStyles.columnScrollView}>
+                {hours.map((h) => {
+                  const isSelected = selectedHour === h;
+                  return (
+                    <TouchableOpacity
+                      key={h}
+                      style={[pickerModalStyles.timeItem, isSelected && pickerModalStyles.timeItemSelected]}
+                      onPress={() => setSelectedHour(h)}
+                    >
+                      <Text style={[pickerModalStyles.timeItemText, isSelected && pickerModalStyles.timeItemTextSelected]}>
+                        {String(h).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <Text style={pickerModalStyles.pickerSeparator}>:</Text>
+
+            <View style={pickerModalStyles.pickerColumnWrapper}>
+              <Text style={pickerModalStyles.columnLabel}>Phút</Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={pickerModalStyles.columnScrollView}>
+                {minutes.map((m) => {
+                  const isSelected = selectedMinute === m;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      style={[pickerModalStyles.timeItem, isSelected && pickerModalStyles.timeItemSelected]}
+                      onPress={() => setSelectedMinute(m)}
+                    >
+                      <Text style={[pickerModalStyles.timeItemText, isSelected && pickerModalStyles.timeItemTextSelected]}>
+                        {String(m).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+
+          <View style={pickerModalStyles.actionsRow}>
+            <TouchableOpacity onPress={onClose} style={[pickerModalStyles.actionBtn, pickerModalStyles.cancelBtn]}>
+              <Text style={pickerModalStyles.cancelBtnText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleConfirm} style={[pickerModalStyles.actionBtn, pickerModalStyles.confirmBtn]}>
+              <Text style={pickerModalStyles.confirmBtnText}>Xác nhận</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 function getCurrentWeekDays() {
   const today = new Date();
   const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
   const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-  
+
   const monday = new Date(today);
   monday.setDate(today.getDate() + distanceToMonday);
-  
+
   const days = [];
   const dayNames = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-  
+
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    
+
     const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
     const apiDateStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
     const isToday = d.toDateString() === today.toDateString();
-    
+
     days.push({
       name: dayNames[i],
       date: dateStr,
@@ -50,22 +269,27 @@ function getCurrentWeekDays() {
 export default function EmployerScheduling() {
   const {
     user,
-    staffList,
-    loadStaffList,
-    schedulesList,
-    loadSchedules,
-    addEmployeeSchedule,
-    removeEmployeeSchedule,
-    deleteSchedule,
     showToast
   } = useContext(AppContext);
 
+  const { data: staffListData } = useStaffListQuery(user);
+  const staffList = staffListData || EMPTY_ARRAY;
+
   const [weekDays, setWeekDays] = useState([]);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+
+  const activeDateStr = weekDays[selectedDayIndex]?.apiDateStr;
+  const { data: schedulesListData } = useSchedulesQuery(activeDateStr);
+  const schedulesList = schedulesListData || EMPTY_ARRAY;
+
+  const addEmployeeScheduleMutation = useAddEmployeeScheduleMutation(user, showToast);
+  const removeEmployeeScheduleMutation = useRemoveEmployeeScheduleMutation(user, showToast);
+
   const [assigningShift, setAssigningShift] = useState(null); // { slotId }
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [localSchedules, setLocalSchedules] = useState([]);
+  const [activeTab, setActiveTab] = useState('internal'); // 'internal' | 'external'
 
   // Shift slots states (Initial 3 shifts)
   const [shiftSlots, setShiftSlots] = useState([
@@ -76,13 +300,18 @@ export default function EmployerScheduling() {
 
   // Add Shift Modal state
   const [addShiftModalVisible, setAddShiftModalVisible] = useState(false);
+  const [editingSlotId, setEditingSlotId] = useState(null);
   const [newShiftName, setNewShiftName] = useState('');
   const [newShiftStart, setNewShiftStart] = useState('');
   const [newShiftEnd, setNewShiftEnd] = useState('');
   const [newShiftIcon, setNewShiftIcon] = useState('☀️');
+  const [errors, setErrors] = useState({});
+  const [startTimeVisible, setStartTimeVisible] = useState(false);
+  const [endTimeVisible, setEndTimeVisible] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [slotToDelete, setSlotToDelete] = useState(null);
 
   React.useEffect(() => {
-    loadStaffList();
     const days = getCurrentWeekDays();
     setWeekDays(days);
     const todayIdx = days.findIndex(d => d.isToday);
@@ -107,144 +336,151 @@ export default function EmployerScheduling() {
   }, [user]);
 
   React.useEffect(() => {
-    if (weekDays.length > 0 && weekDays[selectedDayIndex]) {
-      const activeDateStr = weekDays[selectedDayIndex].apiDateStr;
-      loadSchedules(activeDateStr);
+    if (schedulesList) {
+      const normalized = schedulesList.map(s => ({
+        id: s.id !== undefined ? s.id : s.Id,
+        employeeId: s.employeeId !== undefined ? s.employeeId : s.EmployeeId,
+        businessId: s.businessId !== undefined ? s.businessId : s.BusinessId,
+        jobShiftId: s.jobShiftId !== undefined ? s.jobShiftId : s.JobShiftId,
+        jobShiftSalary: s.jobShiftSalary !== undefined ? s.jobShiftSalary : s.JobShiftSalary,
+        date: s.date !== undefined ? s.date : s.Date,
+        startTime: s.startTime !== undefined ? s.startTime : s.StartTime,
+        endTime: s.endTime !== undefined ? s.endTime : s.EndTime,
+        note: s.note !== undefined ? s.note : s.Note,
+      }));
+      setLocalSchedules(normalized);
+    } else {
+      setLocalSchedules([]);
     }
-  }, [selectedDayIndex, weekDays]);
-
-  React.useEffect(() => {
-    setLocalSchedules(schedulesList || []);
   }, [schedulesList]);
 
-  const filteredStaff = (staffList || []).filter(s =>
-    s.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const removeAccents = (str) => {
+    if (!str) return '';
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D');
+  };
+
+  const filteredStaff = (staffList || []).filter(s => {
+    if (s.isExternal) return false;
+    const normalizedName = removeAccents(s.name.toLowerCase());
+    const normalizedQuery = removeAccents(searchQuery.toLowerCase());
+    return normalizedName.includes(normalizedQuery);
+  });
 
   const openAssignModal = (slotId) => {
     setAssigningShift({ slotId });
     setModalVisible(true);
   };
 
+
+
   const handleAssignStaff = async (staffId) => {
     if (assigningShift && weekDays[selectedDayIndex]) {
-      const activeDate = weekDays[selectedDayIndex];
-      const activeDateStr = activeDate.apiDateStr;
-      
+      const activeDateStr = weekDays[selectedDayIndex].apiDateStr;
       const targetSlot = shiftSlots.find(s => s.id === assigningShift.slotId);
       if (!targetSlot) return;
 
-      // Extract time from the slot's time property, e.g. "08:00 - 12:00"
-      let startTime = '08:00:00';
-      let endTime = '12:00:00';
-      try {
-        const timeParts = targetSlot.time.split(' - ');
-        if (timeParts.length === 2) {
-          startTime = `${timeParts[0]}:00`;
-          endTime = `${timeParts[1]}:00`;
-        }
-      } catch (e) {
-        console.log('Error parsing slot times:', e);
-      }
+      const existingSchedule = (localSchedules || []).find(
+        s => s.note === assigningShift.slotId && s.employeeId === staffId
+      );
 
-      const convertVNTimeToUTC = (dateStr, timeStr) => {
-        try {
-          const utcDate = new Date(`${dateStr}T${timeStr}Z`);
-          utcDate.setUTCHours(utcDate.getUTCHours() - 7);
-          return utcDate.toISOString();
-        } catch (e) {
-          return `${dateStr}T${timeStr}Z`;
-        }
-      };
-
-      const startTimeStr = convertVNTimeToUTC(activeDateStr, startTime);
-      const endTimeStr = convertVNTimeToUTC(activeDateStr, endTime);
-
-      // Save backup for rollback
       const backupSchedules = [...localSchedules];
 
-      // Optimistic update
-      const tempId = `temp_${Date.now()}`;
-      const newSchedule = {
-        id: tempId,
-        employeeId: staffId,
-        note: assigningShift.slotId,
-        date: activeDateStr,
-        startTime: startTimeStr,
-        endTime: endTimeStr
-      };
+      if (existingSchedule) {
+        // Toggle OFF (Unassign)
+        const updatedSchedules = localSchedules.filter(s => s.id !== existingSchedule.id);
+        setLocalSchedules(updatedSchedules);
 
-      const updatedSchedules = [
-        ...localSchedules.filter(s => s.note !== assigningShift.slotId),
-        newSchedule
-      ];
-      setLocalSchedules(updatedSchedules);
-
-      // Close modal with a brief 200ms delay so user sees selection visual state change
-      setTimeout(() => {
-        setModalVisible(false);
-        setAssigningShift(null);
-      }, 200);
-
-      // Call API in background
-      (async () => {
         try {
-          // 1. Delete existing schedule for this slot if there is one in the backup
-          const existingSchedule = backupSchedules.find(s => s.note === assigningShift.slotId);
-          if (existingSchedule && existingSchedule.id && !existingSchedule.id.toString().startsWith('temp_')) {
-            await deleteSchedule(existingSchedule.id);
+          if (existingSchedule.id && !existingSchedule.id.toString().startsWith('temp_')) {
+            await removeEmployeeScheduleMutation.mutateAsync({ 
+              scheduleId: existingSchedule.id, 
+              dateStr: activeDateStr 
+            });
           }
+        } catch (err) {
+          console.log('Failed to perform background unassign:', err);
+          setLocalSchedules(backupSchedules);
+        }
+      } else {
+        // Toggle ON (Assign)
+        let startTime = '08:00:00';
+        let endTime = '12:00:00';
+        try {
+          const timeParts = targetSlot.time.split(' - ');
+          if (timeParts.length === 2) {
+            startTime = `${timeParts[0]}:00`;
+            endTime = `${timeParts[1]}:00`;
+          }
+        } catch (e) {
+          console.log('Error parsing slot times:', e);
+        }
 
-          // 2. Add the new schedule
-          const success = await addEmployeeSchedule(
-            staffId,
-            activeDateStr,
-            assigningShift.slotId,
+        const convertVNTimeToUTC = (dateStr, timeStr) => {
+          try {
+            const utcDate = new Date(`${dateStr}T${timeStr}Z`);
+            utcDate.setUTCHours(utcDate.getUTCHours() - 7);
+            return utcDate.toISOString();
+          } catch (e) {
+            return `${dateStr}T${timeStr}Z`;
+          }
+        };
+
+        const startTimeStr = convertVNTimeToUTC(activeDateStr, startTime);
+        const endTimeStr = convertVNTimeToUTC(activeDateStr, endTime);
+
+        const tempId = `temp_${Date.now()}`;
+        const newSchedule = {
+          id: tempId,
+          employeeId: staffId,
+          note: assigningShift.slotId,
+          date: activeDateStr,
+          startTime: startTimeStr,
+          endTime: endTimeStr
+        };
+
+        const updatedSchedules = [...localSchedules, newSchedule];
+        setLocalSchedules(updatedSchedules);
+
+        try {
+          await addEmployeeScheduleMutation.mutateAsync({
+            employeeId: staffId,
+            dateStr: activeDateStr,
+            slotId: assigningShift.slotId,
             startTimeStr,
             endTimeStr
-          );
-
-          if (!success) {
-            // Revert state if creation failed
-            setLocalSchedules(backupSchedules);
-          }
+          });
         } catch (err) {
           console.log('Failed to perform background scheduling:', err);
           setLocalSchedules(backupSchedules);
-          showToast('Không thể kết nối máy chủ để cập nhật lịch!', 'error');
         }
-      })();
+      }
     }
   };
 
   const handleUnassignStaff = async () => {
     if (assigningShift && weekDays[selectedDayIndex]) {
       const activeDateStr = weekDays[selectedDayIndex].apiDateStr;
-      
       const backupSchedules = [...localSchedules];
 
-      // Optimistic update: filter out this slot's schedule
       const updatedSchedules = localSchedules.filter(s => s.note !== assigningShift.slotId);
       setLocalSchedules(updatedSchedules);
 
       setModalVisible(false);
       setAssigningShift(null);
 
-      // Find the actual schedule from backup to delete
-      const slotSchedule = backupSchedules.find(s => s.note === assigningShift.slotId);
-      if (slotSchedule && slotSchedule.id && !slotSchedule.id.toString().startsWith('temp_')) {
-        (async () => {
+      const slotSchedules = backupSchedules.filter(s => s.note === assigningShift.slotId);
+      for (const sched of slotSchedules) {
+        if (sched.id && !sched.id.toString().startsWith('temp_')) {
           try {
-            const success = await removeEmployeeSchedule(slotSchedule.id, activeDateStr);
-            if (!success) {
-              setLocalSchedules(backupSchedules);
-            }
+            await removeEmployeeScheduleMutation.mutateAsync({ scheduleId: sched.id, dateStr: activeDateStr });
           } catch (err) {
-            console.log('Failed to perform background unassign:', err);
-            setLocalSchedules(backupSchedules);
-            showToast('Không thể kết nối máy chủ để gỡ nhân viên!', 'error');
+            console.log('Failed to perform background unassign for schedule:', sched.id, err);
           }
-        })();
+        }
       }
     }
   };
@@ -254,32 +490,128 @@ export default function EmployerScheduling() {
     setNewShiftStart('');
     setNewShiftEnd('');
     setNewShiftIcon('☀️');
+    setEditingSlotId(null);
+    setErrors({});
   };
 
   const handleAddShiftSubmit = async () => {
+    const newErrors = {};
     if (!newShiftName.trim()) {
-      showToast('Vui lòng nhập tên ca làm', 'warning');
-      return;
+      newErrors.name = 'Vui lòng nhập tên ca làm!';
     }
+    
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-    if (!timeRegex.test(newShiftStart) || !timeRegex.test(newShiftEnd)) {
-      showToast('Giờ phải đúng định dạng HH:MM (ví dụ 11:00)', 'warning');
+    if (!newShiftStart) {
+      newErrors.start = 'Vui lòng chọn giờ bắt đầu!';
+    } else if (!timeRegex.test(newShiftStart)) {
+      newErrors.start = 'Giờ bắt đầu không đúng định dạng!';
+    }
+    
+    if (!newShiftEnd) {
+      newErrors.end = 'Vui lòng chọn giờ kết thúc!';
+    } else if (!timeRegex.test(newShiftEnd)) {
+      newErrors.end = 'Giờ kết thúc không đúng định dạng!';
+    }
+    
+    if (newShiftStart && newShiftEnd && timeRegex.test(newShiftStart) && timeRegex.test(newShiftEnd)) {
+      const [startH, startM] = newShiftStart.split(':').map(Number);
+      const [endH, endM] = newShiftEnd.split(':').map(Number);
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = endH * 60 + endM;
+      if (startMinutes >= endMinutes) {
+        newErrors.end = 'Giờ kết thúc phải sau giờ bắt đầu!';
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
-    const slotId = `custom_${Date.now()}`;
-    const newSlot = {
-      id: slotId,
-      name: newShiftName.trim(),
-      time: `${newShiftStart} - ${newShiftEnd}`,
-      icon: newShiftIcon
-    };
+    setErrors({});
+    if (editingSlotId) {
+      const updatedSlots = shiftSlots.map(s => {
+        if (s.id === editingSlotId) {
+          return {
+            ...s,
+            name: newShiftName.trim(),
+            time: `${newShiftStart} - ${newShiftEnd}`,
+            icon: newShiftIcon
+          };
+        }
+        return s;
+      });
+      setShiftSlots(updatedSlots);
+      setAddShiftModalVisible(false);
+      resetNewShiftForm();
+      showToast('Cập nhật ca làm việc thành công!', 'success');
 
-    const updatedSlots = [...shiftSlots, newSlot];
+      try {
+        const storageKey = `@custom_shift_slots_${user?.id || 'default'}`;
+        await AsyncStorage.setItem(storageKey, JSON.stringify(updatedSlots));
+      } catch (err) {
+        console.log('Error saving shift slots:', err);
+      }
+    } else {
+      const slotId = `custom_${Date.now()}`;
+      const newSlot = {
+        id: slotId,
+        name: newShiftName.trim(),
+        time: `${newShiftStart} - ${newShiftEnd}`,
+        icon: newShiftIcon
+      };
+
+      const updatedSlots = [...shiftSlots, newSlot];
+      setShiftSlots(updatedSlots);
+      setAddShiftModalVisible(false);
+      resetNewShiftForm();
+      showToast('Thêm ca làm việc mới thành công!', 'success');
+
+      try {
+        const storageKey = `@custom_shift_slots_${user?.id || 'default'}`;
+        await AsyncStorage.setItem(storageKey, JSON.stringify(updatedSlots));
+      } catch (err) {
+        console.log('Error saving shift slots:', err);
+      }
+    }
+  };
+
+  const openEditShiftModal = (slot) => {
+    setEditingSlotId(slot.id);
+    setNewShiftName(slot.name);
+    setErrors({});
+    
+    let start = '';
+    let end = '';
+    try {
+      const parts = slot.time.split(' - ');
+      if (parts.length === 2) {
+        start = parts[0];
+        end = parts[1];
+      }
+    } catch (e) {}
+
+    setNewShiftStart(start);
+    setNewShiftEnd(end);
+    setNewShiftIcon(slot.icon || '☀️');
+    setAddShiftModalVisible(true);
+  };
+
+  const handleDeleteShiftSlot = (slotId) => {
+    const targetSlot = shiftSlots.find(s => s.id === slotId);
+    if (!targetSlot) return;
+    setSlotToDelete(targetSlot);
+    setDeleteConfirmVisible(true);
+  };
+
+  const handleConfirmDeleteShiftSlot = async () => {
+    if (!slotToDelete) return;
+    const slotId = slotToDelete.id;
+    const updatedSlots = shiftSlots.filter(s => s.id !== slotId);
     setShiftSlots(updatedSlots);
-    setAddShiftModalVisible(false);
-    resetNewShiftForm();
-    showToast('Thêm ca làm việc mới thành công!', 'success');
+    setDeleteConfirmVisible(false);
+    setSlotToDelete(null);
+    showToast('Đã xóa ca làm việc thành công!', 'info');
 
     try {
       const storageKey = `@custom_shift_slots_${user?.id || 'default'}`;
@@ -348,151 +680,335 @@ export default function EmployerScheduling() {
           {selectedDay?.isToday && <Text style={styles.todayTag}>Hôm nay</Text>}
         </View>
 
-        {/* Lịch trình chi tiết Header Row */}
-        <View style={styles.sectionHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.sectionTitleIcon}>📋</Text>
-            <Text style={styles.sectionTitleText}>Lịch trình chi tiết</Text>
-          </View>
+        {/* Tab Selector */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'internal' && styles.activeTabButton]}
+            onPress={() => setActiveTab('internal')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'internal' && styles.activeTabButtonText]}>
+              👥 Nhân Sự Nội Bộ
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'external' && styles.activeTabButton]}
+            onPress={() => setActiveTab('external')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'external' && styles.activeTabButtonText]}>
+              ⚡ Nhân Sự Vãng Lai
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Shift Grid */}
-        <View style={styles.shiftGridContainer}>
-          {shiftSlots.map((slot) => {
-            const slotSchedule = (localSchedules || []).find(s => s.note === slot.id);
-            const isAssigned = !!slotSchedule;
+        {activeTab === 'internal' ? (
+          <>
+            {/* Lịch trình chi tiết Header Row */}
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.sectionTitleIcon}>📋</Text>
+                <Text style={styles.sectionTitleText}>Lịch trình chi tiết (Nội Bộ)</Text>
+              </View>
+            </View>
 
-            const staff = slotSchedule ? staffList.find(s => s.id === slotSchedule.employeeId) : null;
-            const assignedStaffName = staff ? staff.name : (slotSchedule ? 'Nhân viên' : 'Chưa xếp');
-            
-            const role = staff ? staff.role : (slot.id === 'evening' ? 'Quản lý' : 'Pha chế');
-            
-            let rate = '28.000 đ/h';
-            if (staff && staff.hourlyRate) {
-              rate = `${Number(staff.hourlyRate).toLocaleString('vi-VN')} đ/h`;
-            } else {
-              if (role.toLowerCase().includes('quản lý')) rate = '45.000 đ/h';
-              else if (role.toLowerCase().includes('pha chế')) rate = '35.000 đ/h';
-              else if (role.toLowerCase().includes('thu ngân')) rate = '30.000 đ/h';
-              else if (role.toLowerCase().includes('phục vụ')) rate = '28.000 đ/h';
-            }
+            {/* Shift Grid */}
+            <View style={styles.shiftGridContainer}>
+              {shiftSlots.map((slot) => {
+                const slotSchedules = (localSchedules || []).filter(s => s.note === slot.id && !s.jobShiftId);
+                const isAssigned = slotSchedules.length > 0;
 
-            let iconBgColor = '#FFF9E6'; // amber-50
-            let iconColor = '#F59E0B'; // amber-500
-            let slotIcon = slot.icon || '☀️';
+                let iconBgColor = '#FFF9E6'; // amber-50
+                let iconColor = '#F59E0B'; // amber-500
+                let slotIcon = slot.icon || '☀️';
 
-            if (slot.id === 'afternoon' || slotIcon === '⛅') {
-              iconBgColor = '#FFF0EA'; // orange-50
-              iconColor = '#FF6B00'; // orange-500
-            } else if (slot.id === 'evening' || slotIcon === '🌙') {
-              iconBgColor = '#EEF2FF'; // indigo-50
-              iconColor = '#4F46E5'; // indigo-600
-            } else if (slotIcon === '⏰') {
-              iconBgColor = '#F1F5F9'; // slate-100
-              iconColor = '#64748B'; // slate-500
-            } else if (slotIcon === '⭐') {
-              iconBgColor = '#FEF3C7'; // amber-100
-              iconColor = '#D97706'; // amber-600
-            }
+                if (slot.id === 'afternoon' || slotIcon === '⛅') {
+                  iconBgColor = '#FFF0EA'; // orange-50
+                  iconColor = '#FF6B00'; // orange-500
+                } else if (slot.id === 'evening' || slotIcon === '🌙') {
+                  iconBgColor = '#EEF2FF'; // indigo-50
+                  iconColor = '#4F46E5'; // indigo-600
+                } else if (slotIcon === '⏰') {
+                  iconBgColor = '#F1F5F9'; // slate-100
+                  iconColor = '#64748B'; // slate-500
+                } else if (slotIcon === '⭐') {
+                  iconBgColor = '#FEF3C7'; // amber-100
+                  iconColor = '#D97706'; // amber-600
+                }
 
-            const isPrimaryBadge = slot.id === 'evening' || slot.name.toLowerCase().includes('tối') || slot.name.toLowerCase().includes('cao điểm');
-            const badgeBg = isPrimaryBadge ? 'rgba(255, 107, 0, 0.1)' : 'rgba(91, 0, 223, 0.1)';
-            const badgeTextColor = isPrimaryBadge ? '#FF6B00' : '#5B00DF';
-
-            const avatarSource = getAvatarSource(null, staff?.gender, assignedStaffName);
-
-            if (isAssigned) {
-              return (
-                <View key={slot.id} style={styles.bentoCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.slotDetails}>
-                      <View style={[styles.iconWrapper, { backgroundColor: iconBgColor }]}>
-                        <Text style={[styles.slotIconText, { color: iconColor }]}>{slotIcon}</Text>
+                if (isAssigned) {
+                  return (
+                    <View key={slot.id} style={styles.bentoCard}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.slotDetails}>
+                          <View style={[styles.iconWrapper, { backgroundColor: iconBgColor }]}>
+                            <Text style={[styles.slotIconText, { color: iconColor }]}>{slotIcon}</Text>
+                          </View>
+                          <View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Text style={styles.slotNameText}>{slot.name}</Text>
+                              <View style={styles.slotActionIconsRow}>
+                                <TouchableOpacity
+                                  style={[styles.miniSlotActionBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                                  onPress={() => openEditShiftModal(slot)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Ionicons name="pencil" size={11} color="#2563EB" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.miniSlotActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}
+                                  onPress={() => handleDeleteShiftSlot(slot.id)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Ionicons name="trash" size={11} color="#EF4444" />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                            <Text style={styles.slotTimeText}>{slot.time}</Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => openAssignModal(slot.id)}
+                          style={styles.addStaffHeaderBtn}
+                        >
+                          <Text style={styles.addStaffHeaderBtnText}>+ Thêm nhân sự</Text>
+                        </TouchableOpacity>
                       </View>
-                      <View>
-                        <Text style={styles.slotNameText}>{slot.name}</Text>
-                        <Text style={styles.slotTimeText}>{slot.time}</Text>
+
+                      <View style={styles.assignedStaffContainer}>
+                        {slotSchedules.map((schedule) => {
+                          const staff = staffList.find(s => s.id === schedule.employeeId);
+                          const assignedStaffName = staff ? staff.name : 'Nhân viên';
+                          const role = staff ? (staff.position || staff.role || 'Nhân viên') : (slot.id === 'evening' ? 'Quản lý' : 'Nhân viên');
+                          const avatarSource = getAvatarSource(staff?.avatarUrl, staff?.gender, assignedStaffName);
+                          
+                          let rate = '28.000 đ/h';
+                          if (staff && staff.hourlyRate) {
+                            rate = `${Number(staff.hourlyRate).toLocaleString('vi-VN')} đ/h`;
+                          } else {
+                            if (role.toLowerCase().includes('quản lý')) rate = '45.000 đ/h';
+                            else if (role.toLowerCase().includes('pha chế')) rate = '35.000 đ/h';
+                            else if (role.toLowerCase().includes('thu ngân')) rate = '30.000 đ/h';
+                            else if (role.toLowerCase().includes('phục vụ')) rate = '28.000 đ/h';
+                          }
+                          
+                          return (
+                            <View key={schedule.id} style={styles.assignedStaffRow}>
+                              <Image source={avatarSource} style={styles.staffRowAvatar} />
+                              <View style={{ flex: 1, marginLeft: 10 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                  <Text style={styles.staffRowName}>{assignedStaffName}</Text>
+                                  <View style={[
+                                    styles.typeBadge,
+                                    { backgroundColor: staff?.isExternal ? 'rgba(91, 0, 223, 0.1)' : 'rgba(255, 107, 0, 0.1)' }
+                                  ]}>
+                                    <Text style={[
+                                      styles.typeBadgeText,
+                                      { color: staff?.isExternal ? '#5B00DF' : '#FF6B00' }
+                                    ]}>
+                                      {staff?.isExternal ? 'Vãng lai' : 'Nội bộ'}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <Text style={styles.staffRowRole}>Vị trí: {role}</Text>
+                                <Text style={styles.staffRowRate}>Lương ca: {rate}</Text>
+                              </View>
+                              
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const backupSchedules = [...localSchedules];
+                                  const updatedSchedules = localSchedules.filter(s => s.id !== schedule.id);
+                                  setLocalSchedules(updatedSchedules);
+                                  
+                                  if (schedule.id && !schedule.id.toString().startsWith('temp_')) {
+                                    (async () => {
+                                      try {
+                                        await removeEmployeeScheduleMutation.mutateAsync({ scheduleId: schedule.id, dateStr: activeDateStr });
+                                      } catch (err) {
+                                        console.log('Failed to delete specific schedule:', err);
+                                        setLocalSchedules(backupSchedules);
+                                      }
+                                    })();
+                                  }
+                                }}
+                                style={styles.unassignRowBtn}
+                              >
+                                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })}
                       </View>
                     </View>
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => openAssignModal(slot.id)}
-                      style={[styles.roleBadge, { backgroundColor: badgeBg }]}
-                    >
-                      <Text style={[styles.roleBadgeText, { color: badgeTextColor }]}>
-                        {role}
+                  );
+                } else {
+                  return (
+                    <View key={slot.id} style={styles.unassignedCard}>
+                      <View style={styles.bracketTL} />
+                      <View style={styles.bracketTR} />
+                      <View style={styles.bracketBL} />
+                      <View style={styles.bracketBR} />
+
+                      <View style={styles.cardHeader}>
+                        <View style={styles.slotDetails}>
+                          <View style={[styles.iconWrapper, { backgroundColor: iconBgColor }]}>
+                            <Text style={[styles.slotIconText, { color: iconColor }]}>{slotIcon}</Text>
+                          </View>
+                          <View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Text style={styles.slotNameText}>{slot.name}</Text>
+                              <View style={styles.slotActionIconsRow}>
+                                <TouchableOpacity
+                                  style={[styles.miniSlotActionBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                                  onPress={() => openEditShiftModal(slot)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Ionicons name="pencil" size={11} color="#2563EB" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.miniSlotActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}
+                                  onPress={() => handleDeleteShiftSlot(slot.id)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Ionicons name="trash" size={11} color="#EF4444" />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                            <Text style={styles.slotTimeText}>{slot.time}</Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.assignPlaceholderBox}
+                        activeOpacity={0.8}
+                        onPress={() => openAssignModal(slot.id)}
+                      >
+                        <Text style={styles.assignPlaceholderText}>
+                          + Gán Nhân Sự Đầu Tiên 👤
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
+              })}
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Lịch trình chi tiết Header Row */}
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.sectionTitleIcon}>⚡</Text>
+                <Text style={styles.sectionTitleText}>Lịch nhân sự vãng lai</Text>
+              </View>
+            </View>
+
+            {/* External Shifts List */}
+            <View style={styles.shiftGridContainer}>
+              {(() => {
+                const externalSchedules = (localSchedules || []).filter(s => s.jobShiftId);
+                if (externalSchedules.length > 0) {
+                  return (
+                    <View style={styles.externalGridContainer}>
+                      {externalSchedules.map((schedule) => {
+                        const staff = staffList.find(s => s.id === schedule.employeeId);
+                        const assignedStaffName = staff ? staff.name : 'Sinh viên vãng lai';
+                        const role = staff ? (staff.position || 'Nhân viên vãng lai') : 'Nhân viên vãng lai';
+                        const avatarSource = getAvatarSource(staff?.avatarUrl, staff?.gender, assignedStaffName);
+                        
+                        let rate = '28.000 đ/h';
+                        if (schedule.jobShiftSalary) {
+                          rate = `${Number(schedule.jobShiftSalary).toLocaleString('vi-VN')} đ/h`;
+                        } else if (staff && staff.hourlyRate) {
+                          rate = `${Number(staff.hourlyRate).toLocaleString('vi-VN')} đ/h`;
+                        }
+
+                        // Parse start/end times safely
+                        let startTimeVN = '';
+                        let endTimeVN = '';
+                        try {
+                          startTimeVN = new Date(schedule.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                          endTimeVN = new Date(schedule.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                        } catch (e) {}
+
+                        return (
+                          <View key={schedule.id} style={styles.externalRosterCard}>
+                            <Image source={avatarSource} style={styles.staffRowAvatar} />
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Text style={styles.staffRowName}>{assignedStaffName}</Text>
+                                <View style={[styles.typeBadge, { backgroundColor: 'rgba(91, 0, 223, 0.1)' }]}>
+                                  <Text style={[styles.typeBadgeText, { color: '#5B00DF' }]}>Vãng lai</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.staffRowRole}>Công việc: {role}</Text>
+                              <Text style={styles.externalTimeText}>⏰ Giờ làm: {startTimeVN} - {endTimeVN}</Text>
+                              <Text style={styles.staffRowRate}>Lương ca: {rate}</Text>
+                            </View>
+                            <TouchableOpacity
+                              onPress={() => {
+                                const backupSchedules = [...localSchedules];
+                                const updatedSchedules = localSchedules.filter(s => s.id !== schedule.id);
+                                setLocalSchedules(updatedSchedules);
+                                
+                                if (schedule.id && !schedule.id.toString().startsWith('temp_')) {
+                                  (async () => {
+                                    try {
+                                      await removeEmployeeScheduleMutation.mutateAsync({ scheduleId: schedule.id, dateStr: activeDateStr });
+                                    } catch (err) {
+                                      console.log('Failed to delete external schedule:', err);
+                                      setLocalSchedules(backupSchedules);
+                                    }
+                                  })();
+                                }
+                              }}
+                              style={styles.unassignRowBtn}
+                            >
+                              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  );
+                } else {
+                  return (
+                    <View style={styles.emptyExternalState}>
+                      <Text style={styles.emptyExternalIcon}>✨</Text>
+                      <Text style={styles.emptyExternalTitle}>Không có nhân sự vãng lai</Text>
+                      <Text style={styles.emptyExternalBody}>
+                        Lịch làm việc của nhân sự vãng lai được tự động đồng bộ khi bạn phê duyệt đơn ứng tuyển của sinh viên.
                       </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => openAssignModal(slot.id)}
-                    style={styles.assignedStaffBox}
-                  >
-                    <Image source={avatarSource} style={styles.staffAvatarImage} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.staffNameText}>{assignedStaffName}</Text>
-                      <Text style={styles.staffRateText}>Lương ca: {rate}</Text>
                     </View>
-                    <Text style={styles.assignedBadgeText}>Đã gán nhân sự</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            } else {
-              return (
-                <View key={slot.id} style={styles.unassignedCard}>
-                  <View style={styles.bracketTL} />
-                  <View style={styles.bracketTR} />
-                  <View style={styles.bracketBL} />
-                  <View style={styles.bracketBR} />
+                  );
+                }
+              })()}
+            </View>
+          </>
+        )}
 
-                  <View style={styles.cardHeader}>
-                    <View style={styles.slotDetails}>
-                      <View style={[styles.iconWrapper, { backgroundColor: iconBgColor }]}>
-                        <Text style={[styles.slotIconText, { color: iconColor }]}>{slotIcon}</Text>
-                      </View>
-                      <View>
-                        <Text style={styles.slotNameText}>{slot.name}</Text>
-                        <Text style={styles.slotTimeText}>{slot.time}</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.unassignedButton}
-                    activeOpacity={0.8}
-                    onPress={() => openAssignModal(slot.id)}
-                  >
-                    <Text style={styles.unassignedButtonText}>
-                      [+] Gán Nhân Sự 👤
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            }
-          })}
-        </View>
-        
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>💡 Hướng dẫn xếp ca nhanh</Text>
           <Text style={styles.infoBody}>
-            Nhấn vào nút <Text style={{fontWeight: 'bold'}}>Gán Nhân Sự</Text> hoặc hộp thoại thông tin nhân viên trên bất kỳ ca làm nào để mở danh sách nhân sự nội bộ và phân công làm việc.
+            {activeTab === 'internal' 
+              ? "Nhấn nút '+ Thêm nhân sự' hoặc nút gán nhân sự trên bất kỳ ca làm nào để chọn danh sách nhân sự nội bộ và phân công." 
+              : "Lịch làm việc của sinh viên vãng lai được cố định theo đúng ca đăng ký trong tin tuyển dụng và tự động đồng bộ khi được duyệt."
+            }
           </Text>
         </View>
       </ScrollView>
 
-      {/* Staff Selector Modal (Bottom Sheet style) */}
+      {/* Staff Selector Modal (Centered style) */}
       <Modal
         visible={modalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-
+        <View style={styles.centeredModalOverlay}>
+          <View style={styles.centeredModalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 Gán nhân sự vào {assigningShift ? (shiftSlots.find(s => s.id === assigningShift.slotId)?.name || 'ca làm') : 'ca làm'}
@@ -522,9 +1038,8 @@ export default function EmployerScheduling() {
 
             <ScrollView contentContainerStyle={styles.modalList} showsVerticalScrollIndicator={false}>
               {filteredStaff.map((staff) => {
-                const avatarSource = getAvatarSource(null, staff.gender, staff.name);
-                const slotSchedule = (localSchedules || []).find(s => s.note === assigningShift?.slotId);
-                const isSelected = slotSchedule && slotSchedule.employeeId === staff.id;
+                const avatarSource = getAvatarSource(staff.avatarUrl, staff.gender, staff.name);
+                const isSelected = (localSchedules || []).some(s => s.note === assigningShift?.slotId && s.employeeId === staff.id);
 
                 return (
                   <TouchableOpacity
@@ -535,7 +1050,6 @@ export default function EmployerScheduling() {
                     ]}
                     onPress={() => {
                       handleAssignStaff(staff.id);
-                      setSearchQuery('');
                     }}
                     activeOpacity={0.8}
                   >
@@ -543,9 +1057,7 @@ export default function EmployerScheduling() {
                       <Image source={avatarSource} style={styles.staffSelectAvatar} />
                       <View>
                         <Text style={styles.selectStaffName}>{staff.name}</Text>
-                        <Text style={[styles.selectStaffType, { color: staff.isExternal ? '#5B00DF' : '#FF6B00' }]}>
-                          {staff.isExternal ? 'VÃNG LAI STAFF' : 'NỘI BỘ STAFF'}
-                        </Text>
+                        <Text style={styles.selectStaffRole}>Vị trí: {staff.role}</Text>
                       </View>
                     </View>
                     <View style={[styles.radioButton, isSelected && styles.radioButtonActive]}>
@@ -574,19 +1086,17 @@ export default function EmployerScheduling() {
       {/* Add Shift Modal */}
       <Modal
         visible={addShiftModalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => {
           setAddShiftModalVisible(false);
           resetNewShiftForm();
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-
+        <View style={styles.centeredModalOverlay}>
+          <View style={styles.centeredModalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Thêm ca làm việc mới</Text>
+              <Text style={styles.modalTitle}>{editingSlotId ? 'Chỉnh sửa ca làm' : 'Thêm ca làm việc mới'}</Text>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
                 onPress={() => {
@@ -598,7 +1108,7 @@ export default function EmployerScheduling() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.addShiftForm} keyboardShouldPersistTaps="handled">
+            <ScrollView contentContainerStyle={styles.centeredModalForm} keyboardShouldPersistTaps="handled">
               <Text style={styles.inputLabel}>Tên ca làm việc</Text>
               <TextInput
                 style={styles.formInput}
@@ -607,29 +1117,34 @@ export default function EmployerScheduling() {
                 value={newShiftName}
                 onChangeText={setNewShiftName}
               />
+              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
 
               <View style={styles.timeInputsRow}>
                 <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={styles.inputLabel}>Giờ bắt đầu</Text>
-                  <TextInput
+                  <TouchableOpacity
                     style={styles.formInput}
-                    placeholder="HH:MM (ví dụ: 11:00)"
-                    placeholderTextColor="#94A3B8"
-                    value={newShiftStart}
-                    onChangeText={setNewShiftStart}
-                    maxLength={5}
-                  />
+                    onPress={() => setStartTimeVisible(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: newShiftStart ? '#181C1E' : '#94A3B8', fontSize: 14 }}>
+                      {newShiftStart || 'Chọn giờ'}
+                    </Text>
+                  </TouchableOpacity>
+                  {errors.start && <Text style={styles.errorText}>{errors.start}</Text>}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>Giờ kết thúc</Text>
-                  <TextInput
+                  <TouchableOpacity
                     style={styles.formInput}
-                    placeholder="HH:MM (ví dụ: 15:00)"
-                    placeholderTextColor="#94A3B8"
-                    value={newShiftEnd}
-                    onChangeText={setNewShiftEnd}
-                    maxLength={5}
-                  />
+                    onPress={() => setEndTimeVisible(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: newShiftEnd ? '#181C1E' : '#94A3B8', fontSize: 14 }}>
+                      {newShiftEnd || 'Chọn giờ'}
+                    </Text>
+                  </TouchableOpacity>
+                  {errors.end && <Text style={styles.errorText}>{errors.end}</Text>}
                 </View>
               </View>
 
@@ -654,9 +1169,83 @@ export default function EmployerScheduling() {
                 onPress={handleAddShiftSubmit}
                 activeOpacity={0.8}
               >
-                <Text style={styles.submitShiftButtonText}>Thêm Ca Làm Việc</Text>
+                <Text style={styles.submitShiftButtonText}>{editingSlotId ? 'Cập nhật Ca Làm' : 'Thêm Ca Làm Việc'}</Text>
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+        <CustomTimePickerModal
+          visible={startTimeVisible}
+          value={newShiftStart}
+          onClose={() => setStartTimeVisible(false)}
+          onSelect={setNewShiftStart}
+          title="Chọn giờ bắt đầu"
+        />
+        <CustomTimePickerModal
+          visible={endTimeVisible}
+          value={newShiftEnd}
+          onClose={() => setEndTimeVisible(false)}
+          onSelect={setNewShiftEnd}
+          title="Chọn giờ kết thúc"
+        />
+      </Modal>
+
+      {/* Custom Delete Confirm Modal */}
+      <Modal
+        visible={deleteConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmVisible(false)}
+      >
+        <View style={pickerModalStyles.modalOverlay}>
+          <View style={[pickerModalStyles.pickerContainer, { padding: 24, maxWidth: 320 }]}>
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{
+                width: 60,
+                height: 60,
+                borderRadius: 30,
+                backgroundColor: '#FEE2E2',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 16
+              }}>
+                <Ionicons name="trash-outline" size={32} color="#EF4444" />
+              </View>
+              <Text style={{
+                fontSize: 18,
+                fontWeight: '800',
+                color: '#1F2937',
+                textAlign: 'center',
+                marginBottom: 8,
+                fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold'
+              }}>
+                Xóa ca làm việc
+              </Text>
+              <Text style={{
+                fontSize: 14,
+                color: '#6B7280',
+                textAlign: 'center',
+                lineHeight: 20,
+                fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular'
+              }}>
+                Bạn có chắc chắn muốn xóa ca làm <Text style={{ fontWeight: 'bold', color: '#111827' }}>"{slotToDelete?.name}"</Text> không? Hành động này không thể hoàn tác.
+              </Text>
+            </View>
+
+            <View style={pickerModalStyles.actionsRow}>
+              <TouchableOpacity
+                onPress={() => setDeleteConfirmVisible(false)}
+                style={[pickerModalStyles.actionBtn, pickerModalStyles.cancelBtn]}
+              >
+                <Text style={pickerModalStyles.cancelBtnText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmDeleteShiftSlot}
+                style={[pickerModalStyles.actionBtn, pickerModalStyles.confirmBtn, { backgroundColor: '#EF4444' }]}
+              >
+                <Text style={[pickerModalStyles.confirmBtnText, { color: '#FFFFFF' }]}>Xóa</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -812,7 +1401,7 @@ const styles = StyleSheet.create({
   },
   floatingFab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 110,
     right: 24,
     width: 56,
     height: 56,
@@ -1053,6 +1642,33 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     maxHeight: '80%',
   },
+  centeredModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  centeredModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingBottom: 24,
+    width: '100%',
+    maxWidth: 340,
+    maxHeight: '85%',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  centeredModalForm: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
   modalHandle: {
     width: 48,
     height: 6,
@@ -1149,6 +1765,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 2,
   },
+  selectStaffRole: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
   radioButton: {
     width: 20,
     height: 20,
@@ -1209,6 +1830,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 14,
     color: '#181C1E',
+    justifyContent: 'center',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+    marginBottom: 4,
+    marginLeft: 4,
   },
   timeInputsRow: {
     flexDirection: 'row',
@@ -1263,5 +1893,202 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  assignedStaffContainer: {
+    marginTop: 8,
+  },
+  assignedStaffRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  staffRowAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+  },
+  staffRowName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1E293B',
+  },
+  staffRowRole: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  staffRowRate: {
+    fontSize: 11,
+    color: '#FF6B00',
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  typeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  typeBadgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  unassignRowBtn: {
+    padding: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unassignRowBtnText: {
+    fontSize: 14,
+  },
+  addStaffHeaderBtn: {
+    backgroundColor: '#FF6B00',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  addStaffHeaderBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  assignPlaceholderBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+    marginTop: 8,
+  },
+  assignPlaceholderText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#64748B',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  activeTabButton: {
+    backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+      }
+    }),
+  },
+  tabButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  activeTabButtonText: {
+    color: '#FF6B00',
+  },
+  externalGridContainer: {
+    width: '100%',
+  },
+  externalRosterCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(91, 0, 223, 0.12)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#5B00DF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 1.5,
+      },
+      web: {
+        boxShadow: '0 4px 15px rgba(91, 0, 223, 0.04)',
+      }
+    }),
+  },
+  externalTimeText: {
+    fontSize: 11,
+    color: '#5B00DF',
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  emptyExternalState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  emptyExternalIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
+  emptyExternalTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#475569',
+    marginBottom: 8,
+  },
+  emptyExternalBody: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  slotActionIconsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  miniSlotActionBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 2,
   },
 });

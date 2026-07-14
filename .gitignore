@@ -1,4 +1,6 @@
 ## [Phần 1: Bảo mật - Quan trọng nhất]
+.env
+.env.*
 src/**/appsettings.json
 src/**/appsettings.Development.json
 !src/**/appsettings.Example.json

@@ -1,4 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   getPublishedJobs,
   getJobPostShifts,
@@ -19,7 +22,50 @@ import {
   checkOutShiftApi,
   getEmployees
 } from '../api/management';
+import { getJobPostQuotaApi } from '../api/auth';
 import { translateError } from './useAuth';
+
+const formatTimeVN = (dateInput) => {
+  if (!dateInput) return '';
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return '';
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  } catch (e) {
+    return '';
+  }
+};
+
+const formatDateVN = (dateInput) => {
+  if (!dateInput) return '';
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return '';
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch (e) {
+    return '';
+  }
+};
+
+const checkIsEmergency = (title, description) => {
+  const t = (title || '').toLowerCase();
+  const d = (description || '').toLowerCase();
+  return t.includes('khẩn cấp') || 
+         t.includes('khấn cấp') || 
+         t.includes('khần cấp') || 
+         t.includes('tuyển gấp') || 
+         t.includes('gấp') || 
+         d.includes('khẩn cấp') || 
+         d.includes('khấn cấp') || 
+         d.includes('khần cấp') || 
+         d.includes('tuyển gấp') || 
+         d.includes('gấp');
+};
 
 const INITIAL_SHIFTS = [];
 const INITIAL_LEAVE_REQUESTS = [];
@@ -29,12 +75,65 @@ export const useShifts = ({
   STUDENT_MOCK_GPS,
   showToast,
   addNotification,
-  loadStaffListRef
+  loadStaffListRef,
+  navigateTo
 }) => {
+  const queryClient = useQueryClient();
   const [shifts, setShifts] = useState(INITIAL_SHIFTS);
-  const [activeShift, setActiveShift] = useState(null);
+  const [activeShift, setActiveShiftRaw] = useState(null);
+  const activeShiftRestoredRef = useRef(false);
+
+  // Persist activeShift to AsyncStorage so it survives tab switches / remounts
+  const setActiveShift = useCallback((value) => {
+    if (typeof value === 'function') {
+      setActiveShiftRaw(prev => {
+        const next = value(prev);
+        if (next) {
+          AsyncStorage.setItem('@proxijob_active_shift', JSON.stringify(next)).catch(() => {});
+        } else {
+          AsyncStorage.removeItem('@proxijob_active_shift').catch(() => {});
+        }
+        return next;
+      });
+    } else {
+      setActiveShiftRaw(value);
+      if (value) {
+        AsyncStorage.setItem('@proxijob_active_shift', JSON.stringify(value)).catch(() => {});
+      } else {
+        AsyncStorage.removeItem('@proxijob_active_shift').catch(() => {});
+      }
+    }
+  }, []);
+
+  // Restore activeShift from AsyncStorage on mount
+  useEffect(() => {
+    if (activeShiftRestoredRef.current) return;
+    activeShiftRestoredRef.current = true;
+    AsyncStorage.getItem('@proxijob_active_shift').then(stored => {
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          // Only restore if it's a checkin_active shift (not stale completed)
+          if (parsed && parsed.status === 'checkin_active') {
+            setActiveShiftRaw(parsed);
+            console.log('[useShifts] Restored activeShift from storage:', parsed.id);
+          } else {
+            // Clean up stale data
+            AsyncStorage.removeItem('@proxijob_active_shift').catch(() => {});
+          }
+        } catch (e) {
+          AsyncStorage.removeItem('@proxijob_active_shift').catch(() => {});
+        }
+      }
+    }).catch(() => {});
+  }, []);
   const [employerJobs, setEmployerJobs] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState(INITIAL_LEAVE_REQUESTS);
+
+  const userId = user?.id;
+  const userRole = user?.role;
+  const mockLat = STUDENT_MOCK_GPS?.latitude || 10.7769;
+  const mockLng = STUDENT_MOCK_GPS?.longitude || 106.7009;
 
   const loadShifts = useCallback(async () => {
     try {
@@ -56,15 +155,16 @@ export const useShifts = ({
               hourlyRate: s.salary,
               latitude: job.latitude || job.location?.latitude || 0,
               longitude: job.longitude || job.location?.longitude || 0,
-              address: job.address || job.location?.address || '',
-              date: new Date(s.startTime).toLocaleDateString('vi-VN'),
-              time: `${new Date(s.startTime).getHours().toString().padStart(2, '0')}:${new Date(s.startTime).getMinutes().toString().padStart(2, '0')} - ${new Date(s.endTime).getHours().toString().padStart(2, '0')}:${new Date(s.endTime).getMinutes().toString().padStart(2, '0')}`,
+              address: job.address || job.location?.address || job.shopAddress || job.locationAddress || '',
+              date: formatDateVN(s.startTime),
+              time: `${formatTimeVN(s.startTime)} - ${formatTimeVN(s.endTime)}`,
               description: job.description || '',
               requirements: job.requirements || '',
               rating: 5.0,
               reviewsCount: 1,
               status: s.remainingSlots <= 0 ? 'full' : 'available',
-              isEmergency: (job.title || '').toLowerCase().includes('khẩn cấp') || (job.description || '').toLowerCase().includes('khẩn cấp'),
+              isEmergency: checkIsEmergency(job.title, job.description),
+              createdAt: job.createdAt || job.CreatedAt || s.startTime,
               auditFields: {
                 createdBy: job.createdBy,
                 updatedBy: job.createdBy,
@@ -79,25 +179,49 @@ export const useShifts = ({
 
       let baseShifts = allShifts;
 
-      if (user && user.role === 'student') {
+      if (userId && userRole === 'student') {
         try {
-          const appsRes = await getMyApplications(user.id);
-          const apps = Array.isArray(appsRes) ? appsRes : (Array.isArray(appsRes?.data) ? appsRes.data : (appsRes?.items || appsRes?.data?.items || []));
+          const appsRes = await getMyApplications(userId);
+          const apps = Array.isArray(appsRes) ? appsRes : (Array.isArray(appsRes?.data) ? appsRes.data : (appsRes?.items || appsRes?.Items || appsRes?.data?.items || appsRes?.data?.Items || []));
+          
+          let notifiedJson = await AsyncStorage.getItem('notified_approved_apps');
+          let notifiedList = notifiedJson ? JSON.parse(notifiedJson) : [];
+          let updatedNotified = false;
+
           baseShifts = baseShifts.map(shift => {
-            const app = apps.find(a => a.shiftId === shift.id || a.jobShiftId === shift.id);
+            const app = apps.find(a => {
+              const aShiftId = a.shiftId !== undefined ? a.shiftId : a.ShiftId;
+              const aJobShiftId = a.jobShiftId !== undefined ? a.jobShiftId : a.JobShiftId;
+              return aShiftId === shift.id || aJobShiftId === shift.id;
+            });
             if (app) {
               let status = 'applied';
-              if (app.status === 'Approved') status = 'approved';
-              else if (app.status === 'Rejected') status = 'available';
-              else if (app.status === 'Completed') status = 'completed';
+              const appStatus = app.status !== undefined ? app.status : app.Status;
+              const appId = app.id !== undefined ? app.id : app.Id;
+              if (appStatus === 'Approved') {
+                status = 'approved';
+                if (!notifiedList.includes(appId)) {
+                  notifiedList.push(appId);
+                  updatedNotified = true;
+                  if (addNotification) {
+                    addNotification('Ứng tuyển', `Chúc mừng! Đơn ứng tuyển ca làm "${shift.title}" của bạn đã được DUYỆT.`, 'Vừa xong');
+                  }
+                }
+              }
+              else if (appStatus === 'Rejected') status = 'available';
+              else if (appStatus === 'Completed') status = 'completed';
 
               if (shift.status === 'checkin_active' && status === 'approved') {
                 return shift;
               }
-              return { ...shift, status, applicationId: app.id };
+              return { ...shift, status, applicationId: appId };
             }
             return shift;
           });
+
+          if (updatedNotified) {
+            await AsyncStorage.setItem('notified_approved_apps', JSON.stringify(notifiedList));
+          }
         } catch (appErr) {
           console.log('Error merging applications inside loadShifts:', appErr);
         }
@@ -108,21 +232,21 @@ export const useShifts = ({
       console.log('Error loading published shifts:', err);
       setShifts([]);
     }
-  }, [user, STUDENT_MOCK_GPS]);
+  }, [userId, userRole, mockLat, mockLng]);
 
   const loadMyApplications = useCallback(async (studentId) => {
     await loadShifts();
   }, [loadShifts]);
 
   const loadEmployerJobs = useCallback(async () => {
-    if (!user || user.role !== 'employer') return;
+    if (!userId || userRole !== 'employer') return;
     try {
       const [empsRes, jobsRes] = await Promise.all([
         getEmployees().catch(err => {
           console.log('Error loading employees in loadEmployerJobs:', err);
           return [];
         }),
-        getJobPostsByBusiness(user.id).catch(err => {
+        getJobPostsByBusiness(userId).catch(err => {
           console.log('Error loading jobs in loadEmployerJobs:', err);
           return [];
         })
@@ -145,7 +269,7 @@ export const useShifts = ({
             let currentStatus = 'available';
 
             try {
-              const appsRes = await getApplicationsByShift(s.id, user.id);
+              const appsRes = await getApplicationsByShift(s.id, userId);
               const appsList = Array.isArray(appsRes) ? appsRes : (Array.isArray(appsRes?.data) ? appsRes.data : (appsRes?.items || appsRes?.data?.items || []));
 
               const activeApps = appsList.filter(a => a.status !== 'Cancelled' && a.status !== 'CancelledApproved' && a.status !== 'CancelledRejected' && a.status !== 'Rejected');
@@ -157,7 +281,7 @@ export const useShifts = ({
                 const staffName = emp ? (emp.fullName || emp.name || emp.FullName) : `Sinh viên #${a.studentId}`;
                 const position = emp ? (emp.position || emp.role || emp.Position || 'Nhân viên') : 'Nhân viên';
 
-                const reason = a.introduction || 'Yêu cầu hủy ca làm việc / xin nghỉ phép';
+                const reason = a.cancelNote || a.introduction || 'Yêu cầu hủy ca làm việc / xin nghỉ phép';
                 const isSwap = reason.toLowerCase().includes('đổi') || reason.toLowerCase().includes('chuyển') || reason.toLowerCase().includes('sang') || reason.toLowerCase().includes('ca');
                 const requestType = isSwap ? 'swap' : 'leave';
                 const shiftTime = `${new Date(s.startTime).getHours().toString().padStart(2, '0')}:${new Date(s.startTime).getMinutes().toString().padStart(2, '0')} - ${new Date(s.endTime).getHours().toString().padStart(2, '0')}:${new Date(s.endTime).getMinutes().toString().padStart(2, '0')}`;
@@ -209,7 +333,7 @@ export const useShifts = ({
             let applicantSkills = '';
 
             try {
-              const appsRes = await getApplicationsByShift(s.id, user.id);
+              const appsRes = await getApplicationsByShift(s.id, userId);
               const appsList = Array.isArray(appsRes) ? appsRes : (Array.isArray(appsRes?.data) ? appsRes.data : (appsRes?.items || appsRes?.data?.items || []));
               const activeApps = appsList.filter(a => a.status !== 'Cancelled' && a.status !== 'CancelledApproved' && a.status !== 'CancelledRejected' && a.status !== 'Rejected');
               if (activeApps.length > 0) {
@@ -239,16 +363,16 @@ export const useShifts = ({
               title: job.title,
               shopName: job.categoryName || 'Cửa hàng',
               hourlyRate: s.salary,
-              latitude: STUDENT_MOCK_GPS.latitude,
-              longitude: STUDENT_MOCK_GPS.longitude,
-              date: new Date(s.startTime).toLocaleDateString('vi-VN'),
-              time: `${new Date(s.startTime).getHours().toString().padStart(2, '0')}:${new Date(s.startTime).getMinutes().toString().padStart(2, '0')} - ${new Date(s.endTime).getHours().toString().padStart(2, '0')}:${new Date(s.endTime).getMinutes().toString().padStart(2, '0')}`,
+              latitude: job.latitude || job.location?.latitude || mockLat,
+              longitude: job.longitude || job.location?.longitude || mockLng,
+              date: formatDateVN(s.startTime),
+              time: `${formatTimeVN(s.startTime)} - ${formatTimeVN(s.endTime)}`,
               description: '',
               requirements: '',
               rating: 5.0,
               reviewsCount: 0,
               status: currentStatus,
-              isEmergency: (job.title || '').toLowerCase().includes('khẩn cấp'),
+              isEmergency: checkIsEmergency(job.title, job.description),
               applicantCount,
               applicantName,
               applicantSchool,
@@ -281,7 +405,7 @@ export const useShifts = ({
     } catch (err) {
       console.log('Error loading employer jobs:', err);
     }
-  }, [user, STUDENT_MOCK_GPS]);
+  }, [userId, userRole, mockLat, mockLng]);
 
   const applyToShift = useCallback(async (shiftId, introduction = 'Tôi muốn ứng tuyển.') => {
     try {
@@ -300,13 +424,15 @@ export const useShifts = ({
       );
 
       loadMyApplications(user.id).catch(err => console.log('Background reload failed:', err));
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
       return true;
     } catch (err) {
       console.log('Error applying to shift:', err.message);
       showToast('Ứng tuyển thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, showToast, addNotification, loadMyApplications]);
+  }, [user, showToast, addNotification, loadMyApplications, queryClient]);
 
   const checkInShift = useCallback(async (shiftId, qrToken, latitude, longitude, photoUrl = '') => {
     try {
@@ -343,13 +469,15 @@ export const useShifts = ({
           return shift;
         })
       );
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
       return true;
     } catch (err) {
       console.log('Check-in API failed:', err.message);
       showToast('Check-in thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, showToast, addNotification]);
+  }, [user, showToast, addNotification, queryClient]);
 
   const checkOutShift = useCallback(async (shiftId, latitude, longitude, photoUrl = '') => {
     try {
@@ -389,13 +517,15 @@ export const useShifts = ({
           return shift;
         })
       );
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
       return true;
     } catch (err) {
       console.log('Check-out API failed:', err.message);
       showToast('Check-out thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, shifts, activeShift, showToast, addNotification]);
+  }, [user, shifts, activeShift, showToast, addNotification, queryClient]);
 
   const createEmergencyShift = useCallback(async (title, shopName, hourlyRate, time, duration = '4 giờ') => {
     try {
@@ -430,8 +560,8 @@ export const useShifts = ({
         categoryId: 1,
         location: {
           address: 'Quận 1, TP.HCM',
-          latitude: STUDENT_MOCK_GPS.latitude,
-          longitude: STUDENT_MOCK_GPS.longitude
+          latitude: mockLat,
+          longitude: mockLng
         },
         skillIds: [],
         createdBy: user.name
@@ -452,6 +582,9 @@ export const useShifts = ({
       showToast('Đăng ca khẩn cấp thành công!', 'warning');
       addNotification('TIN TUYỂN GẤP', `Ca khẩn cấp "${title}" tại ${shopName} vừa được đăng với lương hấp dẫn!`, 'Vừa xong');
 
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
+
       loadEmployerJobs();
       return true;
     } catch (err) {
@@ -459,11 +592,17 @@ export const useShifts = ({
       showToast('Đăng ca khẩn cấp thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, STUDENT_MOCK_GPS, showToast, addNotification, loadEmployerJobs]);
+  }, [user, mockLat, mockLng, showToast, addNotification, loadEmployerJobs, queryClient]);
 
   const createJobPostWizard = useCallback(async (data) => {
     try {
       if (!user) throw new Error('Vui lòng đăng nhập.');
+
+      // ═══ KIỂM TRA HẠN MỨC ĐĂNG TIN PROACTIVE ═══
+      const quota = await getJobPostQuotaApi();
+      if (quota && !quota.canPostJob) {
+        throw new Error('QUOTA_EXCEEDED');
+      }
 
       const {
         title,
@@ -471,7 +610,8 @@ export const useShifts = ({
         requirements,
         categoryId,
         salary,
-        skillIds,
+        slots,
+        skillNames,
         address,
         latitude,
         longitude,
@@ -490,7 +630,9 @@ export const useShifts = ({
         const [year, month, day] = date.split('-').map(Number);
 
         startIso = new Date(Date.UTC(year, month - 1, day, parseInt(startParts[0], 10), parseInt(startParts[1], 10), 0));
+        startIso.setUTCHours(startIso.getUTCHours() - 7);
         endIso = new Date(Date.UTC(year, month - 1, day, parseInt(endParts[0], 10), parseInt(endParts[1], 10), 0));
+        endIso.setUTCHours(endIso.getUTCHours() - 7);
 
         if (endIso < startIso) {
           endIso.setUTCDate(endIso.getUTCDate() + 1);
@@ -505,10 +647,10 @@ export const useShifts = ({
         categoryId: parseInt(categoryId, 10),
         location: {
           address,
-          latitude: parseFloat(latitude) || STUDENT_MOCK_GPS.latitude,
-          longitude: parseFloat(longitude) || STUDENT_MOCK_GPS.longitude
+          latitude: parseFloat(latitude) || mockLat,
+          longitude: parseFloat(longitude) || mockLng
         },
-        skillIds: skillIds.map(Number),
+        skillNames: skillNames || [],
         createdBy: user.name
       });
 
@@ -519,7 +661,7 @@ export const useShifts = ({
         startTime: startIso.toISOString(),
         endTime: endIso.toISOString(),
         salary: parseInt(salary, 10),
-        slots: 1,
+        slots: slots !== undefined ? parseInt(slots, 10) : 1,
         createdBy: user.name
       });
 
@@ -532,14 +674,20 @@ export const useShifts = ({
         'Vừa xong'
       );
 
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
+
       loadEmployerJobs();
       return true;
     } catch (err) {
       console.log('Error creating job post via wizard:', err.message);
+      if (err.message === 'QUOTA_EXCEEDED') {
+        throw err;
+      }
       showToast('Đăng bài thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, STUDENT_MOCK_GPS, showToast, addNotification, loadEmployerJobs]);
+  }, [user, mockLat, mockLng, showToast, addNotification, loadEmployerJobs, queryClient, navigateTo]);
 
   const updateJobPostWizard = useCallback(async (jobPostId, data) => {
     try {
@@ -552,7 +700,7 @@ export const useShifts = ({
         address,
         latitude,
         longitude,
-        skillIds
+        skillNames
       } = data;
 
       await updateJobPostApi(jobPostId, {
@@ -564,14 +712,16 @@ export const useShifts = ({
         categoryId: parseInt(categoryId, 10),
         location: {
           address,
-          latitude: parseFloat(latitude) || STUDENT_MOCK_GPS.latitude,
-          longitude: parseFloat(longitude) || STUDENT_MOCK_GPS.longitude
+          latitude: parseFloat(latitude) || mockLat,
+          longitude: parseFloat(longitude) || mockLng
         },
-        skillIds: skillIds.map(Number),
+        skillNames: skillNames || [],
         updatedBy: user.name
       });
 
       showToast('Cập nhật bài đăng thành công!', 'success');
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
       await loadEmployerJobs();
       return true;
     } catch (err) {
@@ -579,13 +729,15 @@ export const useShifts = ({
       showToast('Cập nhật thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, STUDENT_MOCK_GPS, showToast, loadEmployerJobs]);
+  }, [user, mockLat, mockLng, showToast, loadEmployerJobs, queryClient]);
 
   const deleteJobPost = useCallback(async (jobPostId) => {
     try {
       if (!user) throw new Error('Vui lòng đăng nhập.');
       await deleteJobPostApi(jobPostId, user.id, user.name);
       showToast('Đã xóa bài đăng thành công!', 'info');
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
       await loadEmployerJobs();
       return true;
     } catch (err) {
@@ -593,13 +745,16 @@ export const useShifts = ({
       showToast('Xóa bài đăng thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, showToast, loadEmployerJobs]);
+  }, [user, showToast, loadEmployerJobs, queryClient]);
 
   const approveStudentApplication = useCallback(async (applicationId) => {
     try {
       if (!user) throw new Error('Vui lòng đăng nhập.');
       await approveApplication(applicationId, user.id, user.name);
       showToast('Đã duyệt đơn ứng tuyển!', 'success');
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['staffList'] });
       await loadEmployerJobs();
       if (loadStaffListRef && loadStaffListRef.current) {
         await loadStaffListRef.current();
@@ -610,13 +765,15 @@ export const useShifts = ({
       showToast('Duyệt đơn thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, showToast, loadEmployerJobs, loadStaffListRef]);
+  }, [user, showToast, loadEmployerJobs, loadStaffListRef, queryClient]);
 
   const rejectStudentApplication = useCallback(async (applicationId) => {
     try {
       if (!user) throw new Error('Vui lòng đăng nhập.');
       await rejectApplication(applicationId, user.id, user.name);
       showToast('Đã từ chối đơn ứng tuyển.', 'info');
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['employerJobs'] });
       await loadEmployerJobs();
       return true;
     } catch (err) {
@@ -624,22 +781,22 @@ export const useShifts = ({
       showToast('Từ chối đơn thất bại: ' + translateError(err), 'error');
       return false;
     }
-  }, [user, showToast, loadEmployerJobs]);
+  }, [user, showToast, loadEmployerJobs, queryClient]);
 
   useEffect(() => {
-    if (user) {
-      if (user.role === 'student') {
+    if (userId) {
+      if (userRole === 'student') {
         loadShifts();
       } else {
         loadEmployerJobs();
       }
     } else {
-      setShifts(INITIAL_SHIFTS);
-      setActiveShift(null);
-      setEmployerJobs([]);
-      setLeaveRequests(INITIAL_LEAVE_REQUESTS);
+      loadShifts(false);
+      setActiveShift(prev => prev === null ? null : null);
+      setEmployerJobs(prev => prev.length === 0 ? prev : []);
+      setLeaveRequests(prev => prev.length === 0 ? prev : INITIAL_LEAVE_REQUESTS);
     }
-  }, [user, loadShifts, loadEmployerJobs]);
+  }, [userId, userRole, loadShifts, loadEmployerJobs]);
 
   return {
     shifts,

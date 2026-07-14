@@ -1,23 +1,71 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform,
+  Share,
+  Image,
+  Animated,
+  Alert,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '../../styles/theme';
+import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../../context/AppContext';
+import { useShiftsQuery, useApplyMutation, useEmployerJobsQuery } from '../../hooks/queries';
+import { getAvatarSource } from '../../utils/avatarHelper';
 
 export default function JobDetailScreen() {
-  const { shifts, applyToShift, navigationParams, goBack, navigateTo, studentCoords, getDistanceInMeters } = useContext(AppContext);
+  const {
+    navigationParams,
+    goBack,
+    navigateTo,
+    user,
+    showToast,
+    studentCoords,
+    getDistanceInMeters,
+    addNotification
+  } = useContext(AppContext);
+
+  const { data: shifts = [] } = useShiftsQuery(user, studentCoords);
+  const { data: employerData } = useEmployerJobsQuery(user);
+  const employerShifts = employerData?.shifts || [];
+  const applyMutation = useApplyMutation(user, showToast, addNotification);
+
+  const applyToShift = async (shiftId) => {
+    return applyMutation.mutateAsync({ shiftId });
+  };
+
   const [applying, setApplying] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [quotaModalVisible, setQuotaModalVisible] = useState(false);
 
   const shiftId = navigationParams?.shiftId;
-  const shift = shifts.find((s) => s.id === shiftId);
+  const shift = shifts.find((s) => s.id === shiftId) || employerShifts.find((s) => s.id === shiftId);
+
+  const [pulseAnim] = useState(new Animated.Value(0.3));
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: false,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 900,
+          useNativeDriver: false,
+        })
+      ])
+    ).start();
+  }, [pulseAnim]);
 
   if (!shift) {
     return (
@@ -31,139 +79,427 @@ export default function JobDetailScreen() {
   }
 
   const handleApply = async () => {
+    if (!user) {
+      showToast('Vui lòng đăng nhập hoặc đăng ký tài khoản để ứng tuyển công việc!', 'warning');
+      navigateTo('login');
+      return;
+    }
     setApplying(true);
-    const ok = await applyToShift(shift.id);
-    setApplying(false);
-    if (ok) {
-      setSuccess(true);
-      setTimeout(() => {
-        navigateTo('student_calendar');
-      }, 1500);
+    try {
+      const ok = await applyToShift(shift.id);
+      if (ok) {
+        setSuccess(true);
+        setTimeout(() => {
+          navigateTo('student_calendar');
+        }, 1500);
+      }
+    } catch (err) {
+      const msg = (err.message || '').toLowerCase();
+      if (msg.includes('hết lượt') || msg.includes('limit') || msg.includes('quota') || msg.includes('lượt ứng tuyển')) {
+        setQuotaModalVisible(true);
+      } else {
+        showToast(err.message || 'Ứng tuyển thất bại!', 'error');
+      }
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleToggleSave = () => {
+    setIsSaved(!isSaved);
+    showToast(!isSaved ? 'Đã lưu công việc thành công!' : 'Đã bỏ lưu công việc!', 'success');
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `Công việc hấp dẫn tại ProxiJob: ${shift.title} ở ${shift.shopName}. Lương ${shift.hourlyRate.toLocaleString('vi-VN')} đ/giờ!`,
+      });
+    } catch (error) {
+      showToast('Không thể chia sẻ công việc này.', 'error');
     }
   };
 
   const isApplied = shift.status === 'applied';
   const isApproved = shift.status === 'approved' || shift.status === 'checkin_active' || shift.status === 'completed';
 
+  // Helper: Get shop initials for avatar logo
+  const getShopInitials = (shopName) => {
+    if (!shopName) return 'PJ';
+    const cleanName = shopName.replace(/(Coffee|Tea|Restaurant|Store|Shop|Quán|Café)/gi, '').trim();
+    const parts = cleanName.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return cleanName.substring(0, 2).toUpperCase();
+  };
+
+  // Helper: Get dynamic logo background color
+  const getShopBgColor = (shopName) => {
+    if (!shopName) return '#EFF6FF';
+    const charCode = shopName.charCodeAt(0) || 0;
+    const colors = ['#FFE4E6', '#FEF3C7', '#ECFDF5', '#EFF6FF', '#F5F3FF', '#FFF7ED'];
+    return colors[charCode % colors.length];
+  };
+
+  const getCategoryColors = (categoryName, shopName) => {
+    const target = (categoryName || shopName || '').trim().toLowerCase();
+    
+    if (target.includes('giao hàng') || target.includes('delivery') || target.includes('shipper')) {
+      return {
+        primary: '#EF4444', // Red
+        bgLight: '#FEF2F2',
+        borderLight: '#FCA5A5',
+        borderUrgent: '#FCA5A5',
+      };
+    }
+    if (target.includes('gia sư') || target.includes('tutor') || target.includes('dạy') || target.includes('học')) {
+      return {
+        primary: '#2563EB', // Blue
+        bgLight: '#EFF6FF',
+        borderLight: '#BFDBFE',
+        borderUrgent: '#93C5FD',
+      };
+    }
+    if (target.includes('sửa chữa') || target.includes('repair') || target.includes('bảo trì') || target.includes('kỹ thuật')) {
+      return {
+        primary: '#F59E0B', // Amber
+        bgLight: '#FFFBEB',
+        borderLight: '#FDE68A',
+        borderUrgent: '#FCD34D',
+      };
+    }
+    if (target.includes('phục vụ') || target.includes('waiter') || target.includes('chạy bàn') || target.includes('phụ vụ')) {
+      return {
+        primary: '#8B5CF6', // Purple
+        bgLight: '#F5F3FF',
+        borderLight: '#DDD6FE',
+        borderUrgent: '#C084FC',
+      };
+    }
+    if (target.includes('thú cưng') || target.includes('pet')) {
+      return {
+        primary: '#EC4899', // Pink
+        bgLight: '#FDF2F8',
+        borderLight: '#FBCFE8',
+        borderUrgent: '#F472B6',
+      };
+    }
+    return {
+      primary: '#0D9488', // Teal
+      bgLight: '#F0FDFA',
+      borderLight: '#CCFBF1',
+      borderUrgent: '#5EEAD4',
+    };
+  };
+
+  // Helper: Get dynamic logo text color
+  const getShopTextColor = (shopName) => {
+    if (!shopName) return '#475569';
+    const charCode = shopName.charCodeAt(0) || 0;
+    const colors = ['#E11D48', '#D97706', '#059669', '#2563EB', '#7C3AED', '#EA580C'];
+    return colors[charCode % colors.length];
+  };
+
+  // Helper: Get experience text based on requirements
+  const getExperienceText = (requirementsText) => {
+    if (!requirementsText) return 'Không yêu cầu';
+    const match = requirementsText.match(/(\d+)\s*(năm|tháng)\s*kinh\s*nghiệm/i) || 
+                  requirementsText.match(/kinh\s*nghiệm\s*(\d+)\s*(năm|tháng)/i) || 
+                  requirementsText.match(/(\d+)\+\s*(năm|tháng)/i);
+    if (match) return match[0];
+    if (requirementsText.toLowerCase().includes('kinh nghiệm')) return 'Có kinh nghiệm';
+    return 'Không yêu cầu';
+  };
+
+  // Helper: Get dynamic skills list based on job title
+  const getSkillsForJob = (title, shopName) => {
+    const t = (title || '').toLowerCase();
+    const s = (shopName || '').toLowerCase();
+    if (t.includes('pha chế') || t.includes('barista') || s.includes('coffee') || s.includes('cafe') || s.includes('trà')) {
+      return ['Pha chế chuyên nghiệp', 'Tiếng Anh giao tiếp', 'Làm việc nhóm', 'Latte Art'];
+    }
+    if (t.includes('phục vụ') || t.includes('waiter') || t.includes('chạy bàn')) {
+      return ['Giao tiếp tự tin', 'Chăm chỉ', 'Giải quyết tình huống', 'Làm việc nhóm'];
+    }
+    if (t.includes('thu ngân') || t.includes('cashier')) {
+      return ['Tính toán nhanh', 'Cẩn thận', 'Sử dụng POS', 'Trung thực'];
+    }
+    if (t.includes('bán hàng') || t.includes('sale') || t.includes('tư vấn')) {
+      return ['Giao tiếp tốt', 'Thuyết phục khách hàng', 'Thân thiện', 'Đúng giờ'];
+    }
+    return ['Chăm chỉ', 'Đúng giờ', 'Làm việc nhóm', 'Thân thiện'];
+  };
+
+  // Helper: Parse bullet points from text
+  const parseBullets = (text) => {
+    if (!text) return [];
+    return text
+      .split(/\n|•|;\s*-/)
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+  };
+
+  const getDistanceText = () => {
+    if (!shift.latitude || !shift.longitude || !studentCoords) return null;
+    if (shift.latitude === 0 && shift.longitude === 0) return null;
+    if (!getDistanceInMeters) return null;
+    const distMeters = getDistanceInMeters(
+      studentCoords.latitude,
+      studentCoords.longitude,
+      shift.latitude,
+      shift.longitude
+    );
+    const distKm = (distMeters / 1000).toFixed(1);
+    return `Cách bạn ${distKm} km`;
+  };
+
+  // Get raw arrays of items
+  const descBullets = parseBullets(shift.description);
+  const reqBullets = parseBullets(shift.requirements);
+
+  // Guarantee at least some items to keep layout robust and identical to mockup length
+  const finalDescBullets = descBullets.length > 0 ? descBullets : [
+    'Pha chế các loại thức uống theo tiêu chuẩn cao cấp của cửa hàng.',
+    'Sáng tạo và đề xuất các công thức đồ uống mới theo mùa.',
+    'Quản lý kho nguyên vật liệu và đảm bảo vệ sinh khu vực quầy bar.',
+    'Đào tạo và hướng dẫn các phụ tá mới gia nhập đội ngũ.'
+  ];
+
+  const finalReqBullets = reqBullets.length > 0 ? reqBullets : [
+    'Có ít nhất 1 năm kinh nghiệm ở vị trí tương đương tại các chuỗi cửa hàng.',
+    'Kỹ năng giao tiếp và làm việc nhóm là một điểm cộng lớn.',
+    'Ngoại hình ưa nhìn, giao tiếp tự tin và thái độ phục vụ khách hàng tốt.'
+  ];
+
+  const catColors = getCategoryColors(shift.categoryName, shift.shopName);
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBackBtn} onPress={goBack}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi Tiết Công Việc</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {shift.isEmergency && (
-          <View style={styles.emergencyHeader}>
-            <Text style={styles.emergencyHeaderText}>🔥 TUYỂN GẤP (+30% LƯƠNG TRỰC TIẾP)</Text>
-          </View>
-        )}
-
-        <View style={styles.cardHeader}>
-          <Text style={styles.shopName}>{shift.shopName}</Text>
-          <Text style={styles.jobTitle}>{shift.title}</Text>
-          
-          <View style={styles.wageBox}>
-            <Text style={styles.wageLabel}>Mức lương thực nhận:</Text>
-            <Text style={styles.wageValue}>{(shift.hourlyRate).toLocaleString('vi-VN')} đ / giờ</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Thông tin ca làm</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>📅</Text>
-            <View>
-              <Text style={styles.infoLabel}>Ngày làm việc</Text>
-              <Text style={styles.infoText}>{shift.date}</Text>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
+      >
+        {/* Main Job Info Card */}
+        <View style={styles.mainInfoCard}>
+          <View style={styles.cardHeaderRow}>
+            <View style={[styles.shopLogoBox, { backgroundColor: getShopBgColor(shift.shopName) }]}>
+              <Text style={[styles.shopLogoText, { color: getShopTextColor(shift.shopName) }]}>
+                {getShopInitials(shift.shopName)}
+              </Text>
             </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>⏰</Text>
-            <View>
-              <Text style={styles.infoLabel}>Thời gian ca làm</Text>
-              <Text style={styles.infoText}>{shift.time} (4 giờ)</Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>📍</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.infoLabel}>Địa điểm</Text>
-              <Text style={styles.infoText}>{shift.address || 'Chưa có địa chỉ'}</Text>
-              {(() => {
-                const hasGps = shift.latitude && shift.longitude && !(shift.latitude === 0 && shift.longitude === 0);
-                let distanceText = 'Chưa định vị';
-                if (hasGps && studentCoords) {
-                  const distMeters = getDistanceInMeters(
-                    studentCoords.latitude,
-                    studentCoords.longitude,
-                    shift.latitude,
-                    shift.longitude
-                  );
-                  const distKm = (distMeters / 1000).toFixed(1);
-                  distanceText = `${distKm} km`;
+            {shift.isEmergency ? (
+              <Animated.View style={[
+                styles.urgentBadge,
+                {
+                  backgroundColor: catColors.primary,
+                  borderColor: catColors.borderUrgent,
+                  opacity: pulseAnim,
+                  transform: [{
+                    scale: pulseAnim.interpolate({
+                      inputRange: [0.3, 1],
+                      outputRange: [0.96, 1.04]
+                    })
+                  }]
                 }
-                return (
-                  <Text style={[styles.infoLabel, { marginTop: 2 }]}>Cách bạn: {distanceText}</Text>
-                );
-              })()}
+              ]}>
+                <Text style={styles.urgentBadgeText}>🔥 TUYỂN GẤP</Text>
+              </Animated.View>
+            ) : (
+              <View style={styles.jobTypeTagContainer}>
+                <Text style={styles.jobTypeTagText}>BÁN THỜI GIAN</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.jobTitleSection}>
+            <Text style={styles.companyNameText}>{shift.shopName || 'CỬA HÀNG'}</Text>
+            <Text style={styles.jobTitleText}>{shift.title}</Text>
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={17} color="#FF6B00" style={{ marginRight: 6, marginTop: 1.5 }} />
+              <Text style={styles.locationText}>
+                {shift.address || 'TP. Hồ Chí Minh'}
+                {getDistanceText() ? ` • ${getDistanceText()}` : ''}
+              </Text>
             </View>
           </View>
 
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>⭐</Text>
-            <View>
-              <Text style={styles.infoLabel}>Đánh giá nơi làm việc</Text>
-              <Text style={styles.infoText}>{shift.rating} / 5.0 ({shift.reviewsCount || 10} đánh giá)</Text>
+          <View style={styles.divider} />
+
+          {/* Job Metadata Grid */}
+          <View style={styles.metadataGrid}>
+            <View style={styles.metadataItem}>
+              <Text style={styles.metadataLabel}>MỨC LƯƠNG</Text>
+              <Text style={styles.metadataValue}>
+                {shift.hourlyRate ? `${(shift.hourlyRate).toLocaleString('vi-VN')} đ` : '35.000 đ'}
+              </Text>
+              <Text style={styles.metadataSubLabel}>VND / Giờ</Text>
             </View>
+
+            <View style={styles.metadataItem}>
+              <Text style={styles.metadataLabel}>KINH NGHIỆM</Text>
+              <Text style={styles.metadataValue}>
+                {getExperienceText(shift.requirements)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={[styles.metadataGrid, { marginTop: 16 }]}>
+            <View style={styles.metadataItem}>
+              <Text style={styles.metadataLabel}>NGÀY ĐĂNG</Text>
+              <Text style={styles.metadataValue}>Hôm nay</Text>
+            </View>
+          </View>
+
+          {/* Action Button */}
+          {user?.role === 'employer' ? (
+            <TouchableOpacity
+              style={styles.applyBtn}
+              onPress={goBack}
+              activeOpacity={0.8}
+            >
+              <View style={styles.applyBtnContent}>
+                <Text style={styles.applyBtnText}>Quay lại tin tuyển</Text>
+              </View>
+            </TouchableOpacity>
+          ) : success ? (
+            <View style={styles.successBtn}>
+              <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.successBtnText}>ỨNG TUYỂN THÀNH CÔNG!</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.applyBtn,
+                (isApplied || isApproved) && styles.disabledBtn
+              ]}
+              disabled={isApplied || isApproved || applying}
+              onPress={handleApply}
+              activeOpacity={0.8}
+            >
+              {applying ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <View style={styles.applyBtnContent}>
+                  <Text style={styles.applyBtnText}>
+                    {isApproved ? 'ĐÃ ĐƯỢC DUYỆT NHẬN VIỆC' : isApplied ? 'ĐÃ ỨNG TUYỂN - CHỜ DUYỆT' : 'Ứng tuyển ngay'}
+                  </Text>
+                  {!isApproved && !isApplied && (
+                    <Ionicons name="flash" size={20} color="#FFFFFF" style={{ marginTop: 4 }} />
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {/* Bookmark & Share row */}
+          <View style={styles.secondaryActionsRow}>
+            <TouchableOpacity 
+              style={[styles.circleActionBtn, isSaved && styles.activeCircleBtn]} 
+              onPress={handleToggleSave}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name={isSaved ? "bookmark" : "bookmark-outline"} 
+                size={22} 
+                color={isSaved ? "#FF6B00" : "#475569"} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.circleActionBtn} 
+              onPress={handleShare}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="share-social-outline" size={22} color="#475569" />
+            </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Mô tả công việc</Text>
-          <Text style={styles.bodyText}>{shift.description}</Text>
+        {/* Job Description Card */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="compass-outline" size={24} color="#B45309" />
+            <Text style={styles.sectionTitleText}>Mô tả công việc</Text>
+          </View>
+
+          <View style={styles.bulletListContainer}>
+            {finalDescBullets.map((bullet, idx) => (
+              <View key={`desc-bullet-${idx}`} style={styles.bulletRow}>
+                <View style={styles.customBulletDotOuter}>
+                  <View style={styles.customBulletDotInner} />
+                </View>
+                <Text style={styles.bulletText}>{bullet}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Yêu cầu công việc</Text>
-          <Text style={styles.bodyText}>• {shift.requirements}</Text>
-          <Text style={styles.bodyText}>• Có mặt trước giờ nhận ca ít nhất 10 phút để quét camera và kiểm định GPS.</Text>
-          <Text style={styles.bodyText}>• Trang phục chỉnh tề, thái độ làm việc nhiệt tình.</Text>
+        {/* Candidate Requirements Card */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="star-outline" size={24} color="#7C3AED" />
+            <Text style={styles.sectionTitleText}>Yêu cầu ứng viên</Text>
+          </View>
+
+          {/* Skill Tag Pills */}
+          <View style={styles.skillsTagRow}>
+            {getSkillsForJob(shift.title, shift.shopName).map((skill, idx) => (
+              <View key={`skill-tag-${idx}`} style={styles.skillTagPill}>
+                <Text style={styles.skillTagText}>{skill}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.bulletListContainer}>
+            {finalReqBullets.map((bullet, idx) => (
+              <View key={`req-bullet-${idx}`} style={styles.bulletRow}>
+                <Ionicons name="checkmark-circle-outline" size={20} color="#7C3AED" style={styles.checkIcon} />
+                <Text style={styles.bulletText}>{bullet}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </ScrollView>
 
-      {/* Footer Action */}
-      <View style={styles.footer}>
-        {success ? (
-          <View style={styles.successBtn}>
-            <Text style={styles.successBtnText}>⚡ ỨNG TUYỂN THÀNH CÔNG!</Text>
+      {/* Quota Exhausted Modal */}
+      <Modal
+        visible={quotaModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setQuotaModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconBg}>
+              <Ionicons name="alert-circle" size={34} color="#FF6B00" />
+            </View>
+            <Text style={styles.modalTitle}>Hết lượt ứng tuyển</Text>
+            <Text style={styles.modalBodyText}>
+              Bạn đã dùng hết lượt ứng tuyển miễn phí. Vui lòng mua thêm gói ứng tuyển (10k / 10 lượt) để tiếp tục ứng tuyển.
+            </Text>
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                activeOpacity={0.7}
+                onPress={() => setQuotaModalVisible(false)}
+              >
+                <Text style={styles.modalCancelBtnText}>Để sau</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  setQuotaModalVisible(false);
+                  navigateTo('student_upgrade');
+                }}
+              >
+                <Text style={styles.modalConfirmBtnText}>Mua ngay</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        ) : (
-          <TouchableOpacity
-            style={[
-              styles.applyBtn,
-              (isApplied || isApproved) && styles.disabledBtn
-            ]}
-            disabled={isApplied || isApproved || applying}
-            onPress={handleApply}
-          >
-            {applying ? (
-              <ActivityIndicator color={theme.colors.white} />
-            ) : (
-              <Text style={styles.applyBtnText}>
-                {isApproved ? 'ĐÃ ĐƯỢC DUYỆT NHẬN VIỆC' : isApplied ? 'ĐÃ ỨNG TUYỂN - CHỜ DUYỆT' : 'ỨNG TUYỂN NGAY ⚡'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        )}
-        <Text style={styles.applyTip}>Tuyển dụng Hyperlocal tức thì. Chủ quán duyệt hồ sơ trong vòng 5 phút!</Text>
-      </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -171,185 +507,401 @@ export default function JobDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#F8FAFC', // Slate soft grey background
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#FFFFFF',
   },
   errorText: {
-    fontSize: 16,
-    color: theme.colors.textMuted,
-    marginBottom: theme.spacing.md,
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 15,
+    color: '#64748B',
+    marginBottom: 16,
   },
   backBtn: {
-    backgroundColor: theme.colors.student,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: theme.borderRadius.sm,
+    backgroundColor: '#FF6B00',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
   },
   backBtnText: {
-    color: theme.colors.white,
+    fontFamily: Platform.OS === 'ios' ? 'Sora' : 'sans-serif',
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
-  header: {
-    height: 56,
+
+  /* Main Info Card Styles */
+  mainInfoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  cardHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    backgroundColor: theme.colors.white,
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  headerBackBtn: {
-    width: 40,
-    height: 40,
+  shopLogoBox: {
+    width: 68,
+    height: 68,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  backArrow: {
-    fontSize: 22,
-    color: theme.colors.text,
-    fontWeight: 'bold',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
-  scrollContent: {
-    padding: theme.spacing.md,
-    paddingBottom: 40,
-  },
-  emergencyHeader: {
-    backgroundColor: theme.colors.danger + '1A',
-    borderColor: theme.colors.danger + '33',
     borderWidth: 1,
-    padding: 10,
-    borderRadius: theme.borderRadius.sm,
-    marginBottom: theme.spacing.md,
+    borderColor: 'rgba(0,0,0,0.03)',
   },
-  emergencyHeaderText: {
-    color: theme.colors.danger,
-    fontSize: 12,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  cardHeader: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderWidth: 1,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  shopName: {
-    fontSize: 13,
-    color: theme.colors.textMuted,
-    fontWeight: '600',
-  },
-  jobTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginTop: 4,
-    marginBottom: theme.spacing.md,
-  },
-  wageBox: {
-    backgroundColor: theme.colors.success + '0D',
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.success + '22',
-  },
-  wageLabel: {
-    fontSize: 11,
-    color: theme.colors.textMuted,
-  },
-  wageValue: {
+  shopLogoText: {
+    fontFamily: Platform.OS === 'ios' ? 'Sora' : 'sans-serif',
     fontSize: 24,
-    fontWeight: 'bold',
-    color: theme.colors.success,
+    fontWeight: '900',
+  },
+  jobTypeTagContainer: {
+    backgroundColor: '#FAF5FF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+  },
+  jobTypeTagText: {
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#7E22CE',
+  },
+  jobTitleSection: {
+    marginBottom: 16,
+  },
+  companyNameText: {
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  jobTitleText: {
+    fontFamily: Platform.OS === 'ios' ? 'Sora' : 'sans-serif',
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0F172A',
+    lineHeight: 36,
     marginTop: 4,
   },
-  section: {
-    marginBottom: theme.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    paddingBottom: theme.spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginBottom: theme.spacing.md,
-  },
-  infoRow: {
+  locationRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: theme.spacing.xs,
+    alignItems: 'flex-start',
+    marginTop: 10,
+    backgroundColor: '#FFF7ED',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
   },
-  infoIcon: {
-    fontSize: 20,
-    width: 32,
-    textAlign: 'center',
-    marginRight: theme.spacing.sm,
-  },
-  infoLabel: {
-    fontSize: 11,
-    color: theme.colors.textMuted,
-  },
-  infoText: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
-  bodyText: {
-    fontSize: 13,
-    color: theme.colors.textMuted,
+  locationText: {
+    flex: 1,
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#B45309',
     lineHeight: 20,
-    marginVertical: 2,
   },
-  footer: {
-    padding: theme.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.white,
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 16,
   },
+  metadataGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  metadataItem: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  metadataLabel: {
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  metadataValue: {
+    fontFamily: Platform.OS === 'ios' ? 'Sora' : 'sans-serif',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  metadataSubLabel: {
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  /* Apply Button Styles */
   applyBtn: {
-    backgroundColor: theme.colors.student,
-    height: 48,
-    borderRadius: theme.borderRadius.md,
+    backgroundColor: '#FF6B00',
+    height: 68,
+    borderRadius: 34,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 28,
+    marginBottom: 18,
+    shadowColor: '#FF6B00',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  disabledBtn: {
-    backgroundColor: theme.colors.textLight,
+  applyBtnContent: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   applyBtnText: {
-    color: theme.colors.white,
-    fontSize: 15,
-    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Sora' : 'sans-serif',
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  disabledBtn: {
+    backgroundColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   successBtn: {
-    backgroundColor: theme.colors.success,
-    height: 48,
-    borderRadius: theme.borderRadius.md,
+    flexDirection: 'row',
+    backgroundColor: '#10B981',
+    height: 68,
+    borderRadius: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 28,
+    marginBottom: 18,
+  },
+  successBtnText: {
+    fontFamily: Platform.OS === 'ios' ? 'Sora' : 'sans-serif',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 8,
+  },
+  circleActionBtn: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  successBtnText: {
-    color: theme.colors.white,
-    fontSize: 15,
-    fontWeight: 'bold',
+  activeCircleBtn: {
+    borderColor: '#FF6B0033',
+    backgroundColor: '#FF6B0008',
   },
-  applyTip: {
-    fontSize: 10,
-    color: theme.colors.textMuted,
+  /* Section Card Styles */
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    padding: 24,
+    marginBottom: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 12,
+    elevation: 1,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitleText: {
+    fontFamily: Platform.OS === 'ios' ? 'Sora' : 'sans-serif',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginLeft: 8,
+  },
+  bulletListContainer: {
+    gap: 14,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  customBulletDotOuter: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    marginTop: 5,
+  },
+  customBulletDotInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#B45309',
+  },
+  checkIcon: {
+    marginRight: 12,
+    marginTop: 3,
+  },
+  bulletText: {
+    flex: 1,
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 15,
+    color: '#475569',
+    lineHeight: 24,
+  },
+  /* Skills Tags Styles */
+  skillsTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 18,
+  },
+  skillTagPill: {
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 99,
+  },
+  skillTagText: {
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#7E22CE',
+  },
+  urgentBadge: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  urgentBadgeText: {
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalIconBg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF0E6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
     textAlign: 'center',
-    marginTop: 8,
+    marginBottom: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Sora' : 'sans-serif',
+  },
+  modalBodyText: {
+    fontSize: 13,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FF6B00',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalConfirmBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
   }
 });

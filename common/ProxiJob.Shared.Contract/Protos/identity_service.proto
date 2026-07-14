@@ -14,6 +14,24 @@ service IdentityGrpcService {
 
   // Các service khác: validate JWT từ client (sau login) → trả context user.
   rpc ValidateAccessToken (ValidateAccessTokenRequest) returns (GetUserContextResponse);
+
+  // Cập nhật reputation cho sinh viên
+  rpc UpdateStudentReputation (UpdateStudentReputationRequest) returns (UpdateStudentReputationResponse);
+
+  // Cập nhật reputation cho chủ quán
+  rpc UpdateBusinessReputation (UpdateBusinessReputationRequest) returns (UpdateBusinessReputationResponse);
+
+  // Job Service: kiểm tra hạn mức đăng tin của chủ quán
+  rpc CheckJobPostQuota (CheckJobPostQuotaRequest) returns (CheckJobPostQuotaResponse);
+
+  // Job Service: trừ 1 lượt đăng tin sau khi tạo bài thành công
+  rpc ConsumeJobPostQuota (ConsumeJobPostQuotaRequest) returns (ConsumeJobPostQuotaResponse);
+
+  // Student: kiểm tra hạn mức ứng tuyển của sinh viên
+  rpc CheckStudentApplyQuota (CheckStudentApplyQuotaRequest) returns (CheckStudentApplyQuotaResponse);
+
+  // Student: trừ 1 lượt ứng tuyển sau khi ứng tuyển thành công
+  rpc ConsumeStudentApplyQuota (ConsumeStudentApplyQuotaRequest) returns (ConsumeStudentApplyQuotaResponse);
 }
 
 message GetStudentCvForApplicationRequest {
@@ -54,6 +72,9 @@ message UserContextGrpcDto {
   double reputation_score = 12;
   bool is_active = 13;
   repeated string features = 14;
+  int32 max_employees = 15;
+  int32 max_active_qrs = 16;
+  int32 max_search_radius = 17;
 }
 
 message StudentProfileGrpcDto {
@@ -71,4 +92,70 @@ message StudentProfileGrpcDto {
   double reputation_score = 12;
   int32 review_count = 13;
   int32 completion_percent = 14;
+}
+
+message UpdateStudentReputationRequest {
+  int32 user_id = 1;
+  double rating = 2;
+  string comment = 3;
+}
+
+message UpdateStudentReputationResponse {
+  bool success = 1;
+}
+
+message UpdateBusinessReputationRequest {
+  int32 user_id = 1;
+  double rating = 2;
+  string comment = 3;
+}
+
+message UpdateBusinessReputationResponse {
+  bool success = 1;
+}
+
+message CheckJobPostQuotaRequest {
+  int32 user_id = 1;
+}
+
+message CheckJobPostQuotaResponse {
+  bool can_post_job = 1;
+  int32 job_post_limit = 2;
+  int32 job_posts_used = 3;
+  int32 job_posts_remaining = 4;
+  string subscription_tier = 5;
+  bool must_purchase_plan = 6;
+  string message = 7;
+}
+
+message ConsumeJobPostQuotaRequest {
+  int32 user_id = 1;
+}
+
+message ConsumeJobPostQuotaResponse {
+  bool success = 1;
+  int32 job_posts_remaining = 2;
+  string message = 3;
+}
+
+message CheckStudentApplyQuotaRequest {
+  int32 user_id = 1;
+}
+
+message CheckStudentApplyQuotaResponse {
+  bool can_apply = 1;
+  int32 applies_limit = 2;
+  int32 applies_used = 3;
+  int32 applies_remaining = 4;
+  string message = 5;
+}
+
+message ConsumeStudentApplyQuotaRequest {
+  int32 user_id = 1;
+}
+
+message ConsumeStudentApplyQuotaResponse {
+  bool success = 1;
+  int32 applies_remaining = 2;
+  string message = 3;
 }

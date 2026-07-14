@@ -14,9 +14,8 @@ namespace ProxiJob.Identity.Application.Features.Business.Commands.RegisterBusin
 
             RuleFor(x => x.BusinessName).NotEmpty().MaximumLength(200);
             RuleFor(x => x.BusinessType)
-                .NotEmpty()
-                .Must(t => BusinessTypes.All.Contains(t))
-                .WithMessage(ValidationMessages.BusinessTypeInvalid);
+                .NotEmpty().WithMessage(ValidationMessages.BusinessTypeRequired)
+                .MaximumLength(50).WithMessage("Loại hình kinh doanh không được vượt quá 50 ký tự.");
             RuleFor(x => x.City).NotEmpty().MaximumLength(100);
             RuleFor(x => x.Address).NotEmpty().MaximumLength(300);
             RuleFor(x => x.TaxCode)

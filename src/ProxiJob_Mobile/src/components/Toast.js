@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { AppContext } from '../context/AppContext';
 
@@ -84,27 +85,31 @@ export default function Toast() {
     switch (type) {
       case 'success':
         return {
-          color: theme.colors.success,
-          emoji: '✅',
+          color: '#10B981', // Emerald 500
+          bgColor: '#ECFDF5', // Emerald 50
+          iconName: 'checkmark',
           title: 'Thành công'
         };
       case 'error':
         return {
-          color: theme.colors.danger,
-          emoji: '❌',
+          color: '#EF4444', // Red 500
+          bgColor: '#FEF2F2', // Red 50
+          iconName: 'alert',
           title: 'Thất bại'
         };
       case 'warning':
         return {
-          color: theme.colors.warning,
-          emoji: '⚠️',
+          color: '#F59E0B', // Amber 500
+          bgColor: '#FFFBEB', // Amber 50
+          iconName: 'warning',
           title: 'Cảnh báo'
         };
       case 'info':
       default:
         return {
-          color: theme.colors.primary, // ProxiJob bright gold
-          emoji: '💡',
+          color: '#3B82F6', // Blue 500
+          bgColor: '#EFF6FF', // Blue 50
+          iconName: 'information',
           title: 'Thông báo'
         };
     }
@@ -116,11 +121,9 @@ export default function Toast() {
     <Animated.View
       style={[
         styles.toastContainer,
-        theme.shadows.medium,
         {
           transform: [{ translateY: slideAnim }],
           opacity: fadeAnim,
-          borderLeftColor: config.color,
         },
       ]}
     >
@@ -130,23 +133,27 @@ export default function Toast() {
         activeOpacity={0.9}
       >
         <View style={styles.contentRow}>
-          {/* Badge Icon */}
-          <View style={[styles.iconContainer, { backgroundColor: config.color + '15' }]}>
-            <Text style={styles.emojiText}>{config.emoji}</Text>
+          {/* Badge Icon (Light background capsule containing solid color circle) */}
+          <View style={[styles.iconBadge, { backgroundColor: config.bgColor }]}>
+            <View style={[styles.iconCircle, { backgroundColor: config.color }]}>
+              <Ionicons name={config.iconName} size={13} color="#FFFFFF" />
+            </View>
           </View>
           
           {/* Details */}
           <View style={styles.textContainer}>
-            <Text style={[styles.statusTitle, { color: config.color }]}>
-              {config.title}
-            </Text>
             <Text numberOfLines={2} style={styles.messageText}>
               {message}
+            </Text>
+            <Text style={[styles.statusActionText, { color: config.color }]}>
+              {config.title}
             </Text>
           </View>
 
           {/* Close indicator */}
-          <Text style={styles.closeBtn}>✕</Text>
+          <View style={styles.closeBtnContainer}>
+            <Ionicons name="close" size={16} color="#94A3B8" />
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -156,53 +163,62 @@ export default function Toast() {
 const styles = StyleSheet.create({
   toastContainer: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 9999,
+    left: 20,
+    right: 20,
+    zIndex: 99999,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderLeftWidth: 5,
+    borderRadius: 999, // Pill shape capsule
     borderWidth: 1,
-    borderColor: '#E5E7EB', // Fine border to give clean structure
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
   },
   touchArea: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  iconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  emojiText: {
-    fontSize: 16,
+  iconCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   textContainer: {
     flex: 1,
-  },
-  statusTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    justifyContent: 'center',
+    paddingRight: 6,
   },
   messageText: {
     fontSize: 13,
-    color: '#374151', // Dark grey for excellent legibility
+    fontWeight: '700',
+    color: '#1E293B', // Slate-800
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
     lineHeight: 16,
   },
-  closeBtn: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginLeft: 8,
-    fontWeight: '500',
+  statusActionText: {
+    fontSize: 11,
+    fontWeight: '750',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Hanken Grotesk' : 'sans-serif',
+  },
+  closeBtnContainer: {
+    padding: 6,
+    marginRight: 6,
   },
 });

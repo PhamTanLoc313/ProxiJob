@@ -16,4 +16,11 @@ namespace ProxiJob.Identity.Infrastructure.Payments
         public string QrImagePath { get; set; } = "/images/payment-qr.jpg";
         public int OrderExpirationMinutes { get; set; } = 1440;
     }
+
+    public class PayOsSettings
+    {
+        public string ClientId { get; set; } = string.Empty;
+        public string ApiKey { get; set; } = string.Empty;
+        public string ChecksumKey { get; set; } = string.Empty;
+    }
 }

@@ -32,11 +32,14 @@ namespace ProxiJob.Identity.Infrastructure
             services.AddScoped<IAccessTokenValidator, JwtAccessTokenValidator>();
             services.AddScoped<IUserContextService, UserContextService>();
             services.AddScoped<IPasswordHasher, PasswordHasherService>();
+            services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IUnitOfWork, UnitOfWork.UnitOfWork>();
 
             services.Configure<PaymentSettings>(configuration.GetSection("PaymentSettings"));
             services.Configure<BankTransferSettings>(configuration.GetSection("BankTransfer"));
+            services.Configure<PayOsSettings>(configuration.GetSection("PayOs"));
             services.AddScoped<IBankTransferPaymentService, BankTransferPaymentService>();
+            services.AddScoped<IPayOsPaymentService, PayOsPaymentService>();
 
             var secretKey = configuration["JwtSettings:SecretKey"]!;
             var issuer = configuration["JwtSettings:Issuer"]!;
@@ -75,7 +78,7 @@ namespace ProxiJob.Identity.Infrastructure
                     policy.RequireRole(RoleNames.Business));
 
                 options.AddPolicy(PolicyNames.PremiumOnly, policy =>
-                    policy.RequireClaim(ClaimNames.SubscriptionTier, SubscriptionNames.Premium));
+                    policy.RequireClaim(ClaimNames.SubscriptionTier, SubscriptionNames.Enterprise));
 
                 options.AddPolicy(PolicyNames.WebPostJob, policy =>
                     policy.Requirements.Add(new FeatureRequirement(FeatureCodes.WebPostJob)));

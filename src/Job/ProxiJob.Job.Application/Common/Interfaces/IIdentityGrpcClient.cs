@@ -12,4 +12,12 @@ public interface IIdentityGrpcClient
     Task<string?> GetStudentCVUrlAsync(int studentId, CancellationToken cancellationToken = default);
 
     Task<StudentProfileGrpcDto?> GetStudentProfileAsync(int studentId, CancellationToken cancellationToken = default);
+
+    Task<CheckJobPostQuotaResponse> CheckJobPostQuotaAsync(int userId, CancellationToken cancellationToken = default);
+
+    Task<ConsumeJobPostQuotaResponse> ConsumeJobPostQuotaAsync(int userId, CancellationToken cancellationToken = default);
+
+    Task<CheckStudentApplyQuotaResponse> CheckStudentApplyQuotaAsync(int userId, CancellationToken cancellationToken = default);
+
+    Task<ConsumeStudentApplyQuotaResponse> ConsumeStudentApplyQuotaAsync(int userId, CancellationToken cancellationToken = default);
 }

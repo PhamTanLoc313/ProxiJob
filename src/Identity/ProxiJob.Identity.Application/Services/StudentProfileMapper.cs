@@ -31,6 +31,9 @@ namespace ProxiJob.Identity.Application.Services
                 ReviewCount = profile.ReviewCount,
                 ReadyForWorkAt = profile.ReadyForWorkAt,
                 CompletionPercent = StudentProfileCompletion.GetCompletionPercent(profile.User, profile),
+                AppliesLimit = profile.AppliesLimit,
+                AppliesUsed = profile.AppliesUsed,
+                AppliesRemaining = Math.Max(0, profile.AppliesLimit - profile.AppliesUsed),
                 MissingFields = missing
             };
         }
@@ -58,8 +61,10 @@ namespace ProxiJob.Identity.Application.Services
             profile.Gender = string.IsNullOrWhiteSpace(gender) ? null : gender.Trim();
             profile.Address = address.Trim();
             profile.City = city.Trim();
-            profile.Latitude = latitude;
-            profile.Longitude = longitude;
+            if (latitude.HasValue)
+                profile.Latitude = latitude;
+            if (longitude.HasValue)
+                profile.Longitude = longitude;
             profile.School = school.Trim();
             profile.Major = major.Trim();
             profile.YearOfStudy = yearOfStudy;

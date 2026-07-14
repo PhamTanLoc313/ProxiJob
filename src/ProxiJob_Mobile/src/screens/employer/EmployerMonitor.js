@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,12 +7,20 @@ import {
   SafeAreaView,
   Platform,
   TouchableOpacity,
-  Image
+  Image,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
 import { theme } from '../../styles/theme';
 import { AppContext } from '../../context/AppContext';
+import { Ionicons } from '@expo/vector-icons';
 import { getAvatarSource } from '../../utils/avatarHelper';
+import { handleCallUser } from '../../utils/callHelper';
+import { useAttendanceLogsQuery, useStaffListQuery, useEmployerJobsQuery } from '../../hooks/queries';
+import { getQrCode, generateQrCode, updateQrRadius, updateQrLocation } from '../../api/management';
+import { getBusinessProfileApi } from '../../api/businessApi';
 
 // Pure JS Haversine formula
 const calculateHaversineDistance = (lat1, lon1, lat2, lon2) => {
@@ -22,81 +30,456 @@ const calculateHaversineDistance = (lat1, lon1, lat2, lon2) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c); // returns distance in meters
 };
 
 export default function EmployerMonitor() {
-  const { 
-    shifts, 
-    staffList, 
-    loadStaffList, 
-    loadEmployerJobs, 
-    loadAttendanceLogs, 
-    studentCoords, 
-    attendanceLogs 
+  const {
+    user,
+    studentCoords,
+    navigateTo,
+    navigationParams,
+    setNavigationParams,
+    showToast
   } = useContext(AppContext);
 
-  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const { data: attendanceLogs = [], refetch: refetchAttendanceLogs } = useAttendanceLogsQuery(user);
+  const { data: staffList = [] } = useStaffListQuery(user);
+  const { data: employerData } = useEmployerJobsQuery(user);
+  const employerShifts = employerData?.shifts || [];
 
-  React.useEffect(() => {
-    loadStaffList();
-    loadEmployerJobs();
-    loadAttendanceLogs();
-    
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [expandedStaffId, setExpandedStaffId] = useState(null);
+
+  // Shift slots states (for mapping note/slotId to shift details)
+  const [shiftSlots, setShiftSlots] = useState([
+    { id: 'morning', name: 'Ca Sáng', time: '08:00 - 12:00', icon: '☀️' },
+    { id: 'afternoon', name: 'Ca Chiều', time: '13:00 - 17:00', icon: '⛅' },
+    { id: 'evening', name: 'Ca Tối', time: '18:00 - 22:00', icon: '🌙' },
+  ]);
+
+  useEffect(() => {
+    const loadCustomShifts = async () => {
+      try {
+        const storageKey = `@custom_shift_slots_${user?.id || 'default'}`;
+        const stored = await AsyncStorage.getItem(storageKey);
+        if (stored) {
+          setShiftSlots(JSON.parse(stored));
+        }
+      } catch (err) {
+        console.log('Error loading shift slots in EmployerMonitor:', err);
+      }
+    };
+    if (user) {
+      loadCustomShifts();
+    }
+  }, [user]);
+
+  const formatShiftName = (shiftKey) => {
+    if (shiftKey === 'external_staff') return '⚡ Nhân Sự Vãng Lai';
+    if (!shiftKey) return 'Không có ca';
+    const slot = shiftSlots.find(s => s.id === shiftKey);
+    if (slot) {
+      return `${slot.name} (${slot.time})`;
+    }
+    if (shiftKey.startsWith('custom_')) {
+      return 'Ca Tự Chọn';
+    }
+    return shiftKey;
+  };
+
+  const getShiftTimeRange = (shiftKey) => {
+    const slot = shiftSlots.find(s => s.id === shiftKey);
+    if (slot && slot.time) {
+      const parts = slot.time.split(' - ');
+      if (parts.length === 2) {
+        return { startStr: parts[0], endStr: parts[1] };
+      }
+    }
+    return null;
+  };
+
+  const getShiftStartMinutes = (shiftKey) => {
+    if (shiftKey === 'external_staff') return 25 * 60;
+    const range = getShiftTimeRange(shiftKey);
+    if (range) {
+      const [h, m] = range.startStr.split(':').map(Number);
+      return h * 60 + m;
+    }
+    if (shiftKey === 'morning') return 8 * 60;
+    if (shiftKey === 'afternoon') return 13 * 60;
+    if (shiftKey === 'evening') return 18 * 60;
+    return 24 * 60; // other/custom shifts go last
+  };
+
+  const getPunctualityStatus = (person) => {
+    if (!person.rawCheckInTime || !person.scheduledStartTime) {
+      return null;
+    }
+    try {
+      const actual = new Date(person.rawCheckInTime);
+      const scheduled = new Date(person.scheduledStartTime);
+
+      const diffMs = actual.getTime() - scheduled.getTime();
+      const diffMins = Math.round(diffMs / 60000);
+
+      if (diffMins <= 5) {
+        return {
+          status: 'on_time',
+          text: 'Đúng giờ',
+          color: '#10B981',
+          bg: '#D1FAE5'
+        };
+      } else {
+        return {
+          status: 'late',
+          text: `Trễ ${diffMins}ph`,
+          color: '#EF4444',
+          bg: '#FEE2E2'
+        };
+      }
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const getCheckOutPunctuality = (person) => {
+    if (!person.rawCheckOutTime || !person.scheduledEndTime) {
+      return null;
+    }
+    try {
+      const actual = new Date(person.rawCheckOutTime);
+      const scheduled = new Date(person.scheduledEndTime);
+
+      const diffMs = scheduled.getTime() - actual.getTime(); // positive means left early
+      let diffMins = Math.round(diffMs / 60000);
+
+      // Adjust for UTC+7 timezone discrepancy where scheduledEndTime represents local time but has Z suffix
+      if (Math.abs(diffMins - 420) <= 15) {
+        diffMins -= 420;
+      }
+
+      if (diffMins > 5) {
+        return {
+          status: 'early',
+          text: `Sớm ${diffMins}ph`,
+          color: '#F59E0B',
+          bg: '#FEF3C7'
+        };
+      } else {
+        return {
+          status: 'on_time',
+          text: 'Đúng giờ ra ca',
+          color: '#10B981',
+          bg: '#D1FAE5'
+        };
+      }
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const [shopLat, setShopLat] = useState(10.857461); // 84/10 Nam Cao, Quận 9, TP.HCM
+  const [shopLng, setShopLng] = useState(106.801522);
+  const [businessProfile, setBusinessProfile] = useState(null);
+
+  useEffect(() => {
+    async function loadShopLocation() {
+      try {
+        const profile = await getBusinessProfileApi();
+        if (profile) {
+          setBusinessProfile(profile);
+          if (profile.address) {
+            const queryStr = `${profile.address} ${profile.city || ''}`.trim();
+            let latVal = null;
+            let lngVal = null;
+
+            // Try Goong Maps API (Google Maps style Vietnamese clone)
+            const GOONG_API_KEY = 'CvNapWs3C3Vt7ZTRZf0uZliN9v3q8TBJKxd2CEcW';
+            try {
+              const goongUrl = `https://rsapi.goong.io/Geocode?address=${encodeURIComponent(queryStr)}&api_key=${GOONG_API_KEY}`;
+              const goongRes = await fetch(goongUrl);
+              if (goongRes.ok) {
+                const goongData = await goongRes.json();
+                if (goongData.results && goongData.results.length > 0) {
+                  const loc = goongData.results[0].geometry.location;
+                  latVal = loc.lat;
+                  lngVal = loc.lng;
+                }
+              }
+            } catch (err) {
+              console.log('Error geocoding with Goong Maps:', err);
+            }
+
+            // Fallback to Nominatim OpenStreetMap
+            if (latVal === null || lngVal === null) {
+              try {
+                const geoResponse = await fetch(
+                  `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}&limit=1`,
+                  { headers: { 'User-Agent': 'ProxiJob-App' } }
+                );
+                if (geoResponse.ok) {
+                  const geoData = await geoResponse.json();
+                  if (geoData && geoData.length > 0) {
+                    latVal = parseFloat(geoData[0].lat);
+                    lngVal = parseFloat(geoData[0].lon);
+                  }
+                }
+              } catch (osmErr) {
+                console.log('Error geocoding with Nominatim:', osmErr);
+              }
+            }
+
+            if (latVal !== null && lngVal !== null) {
+              setShopLat(latVal);
+              setShopLng(lngVal);
+
+              // Auto-sync shop coordinates to QR code for accurate GPS distance checks
+              try {
+                await updateQrLocation(latVal, lngVal);
+                console.log('[EmployerMonitor] Synced shop GPS to QR code:', latVal, lngVal);
+              } catch (syncErr) {
+                console.log('[EmployerMonitor] Non-critical: failed to sync QR location:', syncErr);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.log('Error loading business profile or geocoding in EmployerMonitor:', err);
+      }
+    }
+    loadShopLocation();
+  }, []);
+
+  // QR Code Management States
+  const [qrCodeData, setQrCodeData] = useState(null);
+  const [loadingQr, setLoadingQr] = useState(false);
+  const [generatingQr, setGeneratingQr] = useState(false);
+
+  const loadQrCode = async () => {
+    setLoadingQr(true);
+    try {
+      const data = await getQrCode();
+      setQrCodeData(data);
+    } catch (err) {
+      console.log('Error fetching QR code:', err);
+    } finally {
+      setLoadingQr(false);
+    }
+  };
+
+  useEffect(() => {
+    loadQrCode();
+  }, []);
+
+  const handleGenerateQr = async () => {
+    setGeneratingQr(true);
+    try {
+      await generateQrCode();
+      await loadQrCode();
+      if (Platform.OS === 'web') {
+        alert('Mã QR đã được làm mới thành công! Token mới đã được cập nhật.');
+      } else {
+        showToast('Mã QR đã được làm mới thành công! Token mới đã được cập nhật.', 'success');
+      }
+    } catch (err) {
+      console.log('Error generating QR code:', err);
+      showToast('Lỗi tạo mã QR: ' + err.message, 'error');
+    } finally {
+      setGeneratingQr(false);
+    }
+  };
+
+  const handleUpdateRadius = async (newRadius) => {
+    try {
+      await updateQrRadius(newRadius);
+      setQrCodeData(prev => prev ? { ...prev, allowedRadiusMeters: newRadius } : null);
+      showToast(`Đã cập nhật bán kính điểm danh thành ${newRadius}m!`, 'success');
+    } catch (err) {
+      console.log('Error updating radius:', err);
+      showToast('Lỗi cập nhật bán kính: ' + err.message, 'error');
+    }
+  };
+
+  useEffect(() => {
     // Set up polling to update logs from database every 5 seconds
     const interval = setInterval(() => {
-      loadAttendanceLogs();
+      refetchAttendanceLogs();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
-
-  const shopLat = 10.857461; // 84/10 Nam Cao, Quận 9, TP.HCM
-  const shopLng = 106.801522;
 
   // Compute live student coordinates and distance
   const studentLat = studentCoords?.latitude || 10.8550;
   const studentLng = studentCoords?.longitude || 106.6300;
   const studentDistance = calculateHaversineDistance(studentLat, studentLng, shopLat, shopLng);
 
-  // Combine into active working personnel list by querying attendanceLogs (linked to database management_timekeepings)
+  // Combine into active working personnel list by querying attendanceLogs
   const activePersonnel = (attendanceLogs || [])
-    .filter(log => log.status === 'working' || log.status === 'suspicious')
     .map(log => {
+      // Find staff profile from staffList to get their true avatarUrl and type
+      const staffMember = staffList.find(s => s.id === log.employeeId || s.name === log.studentName);
+      const isExternal = staffMember ? staffMember.isExternal : false;
+      const realPhotoUrl = staffMember?.avatarUrl || log.photo || null;
+
       // Check if this log belongs to our test student
-      const isStudent = log.studentName.toLowerCase().includes('mai') || log.studentName.toLowerCase().includes('a');
-      const lat = isStudent ? studentLat : 10.8575;
-      const lng = isStudent ? studentLng : 106.8016;
-      const distance = isStudent ? studentDistance : calculateHaversineDistance(lat, lng, shopLat, shopLng);
-      const isSuspicious = distance > 100;
+      const isStudent = log.studentName.toLowerCase().includes('mai') || log.studentName.toLowerCase().includes('a') || isExternal;
+      const isGpsActive = log.status === 'working' || log.status === 'suspicious';
+
+      // Resolve the target work coordinates for this employee (Branch / Job Post coordinates)
+      let targetLat = shopLat;
+      let targetLng = shopLng;
+      let targetAddress = businessProfile?.address || 'Cửa hàng';
+
+      if (isExternal && log.jobShiftId) {
+        const matchingShift = employerShifts.find(s => s.id === log.jobShiftId);
+        if (matchingShift) {
+          targetLat = matchingShift.latitude || targetLat;
+          targetLng = matchingShift.longitude || targetLng;
+          targetAddress = matchingShift.address || targetAddress;
+        }
+      }
+
+      const lat = isGpsActive ? (isStudent ? studentLat : targetLat + 0.0001) : null;
+      const lng = isGpsActive ? (isStudent ? studentLng : targetLng + 0.0001) : null;
+      const distance = isGpsActive ? calculateHaversineDistance(lat, lng, targetLat, targetLng) : null;
+      const isSuspicious = log.status === 'suspicious' || (distance && distance > 100);
+
+      const checkInDistance = (log.inLatitude && log.inLongitude)
+        ? calculateHaversineDistance(log.inLatitude, log.inLongitude, targetLat, targetLng)
+        : null;
+
+      const checkOutDistance = (log.outLatitude && log.outLongitude)
+        ? calculateHaversineDistance(log.outLatitude, log.outLongitude, targetLat, targetLng)
+        : null;
 
       return {
-        id: log.id,
+        id: log.id || `ws_${log.shiftId}`,
+        employeeId: log.employeeId || null,
         name: log.studentName,
         role: log.jobTitle || 'Nhân viên',
-        checkInTime: log.checkInTime || '18:00',
+        shiftName: isExternal ? 'external_staff' : log.shiftName,
+        checkInTime: log.checkInTime || 'Chưa check-in',
+        checkOutTime: log.checkOutTime,
         distance: distance,
         isStudent: isStudent,
         shop: log.shopName || 'Cửa hàng',
         latitude: lat,
         longitude: lng,
-        gpsStatus: isSuspicious ? 'Suspicious' : 'Valid',
-        photo: log.photo || null
+        gpsStatus: log.status === 'suspicious' ? 'Suspicious' : (log.status === 'not_checked_in' ? 'NotCheckedIn' : 'Valid'),
+        photo: realPhotoUrl,
+        rawStatus: log.status,
+        isExternal: isExternal,
+        targetLat,
+        targetLng,
+        targetAddress,
+        studentPhone: log.studentPhone,
+        inLatitude: log.inLatitude,
+        inLongitude: log.inLongitude,
+        outLatitude: log.outLatitude,
+        outLongitude: log.outLongitude,
+        checkInDistance: checkInDistance,
+        checkOutDistance: checkOutDistance,
+        rawCheckInTime: log.rawCheckInTime,
+        rawCheckOutTime: log.rawCheckOutTime,
+        scheduledStartTime: log.scheduledStartTime,
+        scheduledEndTime: log.scheduledEndTime,
+        note: log.note
       };
     });
 
-  // Sort personnel: suspicious first
+  // Sort personnel: suspicious first, then working/valid, then not_checked_in
   const sortedPersonnel = [...activePersonnel].sort((a, b) => {
-    if (a.gpsStatus === 'Suspicious' && b.gpsStatus !== 'Suspicious') return -1;
-    if (a.gpsStatus !== 'Suspicious' && b.gpsStatus === 'Suspicious') return 1;
-    return 0;
+    const score = (status) => {
+      if (status === 'suspicious') return 0;
+      if (status === 'working') return 1;
+      if (status === 'not_checked_in') return 2;
+      return 3; // completed/absent
+    };
+    return score(a.rawStatus) - score(b.rawStatus);
   });
 
+  // Group personnel by shiftKey
+  const groupedShifts = {};
+  sortedPersonnel.forEach(person => {
+    const shiftKey = person.shiftName || 'other';
+    if (!groupedShifts[shiftKey]) {
+      groupedShifts[shiftKey] = [];
+    }
+    groupedShifts[shiftKey].push(person);
+  });
+
+  const availableShiftKeys = Object.keys(groupedShifts);
+  const sortedShiftKeys = availableShiftKeys.sort((a, b) => {
+    return getShiftStartMinutes(a) - getShiftStartMinutes(b);
+  });
+
+  const [selectedShiftKey, setSelectedShiftKey] = useState(null);
+
+  useEffect(() => {
+    if (sortedShiftKeys.length > 0) {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      let activeKey = null;
+      let closestKey = null;
+      let minDiff = Infinity;
+
+      sortedShiftKeys.forEach(key => {
+        const range = getShiftTimeRange(key);
+        if (range) {
+          const [startH, startM] = range.startStr.split(':').map(Number);
+          const [endH, endM] = range.endStr.split(':').map(Number);
+          const startMin = startH * 60 + startM;
+          const endMin = endH * 60 + endM;
+
+          if (currentMinutes >= startMin && currentMinutes <= endMin) {
+            activeKey = key;
+          }
+
+          const diff = Math.abs(currentMinutes - startMin);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestKey = key;
+          }
+        }
+      });
+
+      const defaultKey = activeKey || closestKey || sortedShiftKeys[0];
+      setSelectedShiftKey(prev => prev && sortedShiftKeys.includes(prev) ? prev : defaultKey);
+    } else {
+      setSelectedShiftKey(null);
+    }
+  }, [attendanceLogs]);
+
+  const displayedPersonnel = selectedShiftKey ? (groupedShifts[selectedShiftKey] || []) : [];
+  const mapPersonnel = displayedPersonnel.filter(p => p.latitude !== null && p.longitude !== null);
+
+  const uniqueWorkLocations = [];
+  displayedPersonnel.forEach(p => {
+    const lat = p.targetLat || shopLat;
+    const lng = p.targetLng || shopLng;
+    const address = p.targetAddress || 'Cửa hàng';
+    const exists = uniqueWorkLocations.some(loc => loc.latitude === lat && loc.longitude === lng);
+    if (!exists) {
+      uniqueWorkLocations.push({ latitude: lat, longitude: lng, address });
+    }
+  });
+
+  if (uniqueWorkLocations.length === 0) {
+    uniqueWorkLocations.push({
+      latitude: shopLat,
+      longitude: shopLng,
+      address: businessProfile?.address || 'Cửa hàng'
+    });
+  }
+
   // Leaflet HTML String for Employer GPS Live
-  const personnelPinsJS = activePersonnel.map(person => `
+  const personnelPinsJS = mapPersonnel.map(person => `
     L.marker([${person.latitude}, ${person.longitude}], {
       icon: L.divIcon({
         html: '<div style="background: ${person.gpsStatus === 'Suspicious' ? '#EF4444' : '#10B981'}; width: 34px; height: 34px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; font-size: 16px;">${person.gpsStatus === 'Suspicious' ? '⚠️' : '👤'}</div>',
@@ -139,39 +522,41 @@ export default function EmployerMonitor() {
           dragging: true,
           touchZoom: true,
           scrollWheelZoom: true
-        }).setView([${shopLat}, ${shopLng}], 16);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        }).setView([${uniqueWorkLocations[0].latitude}, ${uniqueWorkLocations[0].longitude}], 16);
+        L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
           maxZoom: 19
         }).addTo(map);
 
-        // 100m Geofence Circle (Cyan-Blue Translucent)
-        L.circle([${shopLat}, ${shopLng}], {
-          color: '#00D1FF',
-          fillColor: '#00D1FF',
-          fillOpacity: 0.1,
-          radius: 100
-        }).addTo(map);
+        // Render branch locations and their geofences
+        ${uniqueWorkLocations.map((loc, idx) => `
+          L.circle([${loc.latitude}, ${loc.longitude}], {
+            color: '#00D1FF',
+            fillColor: '#00D1FF',
+            fillOpacity: 0.1,
+            radius: 100
+          }).addTo(map);
 
-        // Shop Marker (Custom Animated Store Icon)
-        L.marker([${shopLat}, ${shopLng}], {
-          icon: L.divIcon({
-            html: '<div class="shop-pulse-icon" style="background: #EF4444; width: 44px; height: 44px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 22px;">🏪</div>',
-            className: 'custom-shop-icon',
-            iconSize: [44, 44],
-            iconAnchor: [22, 22],
-            popupAnchor: [0, -22]
-          })
-        }).addTo(map)
-          .bindPopup('<b>Cửa hàng (84/10 Nam Cao)</b>')
-          .openPopup();
+          L.marker([${loc.latitude}, ${loc.longitude}], {
+            icon: L.divIcon({
+              html: '<div class="shop-pulse-icon" style="background: #EF4444; width: 44px; height: 44px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 22px;">🏪</div>',
+              className: 'custom-shop-icon',
+              iconSize: [44, 44],
+              iconAnchor: [22, 22],
+              popupAnchor: [0, -22]
+            })
+          }).addTo(map)
+            .bindPopup('<b>${businessProfile?.businessName || "Cửa hàng"} (${loc.address.replace(/'/g, "\\'")})</b>')
+            ${idx === 0 ? '.openPopup()' : ''};
+        `).join('\n')}
 
         // Active Personnel Markers
         ${personnelPinsJS}
 
         // Auto bounds fitting
-        var markerCoords = [[${shopLat}, ${shopLng}]];
-        ${activePersonnel.map(p => `markerCoords.push([${p.latitude}, ${p.longitude}]);`).join('\n')}
-        if (markerCoords.length > 1) {
+        var markerCoords = [];
+        ${uniqueWorkLocations.map(loc => `markerCoords.push([${loc.latitude}, ${loc.longitude}]);`).join('\n')}
+        ${mapPersonnel.map(p => `markerCoords.push([${p.latitude}, ${p.longitude}]);`).join('\n')}
+        if (markerCoords.length > 0) {
           var bounds = L.latLngBounds(markerCoords);
           map.fitBounds(bounds, { padding: [50, 50] });
         }
@@ -182,22 +567,16 @@ export default function EmployerMonitor() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Header Section */}
-      <View style={styles.radarHeader}>
-        <Text style={styles.headerTitle}>GIÁM SÁT GPS LIVE</Text>
-        <Text style={styles.headerSubtitle}>Theo dõi vị trí nhân sự thực tế trong bán kính an toàn của cửa hàng.</Text>
-      </View>
-
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingTop: 16 }]}
         scrollEnabled={!isMapExpanded}
       >
         {/* Bento-style Interactive Map Card */}
         <View style={styles.mapBentoCard}>
           <View style={styles.mapCardHeader}>
             <Text style={styles.mapTitle}>🗺️ Bản đồ định vị GPS (Leaflet Map API)</Text>
-            <TouchableOpacity 
-              style={styles.expandToggleBtn} 
+            <TouchableOpacity
+              style={styles.expandToggleBtn}
               onPress={() => setIsMapExpanded(!isMapExpanded)}
             >
               <Text style={styles.expandToggleText}>
@@ -224,7 +603,7 @@ export default function EmployerMonitor() {
             )}
 
             {!isMapExpanded && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.mapClickOverlay}
                 onPress={() => setIsMapExpanded(true)}
                 activeOpacity={0.8}
@@ -239,76 +618,412 @@ export default function EmployerMonitor() {
             </Text>
           </View>
         </View>
-
         {/* Workforce List Header */}
         <View style={styles.listHeaderRow}>
-          <Text style={styles.sectionHeader}>NHÂN SỰ ĐANG TRỰC</Text>
-          <View style={styles.activeCountBadge}>
-            <Text style={styles.activeCountText}>
-              {sortedPersonnel.filter(p => p.gpsStatus !== 'Suspicious').length.toString().padStart(2, '0')} Hoạt Động
-            </Text>
-          </View>
+          <Text style={styles.sectionHeader}>NHÂN SỰ TRONG NGÀY ({(() => {
+            const localDate = new Date();
+            return `${localDate.getDate().toString().padStart(2, '0')}/${(localDate.getMonth() + 1).toString().padStart(2, '0')}/${localDate.getFullYear()}`;
+          })()})</Text>
+          {selectedShiftKey && (
+            <View style={styles.activeCountBadge}>
+              <Text style={styles.activeCountText}>
+                {displayedPersonnel.filter(p => p.rawStatus === 'working' || p.rawStatus === 'suspicious').length.toString().padStart(2, '0')} Đang Làm
+              </Text>
+            </View>
+          )}
         </View>
-        
-        {sortedPersonnel.length === 0 ? (
+
+        {/* Shift Selection Tabs */}
+        {sortedShiftKeys.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabsContainer}
+            contentContainerStyle={styles.tabsContent}
+          >
+            {sortedShiftKeys.map((key) => {
+              const isActive = selectedShiftKey === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[
+                    styles.shiftTabBtn,
+                    isActive && styles.shiftTabBtnActive
+                  ]}
+                  onPress={() => setSelectedShiftKey(key)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.shiftTabText,
+                    isActive && styles.shiftTabTextActive
+                  ]}>
+                    {formatShiftName(key)} ({groupedShifts[key]?.length || 0})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {displayedPersonnel.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>💤</Text>
-            <Text style={styles.emptyText}>Hiện tại chưa có ai check-in ca làm việc.</Text>
-            <Text style={styles.emptySub}>Sinh viên check-in bằng GPS sẽ xuất hiện tại đây.</Text>
+            <Text style={styles.emptyText}>Ca làm việc này không có ai được phân lịch.</Text>
+            <Text style={styles.emptySub}>Chọn ca khác hoặc thêm lịch trực ở trang Phân Công.</Text>
           </View>
         ) : (
-          sortedPersonnel.map((person) => {
-            const isSuspicious = person.gpsStatus === 'Suspicious';
+          displayedPersonnel.map((person) => {
+            const isSuspicious = person.rawStatus === 'suspicious';
+            const isNotCheckedIn = person.rawStatus === 'not_checked_in';
+            const isAbsent = person.rawStatus === 'absent';
+            const isCompleted = person.rawStatus === 'completed';
+            const isWorking = person.rawStatus === 'working';
+
+            let cardStatusStyle = null;
+            let statusColor = theme.colors.success;
+            let statusText = `• ${person.distance}m - AN TOÀN`;
+
+            if (isSuspicious) {
+              cardStatusStyle = styles.staffCardSuspicious;
+              statusColor = theme.colors.danger;
+              statusText = `⚠️ Nghi vấn GPS - Cách ${person.distance}m`;
+            } else if (isNotCheckedIn) {
+              cardStatusStyle = styles.staffCardNotCheckedIn;
+              statusColor = '#94A3B8';
+              statusText = '• CHƯA ĐIỂM DANH';
+            } else if (isAbsent) {
+              cardStatusStyle = styles.staffCardAbsent;
+              statusColor = '#EF4444';
+              statusText = '❌ VẮNG MẶT';
+            } else if (isCompleted) {
+              cardStatusStyle = styles.staffCardCompleted;
+              statusColor = '#3B82F6';
+              statusText = '✓ ĐÃ RA CA';
+            }
+
+            const isExpanded = expandedStaffId === person.id;
+
             return (
-              <View 
-                key={person.id} 
+              <TouchableOpacity
+                key={person.id}
+                activeOpacity={0.9}
+                onPress={() => setExpandedStaffId(prev => prev === person.id ? null : person.id)}
                 style={[
                   styles.premiumStaffCard,
-                  isSuspicious && styles.staffCardSuspicious
+                  cardStatusStyle,
+                  { flexDirection: 'column', alignItems: 'stretch' }
                 ]}
               >
-                {/* Left: Square-rounded avatar */}
-                <Image 
-                  source={getAvatarSource(person.photo, null, person.name)} 
-                  style={styles.staffAvatar} 
-                />
+                {/* Horizontal Header Row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                  {/* Left: Square-rounded avatar */}
+                  <Image
+                    source={getAvatarSource(person.photo, null, person.name)}
+                    style={styles.staffAvatar}
+                  />
 
-                {/* Center: Info */}
-                <View style={styles.staffInfoContainer}>
-                  <Text style={styles.staffName}>{person.name}</Text>
-                  <View style={styles.staffStatusRow}>
-                    <View style={[
-                      styles.statusIndicatorDot, 
-                      { backgroundColor: isSuspicious ? theme.colors.danger : theme.colors.success }
-                    ]} />
-                    <Text style={[
-                      styles.staffStatusText,
-                      { color: isSuspicious ? theme.colors.danger : theme.colors.success }
-                    ]}>
-                      {isSuspicious 
-                        ? `⚠️ Nghi vấn GPS - Cách ${person.distance}m` 
-                        : `• ${person.distance}m - AN TOÀN`}
+                  {/* Center: Info */}
+                  <View style={styles.staffInfoContainer}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                      <Text style={styles.staffName}>{person.name}</Text>
+                      {(() => {
+                        const punct = getPunctualityStatus(person);
+                        if (!punct) return null;
+                        return (
+                          <View style={{
+                            backgroundColor: punct.bg,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                          }}>
+                            <Text style={{ fontSize: 9, fontWeight: '800', color: punct.color }}>
+                              {punct.text.toUpperCase()}
+                            </Text>
+                          </View>
+                        );
+                      })()}
+                      <Ionicons
+                        name={isExpanded ? "chevron-up" : "chevron-down"}
+                        size={14}
+                        color="#94A3B8"
+                      />
+                    </View>
+                    <View style={styles.staffStatusRow}>
+                      <View style={[
+                        styles.statusIndicatorDot,
+                        { backgroundColor: statusColor }
+                      ]} />
+                      <Text style={[
+                        styles.staffStatusText,
+                        { color: statusColor }
+                      ]}>
+                        {statusText}
+                      </Text>
+                    </View>
+                    <Text style={styles.staffRole} numberOfLines={1} ellipsizeMode="tail">
+                      {person.role} • {formatShiftName(person.shiftName)}
                     </Text>
                   </View>
-                  <Text style={styles.staffRole}>{person.role} • {person.shop.split(' - ')[0]}</Text>
+
+                  {/* Right: Actions & Timestamp */}
+                  <View style={styles.staffRightContainer}>
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity
+                        style={[styles.actionIconButton, styles.chatButton]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          const staffMember = staffList.find(s => s.id === person.employeeId || s.name === person.name);
+                          if (staffMember && staffMember.userId) {
+                            navigationParams.partnerId = staffMember.userId;
+                            navigationParams.partnerName = staffMember.name;
+                            navigationParams.partnerAvatar = staffMember.avatarUrl;
+                            navigationParams.partnerPhone = person.studentPhone || staffMember.phone;
+                            setNavigationParams({ ...navigationParams });
+                            navigateTo('employer_chat');
+                          } else {
+                            showToast('Không thể nhắn tin: Không tìm thấy tài khoản liên kết với nhân sự này.', 'warning');
+                          }
+                        }}
+                      >
+                        <Ionicons name="chatbubble-ellipses" size={16} color="#FF6B00" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionIconButton, styles.callButton]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          const staffMember = staffList.find(s => s.id === person.employeeId || s.name === person.name);
+                          const phone = person.studentPhone || staffMember?.phone || '0901234567';
+                          handleCallUser(phone);
+                        }}
+                      >
+                        <Ionicons name="call" size={15} color="#0A58CA" />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.checkInTimeText}>
+                      {isNotCheckedIn ? 'Chưa Điểm Danh' :
+                        isAbsent ? 'Vắng Mặt' :
+                          isCompleted ? `Ra ca: ${person.checkOutTime}` :
+                            `Check-in: ${person.checkInTime}`}
+                    </Text>
+                  </View>
                 </View>
 
-                {/* Right: Actions & Timestamp */}
-                <View style={styles.staffRightContainer}>
-                  <View style={styles.actionsRow}>
-                    <TouchableOpacity style={styles.actionIconButton}>
-                      <Text style={styles.actionIconEmoji}>💬</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionIconButton}>
-                      <Text style={styles.actionIconEmoji}>📞</Text>
-                    </TouchableOpacity>
+                {/* Collapsible details box */}
+                {isExpanded && (
+                  <View style={styles.expandedDetailBox}>
+                    <View style={styles.detailDivider} />
+
+                    {/* Contact Info */}
+                    <View style={styles.infoBlock}>
+                      <Text style={styles.infoBlockLabel}>THÔNG TIN LIÊN HỆ</Text>
+                      <Text style={styles.infoBlockValue}>📞 {person.studentPhone || 'Chưa cập nhật'}</Text>
+                    </View>
+
+                    {/* System notes (early checkout/late/absent) */}
+                    {person.note && (
+                      <View style={[styles.infoBlock, styles.warningNoteBox]}>
+                        <Text style={styles.warningNoteLabel}>⚠️ Ghi chú điểm danh:</Text>
+                        <Text style={styles.warningNoteText}>{person.note}</Text>
+                      </View>
+                    )}
+
+                    {/* Check In info */}
+                    <View style={styles.logDetailSection}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <View style={styles.logStepNumber}><Text style={styles.logStepText}>1</Text></View>
+                        <Text style={styles.logSectionTitle}>CHI TIẾT CHECK-IN</Text>
+                      </View>
+
+                      {person.rawStatus === 'not_checked_in' || person.rawStatus === 'absent' ? (
+                        <Text style={styles.logEmptyText}>Chưa thực hiện check-in</Text>
+                      ) : (
+                        <View style={styles.logDetailsBox}>
+                          <View style={styles.logDetailRow}>
+                            <Text style={styles.logDetailLabel}>⏰ Giờ Check-in:</Text>
+                            <Text style={styles.logDetailVal}>{person.checkInTime}</Text>
+                          </View>
+                          {person.inLatitude && (
+                            <View style={styles.logDetailRow}>
+                              <Text style={styles.logDetailLabel}>📍 Tọa độ GPS:</Text>
+                              <Text style={styles.logDetailVal}>
+                                {person.inLatitude.toFixed(6)}, {person.inLongitude?.toFixed(6)}
+                              </Text>
+                            </View>
+                          )}
+                          <View style={styles.logDetailRow}>
+                            <Text style={styles.logDetailLabel}>📏 Khoảng cách:</Text>
+                            <Text style={styles.logDetailVal}>
+                              {person.checkInDistance !== null ? `Cách quán ${person.checkInDistance}m` : 'N/A'}
+                            </Text>
+                          </View>
+                          {(() => {
+                            const punct = getPunctualityStatus(person);
+                            if (!punct) return null;
+                            return (
+                              <View style={styles.logDetailRow}>
+                                <Text style={styles.logDetailLabel}>⏱️ Trạng thái:</Text>
+                                <View style={{
+                                  backgroundColor: punct.bg,
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 2,
+                                  borderRadius: 6,
+                                  alignSelf: 'flex-start'
+                                }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: punct.color }}>
+                                    {punct.text.toUpperCase()}
+                                  </Text>
+                                </View>
+                              </View>
+                            );
+                          })()}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Check Out info */}
+                    <View style={[styles.logDetailSection, { marginTop: 12 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <View style={[styles.logStepNumber, { backgroundColor: '#3B82F6' }]}><Text style={styles.logStepText}>2</Text></View>
+                        <Text style={styles.logSectionTitle}>CHI TIẾT CHECK-OUT</Text>
+                      </View>
+
+                      {person.rawStatus === 'completed' ? (
+                        <View style={styles.logDetailsBox}>
+                          <View style={styles.logDetailRow}>
+                            <Text style={styles.logDetailLabel}>⏰ Giờ Check-out:</Text>
+                            <Text style={styles.logDetailVal}>{person.checkOutTime}</Text>
+                          </View>
+                          {person.outLatitude && (
+                            <View style={styles.logDetailRow}>
+                              <Text style={styles.logDetailLabel}>📍 Tọa độ GPS:</Text>
+                              <Text style={styles.logDetailVal}>
+                                {person.outLatitude.toFixed(6)}, {person.outLongitude?.toFixed(6)}
+                              </Text>
+                            </View>
+                          )}
+                          {person.checkOutDistance !== null && (
+                            <View style={styles.logDetailRow}>
+                              <Text style={styles.logDetailLabel}>📏 Khoảng cách:</Text>
+                              <Text style={styles.logDetailVal}>
+                                Cách quán {person.checkOutDistance}m
+                              </Text>
+                            </View>
+                          )}
+                          {(() => {
+                            const punct = getCheckOutPunctuality(person);
+                            if (!punct) return null;
+                            return (
+                              <View style={styles.logDetailRow}>
+                                <Text style={styles.logDetailLabel}>⏱️ Trạng thái:</Text>
+                                <View style={{
+                                  backgroundColor: punct.bg,
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 2,
+                                  borderRadius: 6,
+                                  alignSelf: 'flex-start'
+                                }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: punct.color }}>
+                                    {punct.text.toUpperCase()}
+                                  </Text>
+                                </View>
+                              </View>
+                            );
+                          })()}
+                        </View>
+                      ) : (
+                        <Text style={styles.logEmptyText}>
+                          {person.rawStatus === 'working' || person.rawStatus === 'suspicious'
+                            ? 'Đang làm việc (Chưa check-out)'
+                            : 'Chưa thực hiện check-out'}
+                        </Text>
+                      )}
+                    </View>
                   </View>
-                  <Text style={styles.checkInTimeText}>Check-in: {person.checkInTime}</Text>
-                </View>
-              </View>
+                )}
+              </TouchableOpacity>
             );
           })
         )}
+
+        {/* QR Code Setup Card */}
+        <View style={styles.qrManagementBentoCard}>
+          <Text style={styles.qrCardTitle}>⚙️ Thiết lập Mã QR Điểm Danh</Text>
+          <Text style={styles.qrCardDesc}>
+            Mã QR này được dùng để đặt tại quầy thu ngân của quán. Sinh viên ở trong bán kính GPS và quét mã này để hoàn thành điểm danh.
+          </Text>
+
+          {loadingQr ? (
+            <ActivityIndicator color={theme.colors.student} style={{ marginVertical: 20 }} />
+          ) : qrCodeData ? (
+            <View style={styles.qrDetailsContainer}>
+              {/* Real QR Visual */}
+              <View style={styles.qrCodeVisualBox}>
+                <View style={styles.qrRealCodeContainer}>
+                  <Image
+                    source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCodeData.qrToken)}` }}
+                    style={styles.qrCodeImage}
+                  />
+                </View>
+              </View>
+
+              {/* <View style={styles.qrMetaRow}>
+                <Text style={styles.qrMetaLabel}>Token hiện tại:</Text>
+                <Text style={styles.qrMetaVal} numberOfLines={1}>{qrCodeData.qrToken}</Text>
+              </View> */}
+
+              {/* Allowed geofence radius selector */}
+              <View style={styles.radiusSelectorSection}>
+                <Text style={styles.radiusLabel}>Bán kính GPS cho phép:</Text>
+                <View style={styles.radiusBtnRow}>
+                  {[50, 100, 200].map((radius) => (
+                    <TouchableOpacity
+                      key={radius}
+                      style={[
+                        styles.radiusSelectBtn,
+                        qrCodeData.allowedRadiusMeters === radius && styles.radiusSelectBtnActive
+                      ]}
+                      onPress={() => handleUpdateRadius(radius)}
+                    >
+                      <Text style={[
+                        styles.radiusSelectText,
+                        qrCodeData.allowedRadiusMeters === radius && styles.radiusSelectTextActive
+                      ]}>
+                        {radius}m
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+
+
+              {/* Action Buttons */}
+              <TouchableOpacity
+                style={[styles.regenerateQrBtn, generatingQr && { opacity: 0.6 }]}
+                disabled={generatingQr}
+                onPress={handleGenerateQr}
+              >
+                <Text style={styles.regenerateQrBtnText}>
+                  {generatingQr ? 'Đang tạo mới...' : '🔄 Làm mới mã QR'}
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={styles.qrSecurityTip}>
+                🔒 Nhấn "Làm mới Mã QR" sau mỗi ngày làm việc để tránh tình trạng sinh viên chụp lại mã và tự điểm danh từ xa.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.noQrContainer}>
+              <Text style={styles.noQrText}>Quán của bạn chưa tạo mã QR điểm danh.</Text>
+              <TouchableOpacity
+                style={styles.regenerateQrBtn}
+                onPress={handleGenerateQr}
+              >
+                <Text style={styles.regenerateQrBtnText}>⚡ Khởi tạo mã QR ngay</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -463,6 +1178,21 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     backgroundColor: '#FFFBEB',
   },
+  staffCardNotCheckedIn: {
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    opacity: 0.85,
+  },
+  staffCardAbsent: {
+    borderColor: '#EF4444',
+    borderWidth: 1,
+    backgroundColor: '#FEF2F2',
+    opacity: 0.8,
+  },
+  staffCardCompleted: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+  },
   staffAvatar: {
     width: 56,
     height: 56,
@@ -474,6 +1204,7 @@ const styles = StyleSheet.create({
   staffInfoContainer: {
     flex: 1,
     marginLeft: 12,
+    marginRight: 8,
     justifyContent: 'center',
   },
   staffName: {
@@ -510,18 +1241,29 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   actionIconButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  actionIconEmoji: {
-    fontSize: 13,
+  chatButton: {
+    backgroundColor: '#FFF3EB',
+    borderWidth: 1,
+    borderColor: '#FFE0CC',
+  },
+  callButton: {
+    backgroundColor: '#E6F0FA',
+    borderWidth: 1,
+    borderColor: '#CCE0F5',
   },
   checkInTimeText: {
     fontSize: 10,
@@ -555,5 +1297,273 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'transparent',
-  }
+  },
+  qrManagementBentoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 32,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.04,
+    shadowRadius: 30,
+    elevation: 3,
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  qrCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 6,
+  },
+  qrCardDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  qrDetailsContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  qrCodeVisualBox: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  qrRealCodeContainer: {
+    width: 200,
+    height: 200,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 24,
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 20,
+    elevation: 2,
+  },
+  qrCodeImage: {
+    width: 176,
+    height: 176,
+    resizeMode: 'contain',
+  },
+  qrMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  qrMetaLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  qrMetaVal: {
+    fontSize: 13,
+    color: '#1E293B',
+    fontWeight: '700',
+    maxWidth: 200,
+  },
+  radiusSelectorSection: {
+    width: '100%',
+    marginVertical: 16,
+  },
+  radiusLabel: {
+    fontSize: 13,
+    color: '#1E293B',
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  radiusBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  radiusSelectBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radiusSelectBtnActive: {
+    backgroundColor: '#0F172A',
+  },
+  radiusSelectText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#475569',
+  },
+  radiusSelectTextActive: {
+    color: '#FFFFFF',
+  },
+  regenerateQrBtn: {
+    backgroundColor: theme.colors.student,
+    width: '100%',
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+    shadowColor: theme.colors.student,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  regenerateQrBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  qrSecurityTip: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 15,
+    marginTop: 12,
+    paddingHorizontal: 8,
+  },
+  noQrContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  noQrText: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  tabsContainer: {
+    marginVertical: 12,
+  },
+  tabsContent: {
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  shiftTabBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  shiftTabBtnActive: {
+    backgroundColor: theme.colors.student,
+    borderColor: theme.colors.student,
+  },
+  shiftTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  shiftTabTextActive: {
+    color: '#FFFFFF',
+  },
+  expandedDetailBox: {
+    width: '100%',
+    marginTop: 10,
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
+  },
+  infoBlock: {
+    marginBottom: 8,
+  },
+  infoBlockLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+  },
+  infoBlockValue: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  warningNoteBox: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 4,
+  },
+  warningNoteLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  warningNoteText: {
+    fontSize: 11,
+    color: '#DC2626',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  logDetailSection: {
+    marginBottom: 8,
+  },
+  logStepNumber: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  logStepText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  logSectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.5,
+  },
+  logEmptyText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    marginLeft: 28,
+  },
+  logDetailsBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    marginLeft: 28,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  logDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  logDetailLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  logDetailVal: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '700',
+  },
 });

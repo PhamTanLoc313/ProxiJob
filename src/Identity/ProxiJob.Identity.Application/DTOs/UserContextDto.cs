@@ -20,5 +20,8 @@ namespace ProxiJob.Identity.Application.DTOs
         public decimal ReputationScore { get; set; }
         public bool IsActive { get; set; }
         public IReadOnlyList<string> Features { get; set; } = Array.Empty<string>();
+        public int MaxEmployees { get; set; }
+        public int MaxActiveQrs { get; set; }
+        public int MaxSearchRadius { get; set; }
     }
 }

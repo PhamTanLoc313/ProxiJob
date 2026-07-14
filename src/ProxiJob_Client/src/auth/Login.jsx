@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { loginUser } from "./authStorage";
 import { useAuth } from "./AuthContext";
+import { adminLogin } from "../admin/adminData";
 
 function Login() {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ function Login() {
   const [errors, setErrors] = useState({});
   const [successMessage] = useState(location.state?.message ?? "");
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const newErrors = {};
 
@@ -35,6 +36,21 @@ function Login() {
     }
 
     setErrors({});
+
+    if (email === "admin@proxijob.test" || email === "admin@proxijob.vn") {
+      try {
+        const adminResult = await adminLogin(email, password);
+        if (adminResult.ok) {
+          navigate("/admin");
+        } else {
+          setErrors({ submit: adminResult.message });
+        }
+      } catch (err) {
+        setErrors({ submit: err.message || "Đăng nhập thất bại." });
+      }
+      return;
+    }
+
     const result = loginUser({ email, password });
     if (!result.ok) {
       setErrors({ submit: result.message });

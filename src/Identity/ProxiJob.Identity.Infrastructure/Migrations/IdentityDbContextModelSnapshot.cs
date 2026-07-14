@@ -120,6 +120,71 @@ namespace ProxiJob.Identity.Infrastructure.Migrations
                     b.ToTable("identity_businessprofiles");
                 });
 
+            modelBuilder.Entity("ProxiJob.Identity.Domain.Models.Message", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("createdat");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("createdby");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deletedat");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deletedby");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("isdeleted");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean")
+                        .HasColumnName("isread");
+
+                    b.Property<int>("ReceiverId")
+                        .HasColumnType("integer")
+                        .HasColumnName("receiverid");
+
+                    b.Property<int>("SenderId")
+                        .HasColumnType("integer")
+                        .HasColumnName("senderid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updatedat");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("updatedby");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceiverId");
+
+                    b.HasIndex("SenderId");
+
+                    b.ToTable("identity_messages");
+                });
+
             modelBuilder.Entity("ProxiJob.Identity.Domain.Models.PaymentOrder", b =>
                 {
                     b.Property<int>("Id")
@@ -190,6 +255,10 @@ namespace ProxiJob.Identity.Infrastructure.Migrations
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("paidat");
+
+                    b.Property<long?>("PayOsOrderCode")
+                        .HasColumnType("bigint")
+                        .HasColumnName("payosordercode");
 
                     b.Property<string>("PaymentUrl")
                         .HasColumnType("text")
@@ -412,6 +481,18 @@ namespace ProxiJob.Identity.Infrastructure.Migrations
                         .HasColumnType("character varying(300)")
                         .HasColumnName("address");
 
+                    b.Property<int>("AppliesLimit")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3)
+                        .HasColumnName("applieslimit");
+
+                    b.Property<int>("AppliesUsed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("appliesused");
+
                     b.Property<string>("Bio")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
@@ -575,6 +656,18 @@ namespace ProxiJob.Identity.Infrastructure.Migrations
                     b.Property<int>("JobPostLimit")
                         .HasColumnType("integer")
                         .HasColumnName("jobpostlimit");
+
+                    b.Property<int>("MaxActiveQrs")
+                        .HasColumnType("integer")
+                        .HasColumnName("maxactiveqrs");
+
+                    b.Property<int>("MaxEmployees")
+                        .HasColumnType("integer")
+                        .HasColumnName("maxemployees");
+
+                    b.Property<int>("MaxSearchRadius")
+                        .HasColumnType("integer")
+                        .HasColumnName("maxsearchradius");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -790,6 +883,14 @@ namespace ProxiJob.Identity.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("phonenumber");
 
+                    b.Property<string>("ResetToken")
+                        .HasColumnType("text")
+                        .HasColumnName("resettoken");
+
+                    b.Property<DateTime?>("ResetTokenExpiry")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resettokenexpiry");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updatedat");
@@ -995,6 +1096,25 @@ namespace ProxiJob.Identity.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ProxiJob.Identity.Domain.Models.Message", b =>
+                {
+                    b.HasOne("ProxiJob.Identity.Domain.Models.User", "Receiver")
+                        .WithMany()
+                        .HasForeignKey("ReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProxiJob.Identity.Domain.Models.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Receiver");
+
+                    b.Navigation("Sender");
                 });
 
             modelBuilder.Entity("ProxiJob.Identity.Domain.Models.PaymentOrder", b =>

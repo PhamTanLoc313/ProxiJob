@@ -5,6 +5,10 @@ using ProxiJob.Management.Infrastructure.BackgroundJobs;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 var urls = builder.Configuration["urls"] ?? Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
 if (!string.IsNullOrEmpty(urls))
 {
@@ -63,7 +67,10 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ProxiJob.Management.API.Filters.ApiExceptionFilter>();
+});
 builder.Services.AddAuthentication("GrpcAuthentication")
     .AddScheme<ProxiJob.Management.API.Middleware.GrpcAuthenticationOptions, ProxiJob.Management.API.Middleware.GrpcAuthenticationHandler>("GrpcAuthentication", null);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -86,6 +93,10 @@ if (!app.Environment.IsDevelopment())
 app.UseAuthentication();
 
 app.UseAuthorization();
+
+await ProxiJob.Management.Infrastructure.Data.ManagementDatabaseInitializer.InitializeAsync(
+    app.Services,
+    app.Logger);
 
 app.MapControllers();
 

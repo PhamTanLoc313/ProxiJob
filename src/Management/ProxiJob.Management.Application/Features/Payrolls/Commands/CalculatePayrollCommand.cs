@@ -30,6 +30,8 @@ public class CalculatePayrollCommandHandler : IRequestHandler<CalculatePayrollCo
 
     public async Task<int> Handle(CalculatePayrollCommand request, CancellationToken cancellationToken)
     {
+        await ProxiJob.Management.Application.Features.Timekeepings.TimekeepingHelper.AutoCheckoutStaleRecordsAsync(_context, cancellationToken);
+
         var employee = await _context.Employees
             .FirstOrDefaultAsync(e => e.Id == request.EmployeeId && e.BusinessId == request.BusinessId, cancellationToken);
 
@@ -58,8 +60,8 @@ public class CalculatePayrollCommandHandler : IRequestHandler<CalculatePayrollCo
                 {
                     var hours = (decimal)(t.CheckOutTime!.Value - t.CheckInTime!.Value).TotalHours;
                     totalHours += hours;
-                    var shiftSalary = t.WorkSchedule.JobShiftSalary ?? 0;
-                    baseAmount += shiftSalary;
+                    var rate = t.WorkSchedule.JobShiftSalary ?? employee.HourlyRate ?? 0;
+                    baseAmount += (hours * rate);
                 }
             }
             else

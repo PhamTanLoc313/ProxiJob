@@ -205,7 +205,20 @@ export async function checkAuthApi(token) {
       avatarUrl: avatarUrl,
     };
   } catch (error) {
-    console.log('[ProxiJob API] checkAuthApi failed. Falling back to local cache:', error.message);
+    console.log('[ProxiJob API] checkAuthApi failed:', error.message);
+    // If the token is expired, do NOT fall back to cached user.
+    // Let the error propagate so useAuth can attempt a token refresh.
+    const isExpired = error.message && (
+      error.message.includes('hết hạn') || 
+      error.message.includes('expired') ||
+      error.message.includes('không hợp lệ') ||
+      error.message.includes('invalid')
+    );
+    if (isExpired) {
+      throw error;
+    }
+    // For other errors (network, decode issues), fall back to cached user
+    console.log('[ProxiJob API] Falling back to local cache for non-expiration error');
     const storedUser = await getStoredUser();
     if (storedUser) {
       return storedUser;
@@ -286,13 +299,19 @@ export async function getStoredUser() {
  */
 export async function refreshTokensApi(refreshToken) {
   try {
+    // Add timeout to prevent hanging when backend is unreachable
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ refreshToken }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error('Yêu cầu cấp lại Access Token thất bại.');
@@ -423,3 +442,203 @@ export async function createPaymentSessionApi(orderId) {
     throw error;
   }
 }
+
+/**
+ * Login with Google ID Token
+ * POST /api/auth/google
+ * @param {string} googleToken
+ * @returns {Promise<object>} { token, refreshToken, user }
+ */
+export async function loginWithGoogleApi(googleToken, role) {
+  try {
+    console.log('[ProxiJob Auth API] loginWithGoogleApi calling backend with role:', role);
+    const response = await fetch(`${API_BASE_URL}/auth/google`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ idToken: googleToken, role: role }),
+    });
+
+    const resData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || 'Đăng nhập Google thất bại.';
+      throw new Error(errorMsg);
+    }
+
+    const authData = resData.data || resData;
+    const token = authData.accessToken || authData.token;
+    const refreshToken = authData.refreshToken;
+
+    if (!token) {
+      throw new Error('Không nhận được token từ hệ thống.');
+    }
+
+    const decodedUser = decodeJwt(token);
+    const rawRole = decodedUser['role'] || decodedUser['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || '';
+    const roleStr = (Array.isArray(rawRole) ? rawRole[0] : rawRole).toString();
+    const mappedRole = roleStr.toLowerCase() === 'student' ? 'student' : 'employer';
+    const userId = parseInt(decodedUser.sub || decodedUser['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] || 1, 10);
+    const subTier = decodedUser['subscription_tier'] || 'Free';
+    const avatarUrl = decodedUser['avatar_url'] || '';
+
+    return {
+      token: token,
+      refreshToken: refreshToken,
+      user: {
+        id: userId,
+        email: decodedUser.email || '',
+        name: decodedUser.name || decodedUser.unique_name || (roleStr.toLowerCase() === 'student' ? 'Sinh viên Google' : 'Chủ quán Google'),
+        role: mappedRole,
+        subscriptionTier: subTier,
+        avatarUrl: avatarUrl,
+      }
+    };
+  } catch (error) {
+    console.log('[ProxiJob Auth API] loginWithGoogleApi failed:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Request password reset OTP
+ * @param {string} email
+ * @returns {Promise<object>}
+ */
+export async function forgotPasswordApi(email) {
+  try {
+    console.log('[ProxiJob Auth API] forgotPasswordApi calling backend for:', email);
+    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const resData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || 'Gửi yêu cầu khôi phục mật khẩu thất bại.';
+      throw new Error(errorMsg);
+    }
+
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob Auth API] forgotPasswordApi failed:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Verify password reset OTP
+ * @param {string} email
+ * @param {string} code
+ * @returns {Promise<object>}
+ */
+export async function verifyResetTokenApi(email, code) {
+  try {
+    console.log('[ProxiJob Auth API] verifyResetTokenApi calling backend for:', email);
+    const response = await fetch(`${API_BASE_URL}/auth/verify-reset-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, code }),
+    });
+
+    const resData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || 'Mã xác minh không chính xác hoặc đã hết hạn.';
+      throw new Error(errorMsg);
+    }
+
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob Auth API] verifyResetTokenApi failed:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Reset password using OTP
+ * @param {string} email
+ * @param {string} code
+ * @param {string} newPassword
+ * @param {string} confirmNewPassword
+ * @returns {Promise<object>}
+ */
+export async function resetPasswordApi(email, code, newPassword, confirmNewPassword) {
+  try {
+    console.log('[ProxiJob Auth API] resetPasswordApi calling backend for:', email);
+    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, code, newPassword, confirmNewPassword }),
+    });
+
+    const resData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg = resData.message || (resData.errors && resData.errors.join(', ')) || 'Đặt lại mật khẩu thất bại.';
+      throw new Error(errorMsg);
+    }
+
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob Auth API] resetPasswordApi failed:', error.message);
+    throw error;
+  }
+}
+
+
+/**
+ * Fetch dynamic job post quota for current user
+ * @returns {Promise<object|null>}
+ */
+export async function getJobPostQuotaApi() {
+  try {
+    const token = await getStoredToken();
+    if (!token) return null;
+    const response = await fetch(`${API_BASE_URL}/plans/job-posts/quota`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    const resData = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob API] getJobPostQuotaApi failed:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Consume 1 job post quota after successful post creation
+ * @returns {Promise<object|null>}
+ */
+export async function consumeJobPostQuotaApi() {
+  try {
+    const token = await getStoredToken();
+    if (!token) return null;
+    const response = await fetch(`${API_BASE_URL}/plans/job-posts/consume`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const resData = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
+    return resData.data || resData;
+  } catch (error) {
+    console.log('[ProxiJob API] consumeJobPostQuotaApi failed:', error.message);
+    return null;
+  }
+}
+

@@ -20,6 +20,7 @@ namespace ProxiJob.Identity.Infrastructure.Data
         public DbSet<PaymentOrder> PaymentOrders { get; set; }
         public DbSet<StudentProfile> StudentProfiles { get; set; }
         public DbSet<BusinessProfile> BusinessProfiles { get; set; }
+        public DbSet<Message> Messages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -113,6 +114,8 @@ namespace ProxiJob.Identity.Infrastructure.Data
                 e.Property(x => x.Major).HasMaxLength(150);
                 e.Property(x => x.Bio).HasMaxLength(2000);
                 e.Property(x => x.Skills).HasMaxLength(500);
+                e.Property(x => x.AppliesLimit).HasDefaultValue(3);
+                e.Property(x => x.AppliesUsed).HasDefaultValue(0);
                 e.HasIndex(x => x.UserId).IsUnique();
                 e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             });
@@ -132,6 +135,13 @@ namespace ProxiJob.Identity.Infrastructure.Data
                 e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             });
 
+            modelBuilder.Entity<Message>(e =>
+            {
+                e.HasOne(x => x.Sender).WithMany().HasForeignKey(x => x.SenderId).OnDelete(DeleteBehavior.Restrict);
+                e.HasOne(x => x.Receiver).WithMany().HasForeignKey(x => x.ReceiverId).OnDelete(DeleteBehavior.Restrict);
+                e.Property(x => x.Content).HasMaxLength(4000).IsRequired();
+            });
+
             // 5. Global Query Filters (Soft Delete)
             modelBuilder.Entity<User>().HasQueryFilter(x => !x.IsDeleted);
             modelBuilder.Entity<Role>().HasQueryFilter(x => !x.IsDeleted);
@@ -146,6 +156,7 @@ namespace ProxiJob.Identity.Infrastructure.Data
             modelBuilder.Entity<PaymentOrder>().HasQueryFilter(x => !x.IsDeleted);
             modelBuilder.Entity<StudentProfile>().HasQueryFilter(x => !x.IsDeleted);
             modelBuilder.Entity<BusinessProfile>().HasQueryFilter(x => !x.IsDeleted);
+            modelBuilder.Entity<Message>().HasQueryFilter(x => !x.IsDeleted);
         }
     }
 }

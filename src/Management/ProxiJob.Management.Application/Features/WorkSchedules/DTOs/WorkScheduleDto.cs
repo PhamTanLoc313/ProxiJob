@@ -6,10 +6,15 @@ public class WorkScheduleDto
 {
     public int Id { get; set; }
     public int EmployeeId { get; set; }
+    public int BusinessId { get; set; }
     public int? JobShiftId { get; set; }
     public decimal? JobShiftSalary { get; set; }
     public DateOnly Date { get; set; }
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
     public string? Note { get; set; }
+    public string? TimekeepingStatus { get; set; }
+    public DateTime? ActualCheckInTime { get; set; }
+    public DateTime? ActualCheckOutTime { get; set; }
+    public int? TimekeepingId { get; set; }
 }

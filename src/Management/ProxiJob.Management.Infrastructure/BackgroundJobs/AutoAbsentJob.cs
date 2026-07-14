@@ -34,14 +34,29 @@ public class AutoAbsentJob : BackgroundService
             try
             {
                 await ProcessAbsentRecordsAsync(stoppingToken);
+                
+                // Run every 30 minutes
+                await Task.Delay(TimeSpan.FromMinutes(30), stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Graceful exit on shutdown
+                break;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred executing AutoAbsentJob.");
+                
+                try
+                {
+                    // Delay 1 minute on failure to prevent hammering the DB in a tight loop
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
-
-            // Run every 30 minutes
-            await Task.Delay(TimeSpan.FromMinutes(30), stoppingToken);
         }
 
         _logger.LogInformation("AutoAbsentJob is stopping.");
@@ -54,12 +69,13 @@ public class AutoAbsentJob : BackgroundService
         var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
 
         var thresholdTime = DateTime.UtcNow.AddHours(-2);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)); // local date
+        var twoDaysAgo = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7).AddDays(-2));
 
         // Find schedules where start time + 2 hours < now and no timekeeping exists
         var missedSchedules = await context.WorkSchedules
             .Include(ws => ws.Employee)
-            .Where(ws => ws.Date == today && ws.StartTime < thresholdTime)
+            .Where(ws => ws.Date >= twoDaysAgo && ws.Date <= today && ws.StartTime < thresholdTime)
             .Where(ws => !context.Timekeepings.Any(t => t.WorkScheduleId == ws.Id))
             .ToListAsync(stoppingToken);
 

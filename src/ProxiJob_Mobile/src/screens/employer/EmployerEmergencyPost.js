@@ -11,16 +11,589 @@ import {
   Switch,
   ActivityIndicator,
   Modal,
-  Platform
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
 import { theme } from '../../styles/theme';
 import { AppContext } from '../../context/AppContext';
 import { getCategoriesApi, getSkillsApi } from '../../api/jobs';
+import { Ionicons } from '@expo/vector-icons';
+import { getBusinessProfileApi } from '../../api/businessApi';
+
+// ĐIỀN API KEY GOOGLE MAPS CỦA BẠN VÀO ĐÂY ĐỂ BẬT TỰ ĐỘNG GỢI Ý & TÌM KIẾM ĐỊA CHỈ GOOGLE MAPS
+const GOOGLE_MAPS_API_KEY = 'CvNapWs3C3Vt7ZTRZf0uZliN9v3q8TBJKxd2CEcW';
+
+const cleanAddress = (rawAddress) => {
+  if (!rawAddress) return '';
+  // Remove trailing country suffix
+  let cleaned = rawAddress.replace(/,\s*(Việt Nam|Vietnam)\s*$/i, '');
+  // Remove postal codes (5-6 digit values preceded by comma and space)
+  cleaned = cleaned.replace(/,\s*\d{5,6}\b/g, '');
+  return cleaned.trim();
+};
+
+const reverseGeocode = async (lat, lng) => {
+  if (GOOGLE_MAPS_API_KEY) {
+    try {
+      const response = await fetch(
+        `https://rsapi.goong.io/Geocode?latlng=${lat},${lng}&api_key=${GOOGLE_MAPS_API_KEY}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+          return cleanAddress(data.results[0].formatted_address);
+        }
+      }
+    } catch (e) {
+      console.log('Goong reverse geocoding error:', e);
+    }
+  }
+
+  // Fallback to OSM Nominatim
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      if (data.display_name) {
+        return cleanAddress(data.display_name);
+      }
+      const road = data.address?.road || '';
+      const suburb = data.address?.suburb || data.address?.quarter || '';
+      const city = data.address?.city || data.address?.town || data.address?.state || '';
+      return [road, suburb, city].filter(Boolean).join(', ');
+    }
+  } catch (e) {
+    console.log('OSM reverse geocoding error:', e);
+  }
+  return '';
+};
+
+const fetchGeocode = async (q) => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
+      { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    }
+  } catch (err) {
+    console.log('fetchGeocode error:', err);
+  }
+  return null;
+};
+
+const geocodeAddressWithFallback = async (queryText) => {
+  // 1. Thử geocode bằng dịch vụ Goong Maps trước
+  if (GOOGLE_MAPS_API_KEY) {
+    try {
+      const url = `https://rsapi.goong.io/Geocode?address=${encodeURIComponent(queryText)}&api_key=${GOOGLE_MAPS_API_KEY}`;
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+          const loc = data.results[0].geometry.location;
+          return {
+            data: [{
+              lat: loc.lat,
+              lon: loc.lng,
+              display_name: cleanAddress(data.results[0].formatted_address)
+            }],
+            isFallback: false
+          };
+        }
+      }
+    } catch (e) {
+      console.log('Goong geocoding API error:', e);
+    }
+  }
+
+  // 2. Dự phòng (OSM): Tìm kiếm trực tiếp chuỗi ban đầu
+  let data = await fetchGeocode(queryText);
+  if (data && data.length > 0) {
+    return { data, isFallback: false };
+  }
+
+  // Dự phòng (OSM) Fallback 1: Lược bỏ số nhà, hẻm, khu phố để tìm kiếm tên đường lớn
+  let simplified = queryText
+    .replace(/^\s*(số|so)?\s*\d+(\/\d+)*\s*/i, '') // Loại bỏ số nhà dạng "50/19" ở đầu
+    .replace(/,\s*(khu phố|kp|tổ|to|hẻm|hem)\s*\d+/gi, '') // Loại bỏ ", khu phố 32"
+    .replace(/,\s*(khu phố|kp|tổ|to|hẻm|hem)\s+[a-zA-Z0-9_.-]+/gi, '');
+
+  simplified = simplified.trim();
+  if (simplified && simplified !== queryText) {
+    data = await fetchGeocode(simplified);
+    if (data && data.length > 0) {
+      return { data, isFallback: true, fallbackText: simplified };
+    }
+  }
+
+  // Dự phòng (OSM) Fallback 2: Cắt bớt phần tử đầu tiên sau dấu phẩy và tìm kiếm tiếp
+  const parts = queryText.split(',').map(p => p.trim()).filter(Boolean);
+  for (let i = 1; i < parts.length; i++) {
+    const fallbackQuery = parts.slice(i).join(', ');
+    if (fallbackQuery.length > 5) {
+      data = await fetchGeocode(fallbackQuery);
+      if (data && data.length > 0) {
+        return { data, isFallback: true, fallbackText: fallbackQuery };
+      }
+    }
+  }
+
+  return null;
+};
+
+const modalStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  calendarContainer: {
+    width: '100%',
+    maxWidth: 350,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  pickerContainer: {
+    width: '100%',
+    maxWidth: 300,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+  headerArrow: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+  },
+  headerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  daysHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  daysHeaderText: {
+    width: 38,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  dayCell: {
+    width: 38,
+    height: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 19,
+    marginBottom: 4,
+  },
+  dayCellEmpty: {
+    width: 38,
+    height: 38,
+    marginBottom: 4,
+  },
+  dayCellSelected: {
+    backgroundColor: '#FF6B00',
+  },
+  dayCellDisabled: {
+    opacity: 0.25,
+  },
+  dayCellText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  dayCellTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  dayCellTextDisabled: {
+    color: '#94A3B8',
+  },
+  pickerColumnsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  pickerColumnWrapper: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  columnLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  columnScrollView: {
+    height: 150,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  timeItem: {
+    paddingVertical: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  timeItemSelected: {
+    backgroundColor: '#FF6B00',
+  },
+  timeItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  timeItemTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  pickerSeparator: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#475569',
+    marginHorizontal: 12,
+    marginTop: 20,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: '#F1F5F9',
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  confirmBtn: {
+    backgroundColor: '#FF6B00',
+  },
+  confirmBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+});
+
+const CustomCalendarModal = ({ visible, value, onClose, onSelect }) => {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  
+  let initialDate = new Date();
+  if (value) {
+    const parts = value.split('-');
+    if (parts.length === 3) {
+      initialDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+  }
+
+  const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth());
+  const [currentYear, setCurrentYear] = useState(initialDate.getFullYear());
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+
+  useEffect(() => {
+    if (value) {
+      const parts = value.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        setSelectedDate(d);
+        setCurrentMonth(d.getMonth());
+        setCurrentYear(d.getFullYear());
+      }
+    }
+  }, [value, visible]);
+
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
+  
+  const daysHeader = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+  
+  const handlePrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(currentYear - 1);
+    } else {
+      setCurrentMonth(currentMonth - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(currentMonth + 1);
+    }
+  };
+
+  const handleDayPress = (day) => {
+    const d = new Date(currentYear, currentMonth, day);
+    if (d < today) return;
+    setSelectedDate(d);
+  };
+
+  const handleConfirm = () => {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const d = String(selectedDate.getDate()).padStart(2, '0');
+    onSelect(`${y}-${m}-${d}`);
+    onClose();
+  };
+
+  const monthNames = [
+    'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4',
+    'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8',
+    'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
+  ];
+
+  const cells = [];
+  for (let i = 0; i < firstDayIndex; i++) {
+    cells.push({ key: `empty-${i}`, day: null });
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    cells.push({ key: `day-${i}`, day: i });
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={modalStyles.modalOverlay}>
+        <View style={modalStyles.calendarContainer}>
+          <Text style={modalStyles.modalTitle}>Chọn ngày làm việc</Text>
+          
+          <View style={modalStyles.calendarHeader}>
+            <TouchableOpacity onPress={handlePrevMonth} style={modalStyles.headerArrow}>
+              <Ionicons name="chevron-back" size={20} color="#334155" />
+            </TouchableOpacity>
+            <Text style={modalStyles.headerTitle}>
+              {monthNames[currentMonth]}, {currentYear}
+            </Text>
+            <TouchableOpacity onPress={handleNextMonth} style={modalStyles.headerArrow}>
+              <Ionicons name="chevron-forward" size={20} color="#334155" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={modalStyles.daysHeaderRow}>
+            {daysHeader.map((h, i) => (
+              <Text key={i} style={modalStyles.daysHeaderText}>{h}</Text>
+            ))}
+          </View>
+
+          <View style={modalStyles.gridContainer}>
+            {cells.map((cell) => {
+              if (cell.day === null) {
+                return <View key={cell.key} style={modalStyles.dayCellEmpty} />;
+              }
+              const d = new Date(currentYear, currentMonth, cell.day);
+              const isPast = d < today;
+              const isSelected = selectedDate.getDate() === cell.day &&
+                                 selectedDate.getMonth() === currentMonth &&
+                                 selectedDate.getFullYear() === currentYear;
+
+              return (
+                <TouchableOpacity
+                  key={cell.key}
+                  style={[
+                    modalStyles.dayCell,
+                    isSelected && modalStyles.dayCellSelected,
+                    isPast && modalStyles.dayCellDisabled
+                  ]}
+                  disabled={isPast}
+                  onPress={() => handleDayPress(cell.day)}
+                >
+                  <Text style={[
+                    modalStyles.dayCellText,
+                    isSelected && modalStyles.dayCellTextSelected,
+                    isPast && modalStyles.dayCellTextDisabled
+                  ]}>
+                    {cell.day}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={modalStyles.actionsRow}>
+            <TouchableOpacity onPress={onClose} style={[modalStyles.actionBtn, modalStyles.cancelBtn]}>
+              <Text style={modalStyles.cancelBtnText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleConfirm} style={[modalStyles.actionBtn, modalStyles.confirmBtn]}>
+              <Text style={modalStyles.confirmBtnText}>Xác nhận</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const CustomTimePickerModal = ({ visible, value, onClose, onSelect, title }) => {
+  let initialHour = 8;
+  let initialMinute = 0;
+  if (value) {
+    const parts = value.split(':');
+    if (parts.length === 2) {
+      initialHour = parseInt(parts[0]);
+      initialMinute = parseInt(parts[1]);
+    }
+  }
+
+  const [selectedHour, setSelectedHour] = useState(initialHour);
+  const [selectedMinute, setSelectedMinute] = useState(initialMinute);
+
+  useEffect(() => {
+    if (value) {
+      const parts = value.split(':');
+      if (parts.length === 2) {
+        setSelectedHour(parseInt(parts[0]));
+        setSelectedMinute(parseInt(parts[1]));
+      }
+    }
+  }, [value, visible]);
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
+
+  const handleConfirm = () => {
+    const h = String(selectedHour).padStart(2, '0');
+    const m = String(selectedMinute).padStart(2, '0');
+    onSelect(`${h}:${m}`);
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={modalStyles.modalOverlay}>
+        <View style={modalStyles.pickerContainer}>
+          <Text style={modalStyles.modalTitle}>{title || 'Chọn thời gian'}</Text>
+          
+          <View style={modalStyles.pickerColumnsRow}>
+            <View style={modalStyles.pickerColumnWrapper}>
+              <Text style={modalStyles.columnLabel}>Giờ</Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={modalStyles.columnScrollView}>
+                {hours.map((h) => {
+                  const isSelected = selectedHour === h;
+                  return (
+                    <TouchableOpacity
+                      key={h}
+                      style={[modalStyles.timeItem, isSelected && modalStyles.timeItemSelected]}
+                      onPress={() => setSelectedHour(h)}
+                    >
+                      <Text style={[modalStyles.timeItemText, isSelected && modalStyles.timeItemTextSelected]}>
+                        {String(h).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <Text style={modalStyles.pickerSeparator}>:</Text>
+
+            <View style={modalStyles.pickerColumnWrapper}>
+              <Text style={modalStyles.columnLabel}>Phút</Text>
+              <ScrollView showsVerticalScrollIndicator={false} style={modalStyles.columnScrollView}>
+                {minutes.map((m) => {
+                  const isSelected = selectedMinute === m;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      style={[modalStyles.timeItem, isSelected && modalStyles.timeItemSelected]}
+                      onPress={() => setSelectedMinute(m)}
+                    >
+                      <Text style={[modalStyles.timeItemText, isSelected && modalStyles.timeItemTextSelected]}>
+                        {String(m).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+
+          <View style={modalStyles.actionsRow}>
+            <TouchableOpacity onPress={onClose} style={[modalStyles.actionBtn, modalStyles.cancelBtn]}>
+              <Text style={modalStyles.cancelBtnText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleConfirm} style={[modalStyles.actionBtn, modalStyles.confirmBtn]}>
+              <Text style={modalStyles.confirmBtnText}>Xác nhận</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const STANDARD_SKILL_NAMES = [
+  'Giao tiếp',
+  'Pha chế',
+  'Xử lý tình huống',
+  'Tiếng Anh',
+  'Sử dụng máy POS',
+  'Làm việc nhóm',
+  'Bưng bê',
+  'Lái xe'
+];
 
 export default function EmployerEmergencyPost() {
-  const { createJobPostWizard, showToast, navigateTo, user } = useContext(AppContext);
+  const { createJobPostWizard, showToast, navigateTo, user, goBack } = useContext(AppContext);
 
   // Categories & Skills local states
   const [categories, setCategories] = useState([
@@ -31,14 +604,8 @@ export default function EmployerEmergencyPost() {
     { id: 5, name: 'Phục vụ' },
     { id: 6, name: 'Khác' }
   ]);
-  const [skillsList, setSkillsList] = useState([
-    { id: 1, name: 'Giao tiếp' },
-    { id: 2, name: 'Pha chế' },
-    { id: 3, name: 'Xử lý tình huống' },
-    { id: 4, name: 'Tiếng Anh' },
-    { id: 5, name: 'Sử dụng máy POS' },
-    { id: 6, name: 'Làm việc nhóm' }
-  ]);
+  const [skillsList, setSkillsList] = useState([{ id: 'other_skill_trigger', name: 'Khác...' }]);
+  const [showCustomSkillInput, setShowCustomSkillInput] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
@@ -46,13 +613,22 @@ export default function EmployerEmergencyPost() {
 
   // Form states
   const [step, setStep] = useState(1);
-  const [title, setTitle] = useState('Tuyển nhân viên phục vụ ca tối');
-  const [categoryId, setCategoryId] = useState('5'); // Default 'Phục vụ'
-  const [description, setDescription] = useState('Thực hiện order nước, bưng bê đồ uống cho khách hàng và dọn dẹp bàn ghế sạch sẽ.');
-  const [requirements, setRequirements] = useState('Nhanh nhẹn, chăm chỉ, có thái độ làm việc tốt. Ưu tiên có kinh nghiệm.');
-  
-  const [salary, setSalary] = useState('35000');
-  const [selectedSkills, setSelectedSkills] = useState([1]); // Default 'Giao tiếp'
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [startTimeVisible, setStartTimeVisible] = useState(false);
+  const [endTimeVisible, setEndTimeVisible] = useState(false);
+  const [quotaModalVisible, setQuotaModalVisible] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [title, setTitle] = useState('');
+  const [categoryId, setCategoryId] = useState(''); // Empty by default
+  const [customCategory, setCustomCategory] = useState('');
+  const [description, setDescription] = useState('');
+  const [requirements, setRequirements] = useState('');
+  const [isAddressFocused, setIsAddressFocused] = useState(false);
+
+  const [salary, setSalary] = useState('');
+  const [slots, setSlots] = useState('1');
+  const [selectedSkills, setSelectedSkills] = useState([]); // Default 'Giao tiếp'
+  const [customSkillInput, setCustomSkillInput] = useState('');
 
   const [address, setAddress] = useState('');
   const [latitude, setLatitude] = useState('');
@@ -61,6 +637,19 @@ export default function EmployerEmergencyPost() {
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [selectedLat, setSelectedLat] = useState(10.7769);
   const [selectedLng, setSelectedLng] = useState(106.7009);
+  const [mapInitLat, setMapInitLat] = useState(10.7769);
+  const [mapInitLng, setMapInitLng] = useState(106.7009);
+
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const webviewRef = React.useRef(null);
+
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
+  const [mapSuggestions, setMapSuggestions] = useState([]);
+  const [showMapSuggestions, setShowMapSuggestions] = useState(false);
 
   // Lắng nghe postMessage trên web (nếu có preview/web environment)
   useEffect(() => {
@@ -86,6 +675,8 @@ export default function EmployerEmergencyPost() {
     const initialLng = parseFloat(longitude) || 106.7009;
     setSelectedLat(initialLat);
     setSelectedLng(initialLng);
+    setMapInitLat(initialLat);
+    setMapInitLng(initialLng);
     setMapModalVisible(true);
   };
 
@@ -94,25 +685,8 @@ export default function EmployerEmergencyPost() {
       setLatitude(selectedLat.toString());
       setLongitude(selectedLng.toString());
 
-      // Reverse geocode chosen coordinates to get a human-readable address
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${selectedLat}&lon=${selectedLng}&format=json`,
-        { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        const road = data.address?.road || '';
-        const suburb = data.address?.suburb || data.address?.quarter || '';
-        const city = data.address?.city || data.address?.town || data.address?.state || '';
-        const displayAddress = [road, suburb, city].filter(Boolean).join(', ');
-        if (displayAddress) {
-          setAddress(displayAddress);
-        } else {
-          setAddress(data.display_name || `Tọa độ: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`);
-        }
-      } else {
-        setAddress(`Tọa độ: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`);
-      }
+      const displayAddress = await reverseGeocode(selectedLat, selectedLng);
+      setAddress(displayAddress || `Tọa độ: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`);
       showToast('Đã định vị vị trí công việc thành công!', 'success');
     } catch (e) {
       console.log('Reverse geocoding error:', e);
@@ -121,7 +695,269 @@ export default function EmployerEmergencyPost() {
       setMapModalVisible(false);
     }
   };
-  
+
+  const handleMapSearch = async () => {
+    if (!mapSearchQuery.trim()) {
+      showToast('Vui lòng nhập địa chỉ cần tìm!', 'warning');
+      return;
+    }
+    try {
+      setSearchLoading(true);
+      const result = await geocodeAddressWithFallback(mapSearchQuery);
+      if (result && result.data && result.data.length > 0) {
+        const lat = parseFloat(result.data[0].lat);
+        const lon = parseFloat(result.data[0].lon);
+        setSelectedLat(lat);
+        setSelectedLng(lon);
+
+        // Smoothly update native map webview
+        const jsCode = `
+          if (typeof map !== 'undefined' && typeof marker !== 'undefined') {
+            map.setView([${lat}, ${lon}], 15);
+            marker.setLatLng([${lat}, ${lon}]);
+          }
+          true;
+        `;
+        if (webviewRef.current) {
+          webviewRef.current.injectJavaScript(jsCode);
+        }
+
+        if (result.isFallback) {
+          showToast(`Định vị theo khu vực: ${result.fallbackText}. Hãy kéo ghim bản đồ về số nhà cụ thể!`, 'info');
+        } else {
+          showToast('Đã định vị đến địa chỉ tìm kiếm!', 'success');
+        }
+      } else {
+        showToast('Không tìm thấy địa chỉ này. Hãy thử lược bỏ bớt ngõ/hẻm hoặc số nhà.', 'warning');
+      }
+    } catch (e) {
+      console.log('Forward geocoding error:', e);
+      showToast('Lỗi kết nối khi tìm kiếm địa chỉ.', 'error');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const geocodeTypedAddress = async () => {
+    if (!address.trim()) {
+      showToast('Vui lòng nhập địa chỉ để tìm tọa độ!', 'warning');
+      return;
+    }
+    try {
+      setGpsLoading(true);
+      const result = await geocodeAddressWithFallback(address);
+      if (result && result.data && result.data.length > 0) {
+        const lat = parseFloat(result.data[0].lat);
+        const lon = parseFloat(result.data[0].lon);
+        setLatitude(lat.toString());
+        setLongitude(lon.toString());
+        setSelectedLat(lat);
+        setSelectedLng(lon);
+
+        if (result.data[0].display_name && !result.isFallback) {
+          setAddress(cleanAddress(result.data[0].display_name));
+        }
+
+        if (result.isFallback) {
+          showToast(`Tìm thấy tọa độ khu vực lân cận! Hãy mở Bản đồ để kéo ghim vào đúng vị trí số nhà.`, 'info');
+        } else {
+          showToast('Đã xác thực địa chỉ & lấy tọa độ thành công!', 'success');
+        }
+      } else {
+        showToast('Không tìm thấy tọa độ. Hãy thử lược bỏ bớt số nhà/hẻm hoặc mở Bản đồ để chọn.', 'warning');
+      }
+    } catch (e) {
+      console.log('Geocoding error:', e);
+      showToast('Lỗi kết nối khi xác thực địa chỉ.', 'error');
+    } finally {
+      setGpsLoading(false);
+    }
+  };
+
+  const handleAddressChange = async (text) => {
+    setAddress(text);
+    if (text.length < 4) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      setSuggestionsLoading(true);
+      if (GOOGLE_MAPS_API_KEY) {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/AutoComplete?input=${encodeURIComponent(text)}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.predictions) {
+            const formatted = data.predictions.map(item => ({
+              display_name: item.description,
+              place_id: item.place_id,
+              isGoogle: true
+            }));
+            setAddressSuggestions(formatted);
+            setShowSuggestions(formatted.length > 0);
+          }
+        }
+      } else {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5`,
+          { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const formatted = data.map(item => ({
+            display_name: cleanAddress(item.display_name),
+            lat: parseFloat(item.lat),
+            lon: parseFloat(item.lon)
+          }));
+          setAddressSuggestions(formatted);
+          setShowSuggestions(formatted.length > 0);
+        }
+      }
+    } catch (e) {
+      console.log('Suggestions fetch error:', e);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  };
+
+  const handleSelectSuggestion = async (suggestion) => {
+    setAddress(suggestion.display_name);
+    setShowSuggestions(false);
+
+    try {
+      setGpsLoading(true);
+      let lat = 0;
+      let lon = 0;
+      if (suggestion.isGoogle) {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/Detail?place_id=${suggestion.place_id}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.result?.geometry?.location) {
+            lat = data.result.geometry.location.lat;
+            lon = data.result.geometry.location.lng;
+          }
+        }
+      } else {
+        lat = suggestion.lat;
+        lon = suggestion.lon;
+      }
+
+      if (lat && lon) {
+        setLatitude(lat.toString());
+        setLongitude(lon.toString());
+        setSelectedLat(lat);
+        setSelectedLng(lon);
+        showToast('Đã chọn địa chỉ & lấy tọa độ thành công!', 'success');
+      } else {
+        showToast('Không lấy được tọa độ cho vị trí này.', 'warning');
+      }
+    } catch (err) {
+      console.log('Select suggestion error:', err);
+    } finally {
+      setGpsLoading(false);
+    }
+  };
+
+  const handleMapSearchChange = async (text) => {
+    setMapSearchQuery(text);
+    if (text.length < 4) {
+      setMapSuggestions([]);
+      setShowMapSuggestions(false);
+      return;
+    }
+    try {
+      if (GOOGLE_MAPS_API_KEY) {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/AutoComplete?input=${encodeURIComponent(text)}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.predictions) {
+            const formatted = data.predictions.map(item => ({
+              display_name: item.description,
+              place_id: item.place_id,
+              isGoogle: true
+            }));
+            setMapSuggestions(formatted);
+            setShowMapSuggestions(formatted.length > 0);
+          }
+        }
+      } else {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5`,
+          { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const formatted = data.map(item => ({
+            display_name: cleanAddress(item.display_name),
+            lat: parseFloat(item.lat),
+            lon: parseFloat(item.lon)
+          }));
+          setMapSuggestions(formatted);
+          setShowMapSuggestions(formatted.length > 0);
+        }
+      }
+    } catch (e) {
+      console.log('Map suggestions fetch error:', e);
+    }
+  };
+
+  const handleSelectMapSuggestion = async (suggestion) => {
+    setMapSearchQuery(suggestion.display_name);
+    setShowMapSuggestions(false);
+
+    try {
+      setSearchLoading(true);
+      let lat = 0;
+      let lon = 0;
+      if (suggestion.isGoogle) {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/Detail?place_id=${suggestion.place_id}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.result?.geometry?.location) {
+            lat = data.result.geometry.location.lat;
+            lon = data.result.geometry.location.lng;
+          }
+        }
+      } else {
+        lat = suggestion.lat;
+        lon = suggestion.lon;
+      }
+
+      if (lat && lon) {
+        setSelectedLat(lat);
+        setSelectedLng(lon);
+
+        // Smoothly update native map webview
+        const jsCode = `
+          if (typeof map !== 'undefined' && typeof marker !== 'undefined') {
+            map.setView([${lat}, ${lon}], 15);
+            marker.setLatLng([${lat}, ${lon}]);
+          }
+          true;
+        `;
+        if (webviewRef.current) {
+          webviewRef.current.injectJavaScript(jsCode);
+        }
+        showToast('Đã định vị đến địa chỉ đã chọn!', 'success');
+      } else {
+        showToast('Không lấy được tọa độ cho địa điểm này.', 'warning');
+      }
+    } catch (err) {
+      console.log('Select map suggestion error:', err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
   // Date and Time states
   const getTodayDateString = () => {
     const today = new Date();
@@ -143,9 +979,14 @@ export default function EmployerEmergencyPost() {
         const catRes = await getCategoriesApi();
         const catList = Array.isArray(catRes) ? catRes : (Array.isArray(catRes?.data) ? catRes.data : (catRes?.items || catRes?.data?.items || []));
         if (catList && catList.length > 0) {
-          setCategories(catList);
+          const hasKhac = catList.some(c => c.name.toLowerCase() === 'khác');
+          if (!hasKhac) {
+            setCategories([...catList, { id: 9999, name: 'Khác' }]);
+          } else {
+            setCategories(catList);
+          }
           // Set default category to first item if current is invalid
-          const exists = catList.find(c => c.id.toString() === categoryId);
+          const exists = catList.find(c => c.id.toString() === categoryId) || (!hasKhac && categoryId === '9999');
           if (!exists) {
             setCategoryId(catList[0].id.toString());
           }
@@ -157,11 +998,41 @@ export default function EmployerEmergencyPost() {
       try {
         const skillRes = await getSkillsApi();
         const skillList = Array.isArray(skillRes) ? skillRes : (Array.isArray(skillRes?.data) ? skillRes.data : (skillRes?.items || skillRes?.data?.items || []));
-        if (skillList && skillList.length > 0) {
-          setSkillsList(skillList);
+        if (skillList) {
+          const filteredSkills = skillList.filter(s => 
+            STANDARD_SKILL_NAMES.map(n => n.toLowerCase()).includes((s.name || '').trim().toLowerCase())
+          );
+          setSkillsList([...filteredSkills, { id: 'other_skill_trigger', name: 'Khác...' }]);
         }
       } catch (err) {
         console.log('Error loading skills from API:', err);
+        setSkillsList([{ id: 'other_skill_trigger', name: 'Khác...' }]);
+      }
+
+      try {
+        const profile = await getBusinessProfileApi();
+        if (profile && profile.address) {
+          setAddress(profile.address);
+          
+          // Geocode profile address to find coordinates and center the map
+          try {
+            const result = await geocodeAddressWithFallback(profile.address);
+            if (result && result.data && result.data.length > 0) {
+              const lat = parseFloat(result.data[0].lat);
+              const lon = parseFloat(result.data[0].lon);
+              setLatitude(lat.toString());
+              setLongitude(lon.toString());
+              setSelectedLat(lat);
+              setSelectedLng(lon);
+              setMapInitLat(lat);
+              setMapInitLng(lon);
+            }
+          } catch (geoErr) {
+            console.log('Error geocoding prefilled address:', geoErr);
+          }
+        }
+      } catch (profileErr) {
+        console.log('Error loading business profile for prefilled address:', profileErr);
       } finally {
         setDataLoading(false);
       }
@@ -188,19 +1059,9 @@ export default function EmployerEmergencyPost() {
 
       // Reverse geocode để lấy địa chỉ
       try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-          { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const road = data.address?.road || '';
-          const suburb = data.address?.suburb || data.address?.quarter || '';
-          const city = data.address?.city || data.address?.town || data.address?.state || '';
-          const displayAddress = [road, suburb, city].filter(Boolean).join(', ');
-          if (displayAddress) {
-            setAddress(displayAddress);
-          }
+        const displayAddress = await reverseGeocode(lat, lng);
+        if (displayAddress) {
+          setAddress(displayAddress);
         }
       } catch (geoErr) {
         console.log('Reverse geocoding error:', geoErr);
@@ -219,36 +1080,59 @@ export default function EmployerEmergencyPost() {
   const toggleEmergency = (value) => {
     setIsEmergency(value);
     if (value) {
-      // Emergency gets +30% pay bonus automatically
-      const currentRate = parseFloat(salary) || 0;
-      const bonusRate = Math.round(currentRate * 1.3);
-      setSalary(bonusRate.toString());
       showToast('Đã kích hoạt chế độ TUYỂN GẤP: Tự động cộng thêm 30% lương đề xuất!', 'info');
-    } else {
-      // Revert rate
-      const currentRate = parseFloat(salary) || 0;
-      const baseRate = Math.round(currentRate / 1.3);
-      setSalary(baseRate.toString());
     }
   };
 
   const handleNextStep = () => {
+    const newErrors = {};
     if (step === 1) {
       if (!title.trim()) {
-        showToast('Vui lòng nhập tiêu đề công việc!', 'warning');
-        return;
+        newErrors.title = 'Vui lòng nhập tiêu đề công việc!';
+      } else if (title.trim().length < 5) {
+        newErrors.title = 'Tiêu đề công việc phải có ít nhất 5 ký tự!';
       }
+      
+      if (!categoryId) {
+        newErrors.categoryId = 'Vui lòng chọn danh mục công việc!';
+      }
+
       if (!description.trim()) {
-        showToast('Vui lòng nhập mô tả công việc!', 'warning');
+        newErrors.description = 'Vui lòng nhập mô tả công việc!';
+      } else if (description.trim().length < 15) {
+        newErrors.description = 'Mô tả công việc phải có ít nhất 15 ký tự để ứng viên nắm rõ thông tin!';
+      }
+
+      if (isOtherCategory && !customCategory.trim()) {
+        newErrors.customCategory = 'Vui lòng nhập tên danh mục khác!';
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        showToast('Vui lòng điền đầy đủ các thông tin bắt buộc!', 'warning');
         return;
       }
+      setErrors({});
       setStep(2);
     } else if (step === 2) {
       const parsedSalary = parseFloat(salary);
-      if (isNaN(parsedSalary) || parsedSalary <= 0) {
-        showToast('Mức lương phải lớn hơn 0!', 'warning');
+      if (isNaN(parsedSalary) || parsedSalary < 20000) {
+        newErrors.salary = 'Mức lương đề xuất tối thiểu là 20.000 đ/h!';
+      }
+      const parsedSlots = parseInt(slots, 10);
+      if (isNaN(parsedSlots) || parsedSlots < 1) {
+        newErrors.slots = 'Số lượng tuyển dụng tối thiểu là 1 người!';
+      }
+      if (showCustomSkillInput && !customSkillInput.trim()) {
+        newErrors.customSkillInput = 'Vui lòng nhập ít nhất một kỹ năng khác hoặc bỏ chọn mục này!';
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        showToast('Vui lòng hoàn thiện thông tin còn thiếu ở Bước 2!', 'warning');
         return;
       }
+      setErrors({});
       setStep(3);
     }
   };
@@ -260,6 +1144,10 @@ export default function EmployerEmergencyPost() {
   };
 
   const handleSkillToggle = (skillId) => {
+    if (skillId === 'other_skill_trigger') {
+      setShowCustomSkillInput(!showCustomSkillInput);
+      return;
+    }
     if (selectedSkills.includes(skillId)) {
       setSelectedSkills(selectedSkills.filter(id => id !== skillId));
     } else {
@@ -268,331 +1156,652 @@ export default function EmployerEmergencyPost() {
   };
 
   const handleSubmit = async () => {
+    const newErrors = {};
+    if (isOtherCategory && !customCategory.trim()) {
+      newErrors.customCategory = 'Vui lòng nhập tên danh mục khác!';
+    }
     if (!address.trim()) {
-      showToast('Vui lòng nhập địa chỉ làm việc hoặc nhấn nút GPS!', 'warning');
-      return;
+      newErrors.address = 'Vui lòng nhập địa chỉ làm việc hoặc nhấn nút GPS!';
     }
     if (!latitude || !longitude || parseFloat(latitude) === 0 || parseFloat(longitude) === 0) {
-      showToast('Vui lòng nhấn nút "Lấy vị trí GPS" để xác định tọa độ địa điểm làm việc!', 'warning');
+      newErrors.gps = 'Vui lòng định vị vị trí trên Bản đồ hoặc nhấn nút GPS Hiện tại!';
+    }
+    
+    // Validate date format YYYY-MM-DD
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!date.trim() || !dateRegex.test(date.trim())) {
+      newErrors.date = 'Ngày làm việc không đúng định dạng YYYY-MM-DD (ví dụ: 2026-06-09)!';
+    } else {
+      const parsedDate = new Date(date.trim());
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      if (isNaN(parsedDate.getTime()) || parsedDate < today) {
+        newErrors.date = 'Ngày làm việc không hợp lệ hoặc đã ở trong quá khứ!';
+      }
+    }
+
+    // Validate time format HH:MM
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    let hasTimeError = false;
+    if (!startTime.trim() || !timeRegex.test(startTime.trim())) {
+      newErrors.startTime = 'Giờ bắt đầu không đúng định dạng HH:MM (ví dụ: 08:00)!';
+      hasTimeError = true;
+    }
+    if (!endTime.trim() || !timeRegex.test(endTime.trim())) {
+      newErrors.endTime = 'Giờ kết thúc không đúng định dạng HH:MM (ví dụ: 17:00)!';
+      hasTimeError = true;
+    }
+
+    if (!hasTimeError) {
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+      const startTotalMinutes = startHour * 60 + startMin;
+      const endTotalMinutes = endHour * 60 + endMin;
+      if (endTotalMinutes <= startTotalMinutes) {
+        newErrors.endTime = 'Giờ kết thúc phải sau giờ bắt đầu!';
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      showToast('Vui lòng sửa các lỗi nhập liệu trước khi đăng tin!', 'warning');
       return;
     }
-    if (!date.trim() || !startTime.trim() || !endTime.trim()) {
-      showToast('Vui lòng nhập thời gian ca làm việc!', 'warning');
-      return;
+
+    setErrors({});
+
+    // Map custom category safely to other category code
+    let finalCategoryId = categoryId;
+    if (categoryId === '9999') {
+      const realOther = categories.find(c => c.name.toLowerCase() === 'khác' && c.id !== 9999);
+      finalCategoryId = realOther ? realOther.id.toString() : '6';
+    }
+
+    let finalTitle = title;
+    let finalDescription = description;
+    if (isOtherCategory && customCategory.trim()) {
+      finalTitle = `${title} (${customCategory.trim()})`;
+      finalDescription = `[Danh mục khác: ${customCategory.trim()}]\n\n${description}`;
+    }
+    const finalSelectedSkills = selectedSkills
+      .map(id => skillsList.find(s => s.id === id)?.name)
+      .filter(Boolean);
+
+    if (showCustomSkillInput && customSkillInput.trim()) {
+      const customSkills = customSkillInput
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      finalSelectedSkills.push(...customSkills);
     }
 
     setLoading(true);
-    const success = await createJobPostWizard({
-      title,
-      description,
-      requirements,
-      categoryId,
-      salary,
-      skillIds: selectedSkills,
-      address,
-      latitude,
-      longitude,
-      date,
-      startTime,
-      endTime,
-      isEmergency
-    });
-    setLoading(false);
+    try {
+      const success = await createJobPostWizard({
+        title: finalTitle,
+        description: finalDescription,
+        requirements,
+        categoryId: finalCategoryId,
+        salary: isEmergency ? Math.round((parseFloat(salary.replace(/,/g, '')) || 0) * 1.3).toString() : salary,
+        slots: parseInt(slots, 10) || 1,
+        skillNames: finalSelectedSkills,
+        address,
+        latitude,
+        longitude,
+        date,
+        startTime,
+        endTime,
+        isEmergency
+      });
+      setLoading(false);
 
-    if (success) {
-      navigateTo('employer_approvals');
+      if (success) {
+        showToast('Đăng tin tuyển dụng thành công!', 'success');
+        navigateTo('employer_approvals');
+      }
+    } catch (err) {
+      setLoading(false);
+      if (err.message === 'QUOTA_EXCEEDED') {
+        setQuotaModalVisible(true);
+      } else {
+        console.log('Error creating job post:', err);
+      }
     }
   };
+
+  const selectedCategory = categories.find(c => c.id.toString() === categoryId);
+  const isOtherCategory = selectedCategory && (selectedCategory.name.toLowerCase() === 'khác' || selectedCategory.name.toLowerCase() === 'other' || categoryId === '9999');
 
   const currentCategoryName = categories.find(c => c.id.toString() === categoryId)?.name || 'Khác';
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        {/* Back Button */}
+        <TouchableOpacity style={styles.inlineBackBtn} onPress={goBack}>
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Title & Page Header */}
         <View style={styles.pageHeader}>
-          <Text style={styles.pageTitle}>Đăng tin{'\n'}tuyển dụng mới</Text>
+          <Text style={styles.pageTitle}>Đăng tin tuyển dụng mới</Text>
           <Text style={styles.pageSubtitle}>Kết nối với những ứng viên tiềm năng xung quanh bạn ngay lập tức.</Text>
         </View>
 
-        {/* Progress Indicator */}
-        <View style={styles.progressSection}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressBar, step >= 1 ? styles.progressActive : null]} />
-            <View style={[styles.progressBar, step >= 2 ? styles.progressActive : null]} />
-            <View style={[styles.progressBar, step >= 3 ? styles.progressActive : null]} />
-          </View>
-          <View style={styles.stepLabels}>
-            <Text style={[styles.stepLabel, step >= 1 && styles.stepLabelActive]}>Bước 1</Text>
-            <Text style={[styles.stepLabel, step >= 2 && styles.stepLabelActive]}>Bước 2</Text>
-            <Text style={[styles.stepLabel, step >= 3 && styles.stepLabelActive]}>Bước 3</Text>
-          </View>
-        </View>
-
-        {dataLoading ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loaderText}>Đang tải danh mục dữ liệu...</Text>
-          </View>
-        ) : (
-          <View>
-            {/* Step 1: NỘI DUNG CA LÀM */}
-            {step === 1 && (
-              <View style={[styles.bentoCard, theme.shadows.light]}>
-                <Text style={styles.sectionHeader}>NỘI DUNG CA LÀM</Text>
-                
-                <Text style={styles.inputLabel}>Tiêu đề công việc</Text>
-                <TextInput
-                  style={styles.premiumInput}
-                  placeholder="Ví dụ: Cần nhân viên phục vụ khẩn cấp..."
-                  placeholderTextColor={theme.colors.textLight}
-                  value={title}
-                  onChangeText={setTitle}
-                />
-
-                <Text style={styles.inputLabel}>Danh mục công việc</Text>
-                <View style={styles.categoryGrid}>
-                  {categories.map((cat) => {
-                    const isSelected = categoryId === cat.id.toString();
-                    return (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={[
-                          styles.categoryPill,
-                          isSelected && styles.categoryPillActive
-                        ]}
-                        onPress={() => setCategoryId(cat.id.toString())}
-                      >
+        <View style={[styles.mainFormCard, theme.shadows.light]}>
+          {/* Step Indicator Nodes */}
+          <View style={styles.premiumStepContainer}>
+            <View style={styles.stepProgressLineContainer}>
+              <View style={[styles.stepProgressLine, { width: step === 1 ? '0%' : step === 2 ? '50%' : '100%' }]} />
+            </View>
+            <View style={styles.stepNodesRow}>
+              {[1, 2, 3].map((num) => {
+                const isActive = step >= num;
+                const isCurrent = step === num;
+                return (
+                  <View key={num} style={styles.stepNodeOuter}>
+                    <View style={[
+                      styles.stepNode,
+                      isActive && styles.stepNodeActive,
+                      isCurrent && styles.stepNodeCurrent
+                    ]}>
+                      {isActive && !isCurrent ? (
+                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                      ) : (
                         <Text style={[
-                          styles.categoryPillText,
-                          isSelected && styles.categoryPillTextActive
-                        ]}>
-                          {cat.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                          styles.stepNodeText,
+                          isActive && styles.stepNodeTextActive,
+                          isCurrent && styles.stepNodeTextCurrent
+                        ]}>{num}</Text>
+                      )}
+                    </View>
+                    <Text style={[
+                      styles.stepNodeLabel,
+                      isActive && styles.stepNodeLabelActive
+                    ]}>Bước {num}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
 
-                <Text style={styles.inputLabel}>Mô tả công việc</Text>
-                <TextInput
-                  style={[styles.premiumInput, styles.textArea]}
-                  placeholder="Mô tả chi tiết các yêu cầu và quyền lợi..."
-                  placeholderTextColor={theme.colors.textLight}
-                  multiline
-                  numberOfLines={4}
-                  value={description}
-                  onChangeText={setDescription}
-                />
+          <View style={styles.divider} />
 
-                <Text style={styles.inputLabel}>Yêu cầu đối với ứng viên</Text>
-                <TextInput
-                  style={[styles.premiumInput, styles.textArea, { height: 80 }]}
-                  placeholder="Ví dụ: Chăm chỉ, trung thực, có kinh nghiệm pha chế..."
-                  placeholderTextColor={theme.colors.textLight}
-                  multiline
-                  numberOfLines={3}
-                  value={requirements}
-                  onChangeText={setRequirements}
-                />
-              </View>
-            )}
+          {dataLoading ? (
+            <View style={styles.loaderContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={styles.loaderText}>Đang tải danh mục dữ liệu...</Text>
+            </View>
+          ) : (
+            <View>
+              {/* Step 1: NỘI DUNG CA LÀM */}
+              {step === 1 && (
+                <View style={styles.bentoCard}>
+                  <Text style={styles.sectionHeader}>NỘI DUNG CA LÀM</Text>
 
-            {/* Step 2: QUYỀN LỢI & KỸ NĂNG */}
-            {step === 2 && (
-              <View style={[styles.bentoCard, theme.shadows.light]}>
-                <Text style={styles.sectionHeader}>QUYỀN LỢI & KỸ NĂNG</Text>
-
-                <Text style={styles.inputLabel}>Mức lương đề xuất (VND/giờ)</Text>
-                <View style={styles.salaryInputContainer}>
+                  <Text style={styles.inputLabel}>Tiêu đề công việc</Text>
                   <TextInput
-                    style={[styles.premiumInput, styles.salaryInput]}
-                    placeholder="50,000"
+                    style={styles.premiumInput}
+                    placeholder="Ví dụ: Cần nhân viên phục vụ khẩn cấp..."
                     placeholderTextColor={theme.colors.textLight}
-                    keyboardType="numeric"
-                    value={salary}
-                    onChangeText={setSalary}
+                    value={title}
+                    onChangeText={setTitle}
                   />
-                  <Text style={styles.salaryCurrency}>VND</Text>
-                </View>
+                  {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
 
-                <Text style={styles.inputLabel}>Kỹ năng cần thiết</Text>
-                <View style={styles.skillsContainer}>
-                  {skillsList.map((skill) => {
-                    const isSelected = selectedSkills.includes(skill.id);
-                    return (
-                      <TouchableOpacity
-                        key={skill.id}
-                        style={[
-                          styles.skillPill,
-                          isSelected && styles.skillPillActive
-                        ]}
-                        onPress={() => handleSkillToggle(skill.id)}
-                      >
-                        <Text style={[
-                          styles.skillPillText,
-                          isSelected && styles.skillPillTextActive
-                        ]}>
-                          {isSelected ? '✓ ' : ''}{skill.name}
+                  <Text style={styles.inputLabel}>Danh mục công việc</Text>
+                  <View style={styles.categoryGrid}>
+                    {categories.map((cat) => {
+                      const isSelected = categoryId === cat.id.toString();
+                      return (
+                        <TouchableOpacity
+                          key={cat.id}
+                          style={[
+                            styles.categoryPill,
+                            isSelected && styles.categoryPillActive
+                          ]}
+                          onPress={() => setCategoryId(cat.id.toString())}
+                        >
+                          <Text style={[
+                            styles.categoryPillText,
+                            isSelected && styles.categoryPillTextActive
+                          ]}>
+                            {cat.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {errors.categoryId && <Text style={styles.errorText}>{errors.categoryId}</Text>}
+
+                  {isOtherCategory && (
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={styles.inputLabel}>Nhập danh mục khác</Text>
+                      <TextInput
+                        style={styles.premiumInput}
+                        placeholder="Ví dụ: Rửa bát, Phụ bếp..."
+                        placeholderTextColor={theme.colors.textLight}
+                        value={customCategory}
+                        onChangeText={setCustomCategory}
+                      />
+                      {errors.customCategory && <Text style={styles.errorText}>{errors.customCategory}</Text>}
+                    </View>
+                  )}
+
+                  <Text style={styles.inputLabel}>Mô tả công việc</Text>
+                  <TextInput
+                    style={[styles.premiumInput, styles.textArea]}
+                    placeholder="Mô tả chi tiết các yêu cầu và quyền lợi..."
+                    placeholderTextColor={theme.colors.textLight}
+                    multiline
+                    numberOfLines={4}
+                    value={description}
+                    onChangeText={setDescription}
+                  />
+                  {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
+
+                  <Text style={styles.inputLabel}>Yêu cầu đối với ứng viên</Text>
+                  <TextInput
+                    style={[styles.premiumInput, styles.textArea, { height: 80 }]}
+                    placeholder="Ví dụ: Chăm chỉ, trung thực, có kinh nghiệm pha chế..."
+                    placeholderTextColor={theme.colors.textLight}
+                    multiline
+                    numberOfLines={3}
+                    value={requirements}
+                    onChangeText={setRequirements}
+                  />
+                </View>
+              )}
+
+              {/* Step 2: QUYỀN LỢI & KỸ NĂNG */}
+              {step === 2 && (
+                <View style={styles.bentoCard}>
+                  <Text style={styles.sectionHeader}>QUYỀN LỢI & KỸ NĂNG</Text>
+
+                  {/* Emergency Toggle Switch */}
+                  <View style={[styles.emergencyCard, { marginBottom: 20 }]}>
+                    <View style={styles.emergencyTextSection}>
+                      <Text style={styles.emergencyCardTitle}>🔥 CHẾ ĐỘ ĐĂNG CA GẤP (EMERGENCY)</Text>
+                      <Text style={styles.emergencyCardDesc}>
+                        Tự động nhân hệ số cấp bách (+30% lương cơ bản), đẩy tin tức thì qua thông báo tới các ứng viên trong bán kính 3km.
+                      </Text>
+                    </View>
+                    <Switch
+                      trackColor={{ false: '#767577', true: theme.colors.danger }}
+                      thumbColor={isEmergency ? '#FFFFFF' : '#f4f3f4'}
+                      ios_backgroundColor="#3e3e3e"
+                      onValueChange={toggleEmergency}
+                      value={isEmergency}
+                    />
+                  </View>
+
+                  <Text style={styles.inputLabel}>Mức lương đề xuất (VND/giờ)</Text>
+                  <View style={styles.salaryInputContainer}>
+                    <TextInput
+                      style={[styles.premiumInput, styles.salaryInput]}
+                      placeholder="50,000"
+                      placeholderTextColor={theme.colors.textLight}
+                      keyboardType="numeric"
+                      value={salary}
+                      onChangeText={setSalary}
+                    />
+                    <Text style={styles.salaryCurrency}>VND</Text>
+                  </View>
+                  {errors.salary && <Text style={styles.errorText}>{errors.salary}</Text>}
+
+                  {isEmergency && salary.trim() !== '' && (
+                    <View style={{ marginTop: 8, marginBottom: 16 }}>
+                      <Text style={[styles.inputLabel, { color: theme.colors.danger }]}>🔥 Mức lương thực tế ca gấp (+30%)</Text>
+                      <View style={[
+                        styles.premiumInput, 
+                        { 
+                          backgroundColor: '#FEF2F2', 
+                          borderColor: '#FCA5A5', 
+                          flexDirection: 'row', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between',
+                          paddingVertical: 14,
+                          marginBottom: 0
+                        }
+                      ]}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: '#EF4444' }}>
+                          {(() => {
+                            const base = parseFloat(salary.replace(/,/g, ''));
+                            if (isNaN(base) || base <= 0) return '';
+                            const emergencySal = Math.round(base * 1.3);
+                            return `${emergencySal.toLocaleString('vi-VN')} VND/giờ`;
+                          })()}
                         </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444', backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                          ĐÃ CỘNG 30%
+                        </Text>
+                      </View>
+                    </View>
+                  )}
 
-                <View style={styles.infoBox}>
-                  <Text style={styles.infoBoxText}>
-                    💡 Gợi ý: Hãy chọn những kỹ năng thực tế nhất để hệ thống Matching gợi ý đúng ứng viên F&B tiềm năng.
-                  </Text>
-                </View>
-              </View>
-            )}
+                  <Text style={styles.inputLabel}>Số lượng cần tuyển (người)</Text>
+                  <View style={styles.salaryInputContainer}>
+                    <TextInput
+                      style={[styles.premiumInput, styles.salaryInput]}
+                      placeholder="1"
+                      placeholderTextColor={theme.colors.textLight}
+                      keyboardType="numeric"
+                      value={slots}
+                      onChangeText={setSlots}
+                    />
+                    <Text style={styles.salaryCurrency}>Người</Text>
+                  </View>
+                  {errors.slots && <Text style={styles.errorText}>{errors.slots}</Text>}
 
-            {/* Step 3: ĐỊA ĐIỂM & THỜI GIAN */}
-            {step === 3 && (
-              <View style={[styles.bentoCard, theme.shadows.light]}>
-                <Text style={styles.sectionHeader}>ĐỊA ĐIỂM & THỜI GIAN</Text>
+                  <Text style={styles.inputLabel}>Kỹ năng cần thiết</Text>
+                  <View style={styles.skillsContainer}>
+                    {skillsList.map((skill) => {
+                      const isSelected = skill.id === 'other_skill_trigger' ? showCustomSkillInput : selectedSkills.includes(skill.id);
+                      return (
+                        <TouchableOpacity
+                          key={skill.id}
+                          style={[
+                            styles.skillPill,
+                            isSelected && styles.skillPillActive
+                          ]}
+                          onPress={() => handleSkillToggle(skill.id)}
+                        >
+                          <Text style={[
+                            styles.skillPillText,
+                            isSelected && styles.skillPillTextActive
+                          ]}>
+                            {isSelected ? '✓ ' : ''}{skill.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
 
-                {/* Emergency Toggle Switch */}
-                <View style={styles.emergencyCard}>
-                  <View style={styles.emergencyTextSection}>
-                    <Text style={styles.emergencyCardTitle}>🔥 CHẾ ĐỘ ĐĂNG CA GẤP (EMERGENCY)</Text>
-                    <Text style={styles.emergencyCardDesc}>
-                      Tự động nhân hệ số cấp bách (+30% lương cơ bản), đẩy tin tức thì qua thông báo tới các ứng viên trong bán kính 3km.
+                  {showCustomSkillInput && (
+                    <View style={styles.customSkillInputRow}>
+                      <TextInput
+                        style={[styles.premiumInput, styles.customSkillInput, { marginRight: 0 }]}
+                        placeholder="Nhập kỹ năng khác (cách nhau bởi dấu phẩy)..."
+                        placeholderTextColor={theme.colors.textLight}
+                        value={customSkillInput}
+                        onChangeText={setCustomSkillInput}
+                      />
+                      {errors.customSkillInput && <Text style={styles.errorText}>{errors.customSkillInput}</Text>}
+                    </View>
+                  )}
+
+                  <View style={styles.infoBox}>
+                    <Text style={styles.infoBoxText}>
+                      💡 Gợi ý: Hãy chọn những kỹ năng thực tế nhất để hệ thống Matching gợi ý đúng ứng viên F&B tiềm năng.
                     </Text>
                   </View>
-                  <Switch
-                    trackColor={{ false: '#767577', true: theme.colors.danger }}
-                    thumbColor={isEmergency ? '#FFFFFF' : '#f4f3f4'}
-                    ios_backgroundColor="#3e3e3e"
-                    onValueChange={toggleEmergency}
-                    value={isEmergency}
-                  />
                 </View>
+              )}
 
-                <Text style={styles.inputLabel}>Địa điểm làm việc</Text>
-                <TextInput
-                  style={styles.premiumInput}
-                  placeholder="Nhập địa chỉ hoặc nhấn nút GPS bên dưới..."
-                  placeholderTextColor={theme.colors.textLight}
-                  value={address}
-                  onChangeText={setAddress}
-                />
+              {/* Step 3: ĐỊA ĐIỂM & THỜI GIAN */}
+              {step === 3 && (
+                <View style={styles.bentoCard}>
+                  <Text style={styles.sectionHeader}>ĐỊA ĐIỂM & THỜI GIAN</Text>
 
-                 {/* Location Buttons Row */}
-                 <View style={styles.locationButtonsRow}>
-                   <TouchableOpacity
-                     style={[styles.gpsButton, { flex: 1, marginRight: 8, marginBottom: 0 }]}
-                     onPress={getCurrentLocation}
-                     disabled={gpsLoading}
-                   >
-                     {gpsLoading ? (
-                       <ActivityIndicator size="small" color="#FFFFFF" />
-                     ) : (
-                       <Text style={styles.gpsButtonText}>📍 GPS Hiện Tại</Text>
-                     )}
-                   </TouchableOpacity>
+                  <Text style={styles.inputLabel}>Địa điểm làm việc</Text>
+                  <View style={{ position: 'relative', marginBottom: 16, zIndex: 10 }}>
+                    <TextInput
+                      style={[styles.premiumInput, { paddingRight: 105, marginBottom: 0, height: 64, textAlignVertical: 'top', paddingTop: 10, paddingBottom: 10 }]}
+                      placeholder="Nhập địa chỉ hoặc nhấn nút GPS bên dưới..."
+                      placeholderTextColor={theme.colors.textLight}
+                      value={address}
+                      onChangeText={handleAddressChange}
+                      multiline={true}
+                    />
+                    <TouchableOpacity
+                      style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: 7,
+                        backgroundColor: '#64748B',
+                        borderRadius: 10,
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        height: 34,
+                        justifyContent: 'center',
+                      }}
+                      onPress={geocodeTypedAddress}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>Tìm Tọa Độ</Text>
+                    </TouchableOpacity>
 
-                   <TouchableOpacity
-                     style={[styles.mapButton, { flex: 1 }]}
-                     onPress={handleOpenMapPicker}
-                   >
-                     <Text style={styles.mapButtonText}>🗺 Bản Đồ</Text>
-                   </TouchableOpacity>
-                 </View>
+                    {showSuggestions && (
+                      <View style={{
+                        position: 'absolute',
+                        top: 52,
+                        left: 0,
+                        right: 0,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 8,
+                        elevation: 4,
+                        maxHeight: 200,
+                        zIndex: 9999,
+                      }}>
+                        <ScrollView keyboardShouldPersistTaps="always">
+                          {addressSuggestions.map((item, index) => (
+                            <TouchableOpacity
+                              key={index}
+                              style={{
+                                paddingVertical: 12,
+                                paddingHorizontal: 16,
+                                borderBottomWidth: index === addressSuggestions.length - 1 ? 0 : 1,
+                                borderBottomColor: '#F1F5F9',
+                              }}
+                              onPress={() => handleSelectSuggestion(item)}
+                            >
+                              <Text style={{ fontSize: 13, color: '#334155', fontWeight: '500' }}>{item.display_name}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+                  {errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
 
-                {/* Coordinates */}
-                {latitude && longitude ? (
-                  <View style={styles.coordsRow}>
-                    <View style={styles.coordBox}>
-                      <Text style={styles.coordLabel}>Lat: {parseFloat(latitude).toFixed(6)}</Text>
+                  {/* Location Buttons Row */}
+                  <View style={styles.locationButtonsRow}>
+                    <TouchableOpacity
+                      style={[styles.gpsButton, { flex: 1, marginRight: 8, marginBottom: 0 }]}
+                      onPress={getCurrentLocation}
+                      disabled={gpsLoading}
+                    >
+                      {gpsLoading ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.gpsButtonText}>📍 GPS Hiện Tại</Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.mapButton, { flex: 1 }]}
+                      onPress={handleOpenMapPicker}
+                    >
+                      <Text style={styles.mapButtonText}>🗺 Bản Đồ</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Coordinates */}
+                  {latitude && longitude ? (
+                    <View style={styles.coordsRow}>
+                      <View style={styles.coordBox}>
+                        <Text style={styles.coordLabel}>Lat: {parseFloat(latitude).toFixed(6)}</Text>
+                      </View>
+                      <View style={styles.coordBox}>
+                        <Text style={styles.coordLabel}>Long: {parseFloat(longitude).toFixed(6)}</Text>
+                      </View>
+                      <View style={[styles.coordBox, { backgroundColor: '#10B98120', borderColor: '#10B981' }]}>
+                        <Text style={[styles.coordLabel, { color: '#10B981' }]}>✓ GPS Đã kết nối</Text>
+                      </View>
                     </View>
-                    <View style={styles.coordBox}>
-                      <Text style={styles.coordLabel}>Long: {parseFloat(longitude).toFixed(6)}</Text>
+                  ) : (
+                    <View style={styles.coordsRow}>
+                      <View style={[styles.coordBox, { backgroundColor: '#EF444420', borderColor: '#EF4444' }]}>
+                        <Text style={[styles.coordLabel, { color: '#EF4444' }]}>⚠ Chưa có tọa độ GPS</Text>
+                      </View>
                     </View>
-                    <View style={[styles.coordBox, { backgroundColor: '#10B98120', borderColor: '#10B981' }]}>
-                      <Text style={[styles.coordLabel, { color: '#10B981' }]}>✓ GPS Đã kết nối</Text>
+                  )}
+                  {errors.gps && <Text style={styles.errorText}>{errors.gps}</Text>}
+
+                  {/* DateTime Inputs */}
+                  <Text style={[styles.inputLabel, { marginTop: 12 }]}>Ngày làm việc (YYYY-MM-DD)</Text>
+                  <TouchableOpacity
+                    style={styles.pickerSelectorButton}
+                    onPress={() => setCalendarVisible(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="calendar-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                    <Text style={[styles.pickerSelectorText, date && styles.pickerSelectorTextFilled]}>
+                      {date || 'Chọn ngày làm việc...'}
+                    </Text>
+                  </TouchableOpacity>
+                  {errors.date && <Text style={styles.errorText}>{errors.date}</Text>}
+
+                  <View style={styles.timeRow}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.inputLabel}>Giờ bắt đầu (HH:MM)</Text>
+                      <TouchableOpacity
+                        style={styles.pickerSelectorButton}
+                        onPress={() => setStartTimeVisible(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="time-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                        <Text style={[styles.pickerSelectorText, startTime && styles.pickerSelectorTextFilled]}>
+                          {startTime || 'Chọn giờ...'}
+                        </Text>
+                      </TouchableOpacity>
+                      {errors.startTime && <Text style={styles.errorText}>{errors.startTime}</Text>}
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 8 }}>
+                      <Text style={styles.inputLabel}>Giờ kết thúc (HH:MM)</Text>
+                      <TouchableOpacity
+                        style={styles.pickerSelectorButton}
+                        onPress={() => setEndTimeVisible(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="time-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                        <Text style={[styles.pickerSelectorText, endTime && styles.pickerSelectorTextFilled]}>
+                          {endTime || 'Chọn giờ...'}
+                        </Text>
+                      </TouchableOpacity>
+                      {errors.endTime && <Text style={styles.errorText}>{errors.endTime}</Text>}
                     </View>
                   </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Wizard Actions */}
+          <View style={styles.actionsContainer}>
+            {step > 1 ? (
+              <TouchableOpacity style={styles.backButton} onPress={handlePrevStep} disabled={loading}>
+                <Text style={styles.backButtonText}>⬅ Quay lại</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.backButton} onPress={() => navigateTo('employer_approvals')} disabled={loading}>
+                <Text style={styles.backButtonText}>✕ Hủy</Text>
+              </TouchableOpacity>
+            )}
+
+            {step < 3 ? (
+              <TouchableOpacity style={styles.nextButton} onPress={handleNextStep}>
+                <Text style={styles.nextButtonText}>Tiếp theo ➔</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <View style={styles.coordsRow}>
-                    <View style={[styles.coordBox, { backgroundColor: '#EF444420', borderColor: '#EF4444' }]}>
-                      <Text style={[styles.coordLabel, { color: '#EF4444' }]}>⚠ Chưa có tọa độ GPS</Text>
-                    </View>
-                  </View>
+                  <Text style={styles.submitButtonText}>
+                    Đăng bài tuyển dụng {isEmergency ? '⚡' : '🚀'}
+                  </Text>
                 )}
-
-                {/* DateTime Inputs */}
-                <Text style={[styles.inputLabel, { marginTop: 12 }]}>Ngày làm việc (YYYY-MM-DD)</Text>
-                <TextInput
-                  style={styles.premiumInput}
-                  placeholder="2026-06-09"
-                  placeholderTextColor={theme.colors.textLight}
-                  value={date}
-                  onChangeText={setDate}
-                />
-
-                <View style={styles.timeRow}>
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={styles.inputLabel}>Giờ bắt đầu (HH:MM)</Text>
-                    <TextInput
-                      style={styles.premiumInput}
-                      placeholder="08:00"
-                      placeholderTextColor={theme.colors.textLight}
-                      value={startTime}
-                      onChangeText={setStartTime}
-                    />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 8 }}>
-                    <Text style={styles.inputLabel}>Giờ kết thúc (HH:MM)</Text>
-                    <TextInput
-                      style={styles.premiumInput}
-                      placeholder="17:00"
-                      placeholderTextColor={theme.colors.textLight}
-                      value={endTime}
-                      onChangeText={setEndTime}
-                    />
-                  </View>
-                </View>
-              </View>
+              </TouchableOpacity>
             )}
           </View>
-        )}
 
-        {/* Wizard Actions */}
-        <View style={styles.actionsContainer}>
-          {step > 1 ? (
-            <TouchableOpacity style={styles.backButton} onPress={handlePrevStep} disabled={loading}>
-              <Text style={styles.backButtonText}>⬅ Quay lại</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.backButton} onPress={() => navigateTo('employer_approvals')} disabled={loading}>
-              <Text style={styles.backButtonText}>✕ Hủy</Text>
-            </TouchableOpacity>
-          )}
-
-          {step < 3 ? (
-            <TouchableOpacity style={styles.nextButton} onPress={handleNextStep}>
-              <Text style={styles.nextButtonText}>Tiếp theo ➔</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.submitButtonText}>
-                  Đăng bài tuyển dụng {isEmergency ? '⚡' : '🚀'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
+          <Text style={styles.termsText}>
+            Bằng cách nhấn đăng tin, bạn đồng ý với các điều khoản dịch vụ của ProxiJob.
+          </Text>
         </View>
-
-        <Text style={styles.termsText}>
-          Bằng cách nhấn đăng tin, bạn đồng ý với các điều khoản dịch vụ của ProxiJob.
-        </Text>
       </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Date & Time Picker Modals */}
+      <CustomCalendarModal
+        visible={calendarVisible}
+        value={date}
+        onClose={() => setCalendarVisible(false)}
+        onSelect={(selectedDate) => {
+          setDate(selectedDate);
+          if (errors.date) {
+            setErrors(prev => ({ ...prev, date: null }));
+          }
+        }}
+      />
+
+      <CustomTimePickerModal
+        visible={startTimeVisible}
+        value={startTime}
+        title="Chọn giờ bắt đầu"
+        onClose={() => setStartTimeVisible(false)}
+        onSelect={(selectedTime) => {
+          setStartTime(selectedTime);
+          let newErrors = { ...errors };
+          delete newErrors.startTime;
+          if (endTime) {
+            const [startHour, startMin] = selectedTime.split(':').map(Number);
+            const [endHour, endMin] = endTime.split(':').map(Number);
+            const startTotalMinutes = startHour * 60 + startMin;
+            const endTotalMinutes = endHour * 60 + endMin;
+            if (endTotalMinutes <= startTotalMinutes) {
+              newErrors.startTime = 'Giờ bắt đầu phải trước giờ kết thúc!';
+            } else {
+              delete newErrors.endTime;
+            }
+          }
+          setErrors(newErrors);
+        }}
+      />
+
+      <CustomTimePickerModal
+        visible={endTimeVisible}
+        value={endTime}
+        title="Chọn giờ kết thúc"
+        onClose={() => setEndTimeVisible(false)}
+        onSelect={(selectedTime) => {
+          setEndTime(selectedTime);
+          let newErrors = { ...errors };
+          delete newErrors.endTime;
+          if (startTime) {
+            const [startHour, startMin] = startTime.split(':').map(Number);
+            const [endHour, endMin] = selectedTime.split(':').map(Number);
+            const startTotalMinutes = startHour * 60 + startMin;
+            const endTotalMinutes = endHour * 60 + endMin;
+            if (endTotalMinutes <= startTotalMinutes) {
+              newErrors.endTime = 'Giờ kết thúc phải sau giờ bắt đầu!';
+            } else {
+              delete newErrors.startTime;
+            }
+          }
+          setErrors(newErrors);
+        }}
+      />
 
       {/* Map Picker Modal */}
       <Modal
@@ -612,7 +1821,10 @@ export default function EmployerEmergencyPost() {
             borderBottomColor: '#E5E9EB'
           }}>
             <TouchableOpacity
-              onPress={() => setMapModalVisible(false)}
+              onPress={() => {
+                setMapSearchQuery('');
+                setMapModalVisible(false);
+              }}
               style={{ padding: 8 }}
             >
               <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textMuted }}>Hủy</Text>
@@ -622,7 +1834,95 @@ export default function EmployerEmergencyPost() {
               <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' }}>Xác nhận</Text>
             </TouchableOpacity>
           </View>
-          
+
+          {/* Map Search Bar */}
+          <View style={{ zIndex: 20, position: 'relative' }}>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: 12,
+              backgroundColor: '#F8FAFC',
+              borderBottomWidth: 1,
+              borderBottomColor: '#E5E9EB',
+            }}>
+              <TextInput
+                style={{
+                  flex: 1,
+                  height: 40,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
+                  fontSize: 14,
+                  color: '#1E293B',
+                }}
+                placeholder="Nhập địa chỉ để dời ghim bản đồ..."
+                placeholderTextColor="#94A3B8"
+                value={mapSearchQuery}
+                onChangeText={handleMapSearchChange}
+                onSubmitEditing={handleMapSearch}
+              />
+              <TouchableOpacity
+                onPress={handleMapSearch}
+                disabled={searchLoading}
+                style={{
+                  marginLeft: 10,
+                  backgroundColor: '#FF6B00',
+                  borderRadius: 10,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  height: 40,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                {searchLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>Tìm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {showMapSuggestions && (
+              <View style={{
+                position: 'absolute',
+                top: 56,
+                left: 12,
+                right: 12,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 5,
+                maxHeight: 180,
+                zIndex: 30,
+              }}>
+                <ScrollView keyboardShouldPersistTaps="always">
+                  {mapSuggestions.map((item, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={{
+                        paddingVertical: 12,
+                        paddingHorizontal: 16,
+                        borderBottomWidth: index === mapSuggestions.length - 1 ? 0 : 1,
+                        borderBottomColor: '#F1F5F9',
+                      }}
+                      onPress={() => handleSelectMapSuggestion(item)}
+                    >
+                      <Text style={{ fontSize: 13, color: '#334155', fontWeight: '500' }}>{item.display_name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+
           <View style={{ flex: 1, position: 'relative' }}>
             {Platform.OS === 'web' ? (
               <iframe
@@ -641,10 +1941,10 @@ export default function EmployerEmergencyPost() {
                   <body>
                     <div id="map"></div>
                     <script>
-                      var map = L.map('map', { zoomControl: true }).setView([${selectedLat}, ${selectedLng}], 15);
+                      var map = L.map('map', { zoomControl: true }).setView([${mapInitLat}, ${mapInitLng}], 15);
                       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-                      var marker = L.marker([${selectedLat}, ${selectedLng}], {
+                      var marker = L.marker([${mapInitLat}, ${mapInitLng}], {
                         draggable: true
                       }).addTo(map);
 
@@ -675,6 +1975,7 @@ export default function EmployerEmergencyPost() {
               />
             ) : (
               <WebView
+                ref={webviewRef}
                 originWhitelist={['*']}
                 source={{
                   html: `
@@ -692,10 +1993,10 @@ export default function EmployerEmergencyPost() {
                     <body>
                       <div id="map"></div>
                       <script>
-                        var map = L.map('map', { zoomControl: true }).setView([${selectedLat}, ${selectedLng}], 15);
+                        var map = L.map('map', { zoomControl: true }).setView([${mapInitLat}, ${mapInitLng}], 15);
                         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-                        var marker = L.marker([${selectedLat}, ${selectedLng}], {
+                        var marker = L.marker([${mapInitLat}, ${mapInitLng}], {
                           draggable: true
                         }).addTo(map);
 
@@ -761,14 +2062,160 @@ export default function EmployerEmergencyPost() {
           </View>
         </SafeAreaView>
       </Modal>
-    </View>
+
+      {/* Custom Quota Limit Modal */}
+      <Modal
+        visible={quotaModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setQuotaModalVisible(false)}
+      >
+        <View style={modalStyles.modalOverlay}>
+          <View style={[modalStyles.pickerContainer, { padding: 24, maxWidth: 340, alignItems: 'center' }]}>
+            {/* Header Icon */}
+            <View style={{
+              width: 72,
+              height: 72,
+              borderRadius: 36,
+              backgroundColor: '#FFF7ED',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 20,
+              borderWidth: 1.5,
+              borderColor: '#FFEDD5',
+              shadowColor: '#FF6B00',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.1,
+              shadowRadius: 10,
+              elevation: 2
+            }}>
+              <Ionicons name="rocket" size={36} color="#FF6B00" />
+            </View>
+
+            {/* Title */}
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '800',
+              color: '#0F172A',
+              textAlign: 'center',
+              marginBottom: 10,
+              fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold'
+            }}>
+              Hết lượt đăng tin
+            </Text>
+
+            {/* Description */}
+            <Text style={{
+              fontSize: 14,
+              color: '#64748B',
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 24,
+              fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular'
+            }}>
+              Bạn đã dùng hết lượt đăng tin miễn phí. Vui lòng nâng cấp gói dịch vụ để tiếp tục đăng tuyển dụng không giới hạn!
+            </Text>
+
+            {/* Premium Features List */}
+            <View style={{ width: '100%', marginBottom: 24, backgroundColor: '#F8FAFC', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#F1F5F9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="sparkles" size={14} color="#FF6B00" style={{ marginRight: 8 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Đăng tin không giới hạn</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="notifications" size={14} color="#FF6B00" style={{ marginRight: 8 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Đẩy tin tức thì đến ứng viên</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="checkmark-circle" size={14} color="#FF6B00" style={{ marginRight: 8 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Tăng tỷ lệ duyệt hồ sơ 2.5x</Text>
+              </View>
+            </View>
+
+            {/* Buttons Row */}
+            <View style={{ flexDirection: 'row', width: '100%', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setQuotaModalVisible(false)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 16,
+                  backgroundColor: '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0'
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569', fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold' }}>Để sau</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setQuotaModalVisible(false);
+                  navigateTo('upgrade_package');
+                }}
+                style={{
+                  flex: 1.4,
+                  paddingVertical: 14,
+                  borderRadius: 16,
+                  backgroundColor: '#FF6B00',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#FF6B00',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF', fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold' }}>Nâng cấp ngay ⚡</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
+
+const FONT_REGULAR = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular';
+const FONT_BOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold';
+const FONT_EXTRABOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-ExtraBold';
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: -10,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  pickerSelectorButton: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  pickerSelectorText: {
+    fontSize: 14,
+    color: '#94A3B8',
+    fontFamily: FONT_REGULAR,
+  },
+  pickerSelectorTextFilled: {
+    color: '#0F172A',
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',
@@ -815,7 +2262,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 80,
   },
   pageHeader: {
     marginVertical: 12,
@@ -826,6 +2273,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     lineHeight: 40,
     letterSpacing: -1,
+    fontFamily: FONT_EXTRABOLD,
   },
   pageSubtitle: {
     fontSize: 14,
@@ -833,56 +2281,108 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 8,
     lineHeight: 20,
+    fontFamily: FONT_REGULAR,
   },
-  progressSection: {
-    marginVertical: 16,
+  premiumStepContainer: {
+    marginTop: 8,
+    marginBottom: 20,
+    position: 'relative',
+    paddingHorizontal: 10,
   },
-  progressTrack: {
-    flexDirection: 'row',
-    height: 6,
+  stepProgressLineContainer: {
+    position: 'absolute',
+    top: 20,
+    left: 40,
+    right: 40,
+    height: 4,
     backgroundColor: '#E2E8F0',
-    borderRadius: 3,
-    overflow: 'hidden',
+    zIndex: 1,
+    borderRadius: 2,
   },
-  progressBar: {
-    flex: 1,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: 1,
-  },
-  progressActive: {
+  stepProgressLine: {
+    height: '100%',
     backgroundColor: '#FF6B00',
+    borderRadius: 2,
   },
-  stepLabels: {
+  stepNodesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 6,
-    paddingHorizontal: 2,
+    zIndex: 2,
   },
-  stepLabel: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  stepNodeOuter: {
+    alignItems: 'center',
+    width: 80,
   },
-  stepLabelActive: {
+  stepNode: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  stepNodeActive: {
+    backgroundColor: '#FF6B00',
+  },
+  stepNodeCurrent: {
+    borderColor: '#FF6B00',
+    backgroundColor: '#FFFFFF',
+  },
+  stepNodeText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#64748B',
+    fontFamily: FONT_BOLD,
+  },
+  stepNodeTextActive: {
+    color: '#FFFFFF',
+  },
+  stepNodeTextCurrent: {
     color: '#FF6B00',
   },
-  bentoCard: {
+  stepNodeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginTop: 8,
+    fontFamily: FONT_BOLD,
+    textTransform: 'uppercase',
+  },
+  stepNodeLabelActive: {
+    color: '#FF6B00',
+  },
+  mainFormCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 16,
+  },
+  bentoCard: {
+    paddingVertical: 12,
+    marginBottom: 10,
   },
   sectionHeader: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#64748B',
+    color: '#FF6B00',
     letterSpacing: 1.5,
     marginBottom: 16,
     textTransform: 'uppercase',
+    fontFamily: FONT_EXTRABOLD,
   },
   inputLabel: {
     fontSize: 13,
@@ -890,18 +2390,21 @@ const styles = StyleSheet.create({
     color: '#334155',
     marginBottom: 6,
     marginLeft: 2,
+    fontFamily: FONT_BOLD,
   },
   premiumInput: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 16,
+    paddingBottom: 12,
     fontSize: 14,
-    color: '#1E293B',
-    fontWeight: '500',
+    color: '#0F172A',
+    fontFamily: FONT_REGULAR,
     marginBottom: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
+    includeFontPadding: false,
   },
   textArea: {
     height: 100,
@@ -913,23 +2416,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   categoryPill: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 99,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     backgroundColor: '#F1F5F9',
     marginRight: 8,
     marginBottom: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
   },
   categoryPillActive: {
-    backgroundColor: '#FF6B001F',
+    backgroundColor: '#FF6B0010',
     borderColor: '#FF6B00',
   },
   categoryPillText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#475569',
+    fontFamily: FONT_BOLD,
   },
   categoryPillTextActive: {
     color: '#FF6B00',
@@ -962,31 +2466,33 @@ const styles = StyleSheet.create({
   skillPill: {
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 99,
+    borderRadius: 12,
     backgroundColor: '#F1F5F9',
     marginRight: 8,
     marginBottom: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
   },
   skillPillActive: {
-    backgroundColor: '#FF6B001F',
+    backgroundColor: '#FF6B0010',
     borderColor: '#FF6B00',
   },
   skillPillText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#475569',
+    fontFamily: FONT_BOLD,
   },
   skillPillTextActive: {
     color: '#FF6B00',
   },
   infoBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#FFEDD5',
+    marginTop: 8,
   },
   infoBoxText: {
     fontSize: 11,
@@ -1136,47 +2642,101 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontWeight: '600',
   },
-   locationButtonsRow: {
-     flexDirection: 'row',
-     alignItems: 'center',
-     marginBottom: 12,
-   },
-   gpsButton: {
-     backgroundColor: '#10B981',
-     paddingVertical: 12,
-     paddingHorizontal: 16,
-     borderRadius: 14,
-     flexDirection: 'row',
-     alignItems: 'center',
-     justifyContent: 'center',
-     shadowColor: '#10B981',
-     shadowOffset: { width: 0, height: 3 },
-     shadowOpacity: 0.2,
-     shadowRadius: 6,
-     elevation: 2,
-   },
-   gpsButtonText: {
-     fontSize: 13,
-     fontWeight: '700',
-     color: '#FFFFFF',
-   },
-   mapButton: {
-     backgroundColor: '#FF6B00',
-     paddingVertical: 12,
-     paddingHorizontal: 16,
-     borderRadius: 14,
-     flexDirection: 'row',
-     alignItems: 'center',
-     justifyContent: 'center',
-     shadowColor: '#FF6B00',
-     shadowOffset: { width: 0, height: 3 },
-     shadowOpacity: 0.2,
-     shadowRadius: 6,
-     elevation: 2,
-   },
-   mapButtonText: {
-     fontSize: 13,
-     fontWeight: '700',
-     color: '#FFFFFF',
-   },
+  locationButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  gpsButton: {
+    backgroundColor: '#10B981',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  gpsButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  mapButton: {
+    backgroundColor: '#FF6B00',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF6B00',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  mapButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  header: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderColor: '#F3F4F6'
+  },
+  hBack: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  hTitle: { fontSize: 18, fontWeight: '800', color: '#1F2937' },
+  inlineBackBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  customSkillInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  customSkillInput: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    marginBottom: 0,
+  },
+  btnAddCustomSkill: {
+    backgroundColor: '#FF6B00',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginLeft: 8,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  btnAddCustomSkillText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontFamily: FONT_BOLD,
+  },
 });

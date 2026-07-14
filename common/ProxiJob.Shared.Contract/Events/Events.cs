@@ -70,9 +70,18 @@ namespace ProxiJob.Shared.Contract.Events
     public record PayrollPaidEvent(
         int PayrollId,
         int EmployeeId,
+        int StudentId,
         int BusinessId,
         decimal FinalAmount,
         DateOnly PayDate,
+        string EmployeeName
+    );
+
+    public record PayrollPendingConfirmationEvent(
+        int PayrollId,
+        int EmployeeId,
+        int BusinessId,
+        decimal FinalAmount,
         string EmployeeName
     );
 }

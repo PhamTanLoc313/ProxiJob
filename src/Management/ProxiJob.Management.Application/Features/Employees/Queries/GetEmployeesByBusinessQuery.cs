@@ -34,6 +34,7 @@ public class GetEmployeesByBusinessQueryHandler : IRequestHandler<GetEmployeesBy
         var pageSize = request.PageSize < 1 ? 10 : request.PageSize;
 
         var query = _context.Employees
+            .AsNoTracking()
             .Where(e => e.BusinessId == _currentUser.BusinessId.Value);
 
         if (request.Status.HasValue)
@@ -50,6 +51,7 @@ public class GetEmployeesByBusinessQueryHandler : IRequestHandler<GetEmployeesBy
                 Id = e.Id,
                 UserId = e.UserId,
                 FullName = e.FullName,
+                PhoneNumber = e.PhoneNumber,
                 Position = e.Position,
                 Status = e.Status,
                 IsExternal = e.IsExternal,

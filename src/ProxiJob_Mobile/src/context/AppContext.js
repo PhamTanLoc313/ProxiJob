@@ -1,11 +1,12 @@
-import React, { createContext, useRef, useState } from "react";
+import React, { createContext, useRef, useState, useEffect } from "react";
 import { useToast } from "./useToast";
 import { useLocation } from "./useLocation";
 import { useAuth } from "./useAuth";
 import { useNavigation } from "./useNavigation";
 import { useShifts } from "./useShifts";
-import { useManagement } from "./useManagement";
-import { deleteSchedule } from "../api/management";
+import { getStoredToken } from "../api/auth";
+import { HubConnectionBuilder } from '@microsoft/signalr/dist/browser/signalr.js';
+import { IDENTITY_API_BASE_URL } from '../api/apiConfig';
 
 export const AppContext = createContext();
 
@@ -15,8 +16,7 @@ export const AppProvider = ({ children }) => {
 
   // Create refs to avoid circular dependencies and stale closures
   const navigationRef = useRef(null);
-  const shiftsRef = useRef(null);
-  const loadStaffListRef = useRef(null);
+  const shiftsStateRef = useRef(null);
 
   // Set up authentication
   const authState = useAuth({
@@ -27,16 +27,11 @@ export const AppProvider = ({ children }) => {
     setNavigationStack: (stack) =>
       navigationRef.current?.setNavigationStack(stack),
     onLogoutResets: () => {
-      if (shiftsRef.current) {
-        shiftsRef.current.setActiveShift(null);
-        shiftsRef.current.setEmployerJobs([]);
-        shiftsRef.current.setShifts([]);
-      }
+      shiftsStateRef.current?.setActiveShift(null);
       locationState.setSimulatedDistanceToActive(3200);
-      // Clean up HRM and logs via setters
-      if (loadStaffListRef.current) {
-        // We will reset these directly if needed, or through direct setters exposed
-      }
+      toastState.setNotifications([
+        { id: 1, title: 'Hệ thống', content: 'Chào mừng bạn đến với ProxiJob - Nền tảng việc làm hyperlocal!', time: 'Vừa xong', read: false }
+      ]);
     },
   });
 
@@ -44,34 +39,87 @@ export const AppProvider = ({ children }) => {
   const navigationState = useNavigation(
     authState.isEnterprise,
     toastState.showToast,
+    authState.user
   );
   navigationRef.current = navigationState;
 
-  // Set up shift management
+  // Set up shifts state
   const shiftsState = useShifts({
     user: authState.user,
     STUDENT_MOCK_GPS: locationState.STUDENT_MOCK_GPS,
     showToast: toastState.showToast,
     addNotification: toastState.addNotification,
-    loadStaffListRef,
+    navigateTo: navigationState.navigateTo,
   });
-  shiftsRef.current = shiftsState;
-
-  // Set up management / HRM / scheduling / payroll
-  const managementState = useManagement({
-    user: authState.user,
-    showToast: toastState.showToast,
-    approveStudentApplication: shiftsState.approveStudentApplication,
-    rejectStudentApplication: shiftsState.rejectStudentApplication,
-  });
-  loadStaffListRef.current = managementState.loadStaffList;
+  shiftsStateRef.current = shiftsState;
 
   // Static review state for backward compatibility
   const [reviews, setReviews] = useState([]);
+  const [isChatRoomActive, setIsChatRoomActive] = useState(false);
+
+  // Global SignalR connection for Notifications
+  useEffect(() => {
+    let active = true;
+    let connection = null;
+
+    async function startSignalR() {
+      if (!authState.user) {
+        return;
+      }
+
+      try {
+        const token = await getStoredToken();
+        if (!token) return;
+
+        const hubUrl = IDENTITY_API_BASE_URL.replace('/api', '/hub/chat');
+        console.log('[Global Notifications SignalR] Connecting to:', hubUrl);
+
+        connection = new HubConnectionBuilder()
+          .withUrl(hubUrl, {
+            accessTokenFactory: () => token
+          })
+          .configureLogging({
+            log(logLevel, message) {
+              if (message.includes("status code: 1006") || message.includes("WebSocket closed")) {
+                console.log("[Global Notifications SignalR] Connection closed gracefully.");
+              } else if (logLevel >= 4) { // Error level
+                console.warn("[Global Notifications SignalR Error]", message);
+              }
+            }
+          })
+          .withAutomaticReconnect()
+          .build();
+
+        connection.on("ReceiveNotification", (title, content, time) => {
+          console.log('[Global Notifications SignalR] Received Notification:', title, content);
+          if (active) {
+            toastState.addNotification(title, content, time || 'Vừa xong');
+            toastState.showToast(content, 'info');
+          }
+        });
+
+        await connection.start();
+        console.log('[Global Notifications SignalR] Connection started successfully.');
+      } catch (err) {
+        console.log('[Global Notifications SignalR] Connection failed:', err);
+      }
+    }
+
+    startSignalR();
+
+    return () => {
+      active = false;
+      if (connection) {
+        connection.stop().catch(err => console.log('[Global Notifications SignalR] Stop error:', err));
+      }
+    };
+  }, [authState.user]);
 
   return (
     <AppContext.Provider
       value={{
+        isChatRoomActive,
+        setIsChatRoomActive,
         // Auth State & Actions
         user: authState.user,
         setUser: authState.setUser,
@@ -86,6 +134,7 @@ export const AppProvider = ({ children }) => {
         isEnterprise: authState.isEnterprise,
         setIsEnterprise: authState.setIsEnterprise,
         login: authState.login,
+        loginWithGoogle: authState.loginWithGoogle,
         register: authState.register,
         logout: authState.logout,
 
@@ -118,7 +167,7 @@ export const AppProvider = ({ children }) => {
         navigateTo: navigationState.navigateTo,
         goBack: navigationState.goBack,
 
-        // Shifts & Jobs State
+        // Shifts State & Actions
         shifts: shiftsState.shifts,
         setShifts: shiftsState.setShifts,
         activeShift: shiftsState.activeShift,
@@ -140,35 +189,9 @@ export const AppProvider = ({ children }) => {
         approveStudentApplication: shiftsState.approveStudentApplication,
         rejectStudentApplication: shiftsState.rejectStudentApplication,
 
-        // HRM/Management State
-        staffList: managementState.staffList,
-        setStaffList: () => {}, // Backward compatibility dummy
-        loadStaffList: managementState.loadStaffList,
-        addStaffMember: managementState.addStaffMember,
-        removeStaffMember: managementState.removeStaffMember,
-        hrmSingleApplicants: managementState.hrmSingleApplicants,
-        setHrmSingleApplicants: managementState.setHrmSingleApplicants,
-        attendanceLogs: managementState.attendanceLogs,
-        setAttendanceLogs: managementState.setAttendanceLogs,
-        loadAttendanceLogs: managementState.loadAttendanceLogs,
-        payrolls: managementState.payrolls,
-        loadPayrolls: managementState.loadPayrolls,
-        runCalculatePayroll: managementState.runCalculatePayroll,
-        runApprovePayroll: managementState.runApprovePayroll,
-
-        // Scheduling State
-        schedulesList: managementState.schedulesList,
-        loadSchedules: managementState.loadSchedules,
-        addEmployeeSchedule: managementState.addEmployeeSchedule,
-        removeEmployeeSchedule: managementState.removeEmployeeSchedule,
-        deleteSchedule,
-
         // Reviews (backward-compatible mock state)
         reviews,
         setReviews,
-
-        // Other Actions
-        handleLeaveRequest: managementState.handleLeaveRequest,
       }}
     >
       {children}

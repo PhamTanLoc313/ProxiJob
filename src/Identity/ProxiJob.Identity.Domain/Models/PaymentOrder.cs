@@ -18,6 +18,8 @@ namespace ProxiJob.Identity.Domain.Models
         public DateTime? PaidAt { get; set; }
         public string? ConfirmedBy { get; set; }
         public string? AdminNote { get; set; }
+        /// <summary>PayOS yêu cầu orderCode kiểu long — lưu riêng để lookup webhook</summary>
+        public long? PayOsOrderCode { get; set; }
     }
 }
 

@@ -15,6 +15,7 @@ namespace ProxiJob.Identity.Application.Services
         private readonly IAuthRepository _authRepository;
         private readonly IAuthSessionService _authSessionService;
         private readonly IBankTransferPaymentService _bankTransfer;
+        private readonly IPayOsPaymentService _payOs;
         private readonly IUnitOfWork _unitOfWork;
         private readonly string _publicBaseUrl;
         private readonly int _orderExpirationMinutes;
@@ -25,6 +26,7 @@ namespace ProxiJob.Identity.Application.Services
             IAuthRepository authRepository,
             IAuthSessionService authSessionService,
             IBankTransferPaymentService bankTransfer,
+            IPayOsPaymentService payOs,
             IUnitOfWork unitOfWork,
             IConfiguration configuration)
         {
@@ -33,6 +35,7 @@ namespace ProxiJob.Identity.Application.Services
             _authRepository = authRepository;
             _authSessionService = authSessionService;
             _bankTransfer = bankTransfer;
+            _payOs = payOs;
             _unitOfWork = unitOfWork;
             _publicBaseUrl = configuration.GetValue("PaymentSettings:PublicBaseUrl", "https://localhost:7159")!;
             _orderExpirationMinutes = configuration.GetValue("BankTransfer:OrderExpirationMinutes", 1440);
@@ -41,34 +44,44 @@ namespace ProxiJob.Identity.Application.Services
         public async Task<PurchasePlanResponseDto> InitiatePurchaseAsync(
             int userId,
             int planId,
+            string userRole,
             CancellationToken cancellationToken = default)
         {
-            if (!_bankTransfer.IsConfigured)
-            {
-                var details = string.Join(", ", _bankTransfer.GetConfigurationErrors());
-                throw new InvalidOperationException(
-                    $"{BusinessMessages.BankTransferNotConfigured} Thiếu: {details}");
-            }
-
             var plan = await _subscriptionRepository.GetByIdAsync(planId, cancellationToken)
                 ?? throw new InvalidOperationException(BusinessMessages.PlanNotFound);
 
             if (!SubscriptionNames.AllPaidPlans.Contains(plan.Name))
                 throw new InvalidOperationException(BusinessMessages.InvalidPlanId);
 
-            var active = await _subscriptionRepository.GetActiveByUserIdAsync(userId, cancellationToken);
-            if (active?.SubscriptionId == planId)
-                throw new InvalidOperationException(BusinessMessages.AlreadyOnPlan);
+            if (SubscriptionNames.AllBusinessPlans.Contains(plan.Name) && userRole != RoleNames.Business)
+            {
+                throw new InvalidOperationException("Chỉ tài khoản doanh nghiệp mới được mua gói này.");
+            }
 
+            if (SubscriptionNames.AllStudentPlans.Contains(plan.Name) && userRole != RoleNames.Student)
+            {
+                throw new InvalidOperationException("Chỉ tài khoản sinh viên mới được mua gói này.");
+            }
+
+            if (plan.Name != SubscriptionNames.Student10)
+            {
+                var active = await _subscriptionRepository.GetActiveByUserIdAsync(userId, cancellationToken);
+                if (active?.SubscriptionId == planId)
+                    throw new InvalidOperationException(BusinessMessages.AlreadyOnPlan);
+            }
+
+            // Kiểm tra đơn pending đã có cho user+plan này
             var existingPending = await _paymentRepository.GetPendingByUserAndPlanAsync(userId, planId, cancellationToken);
             if (existingPending != null)
             {
-                var existingInstructions = _bankTransfer.CreateInstructions(existingPending, _publicBaseUrl);
-                return MapPurchaseResponse(existingPending, BusinessMessages.PaymentOrderCreated, existingInstructions.BankTransfer);
+                return MapPurchaseResponse(existingPending, BusinessMessages.PaymentOrderCreated);
             }
 
             var user = await _authRepository.GetUserByIdAsync(userId, cancellationToken)
                 ?? throw new UnauthorizedAccessException(BusinessMessages.UserNotFound);
+
+            // Tạo mã PayOS orderCode (long) — dùng timestamp + random
+            var payOsOrderCode = GeneratePayOsOrderCode();
 
             var order = new PaymentOrder
             {
@@ -76,20 +89,27 @@ namespace ProxiJob.Identity.Application.Services
                 UserId = userId,
                 SubscriptionId = planId,
                 Amount = plan.Price,
-                Gateway = PaymentGatewayType.BankTransfer,
+                Gateway = PaymentGatewayType.PayOS,
                 Status = PaymentOrderStatus.Pending,
                 ExpiresAt = DateTime.UtcNow.AddMinutes(_orderExpirationMinutes),
-                CreatedBy = user.Email
+                CreatedBy = user.Email,
+                PayOsOrderCode = payOsOrderCode
             };
 
-            var initiation = _bankTransfer.CreateInstructions(order, _publicBaseUrl);
-            order.PaymentUrl = initiation.QrImageUrl;
-            order.GatewayTransactionId = initiation.GatewayTransactionId;
+            // Gọi PayOS tạo payment link
+            var returnUrl = $"{_publicBaseUrl}/api/payments/payos/return?orderCode={payOsOrderCode}";
+            var cancelUrl = $"{_publicBaseUrl}/api/payments/payos/cancel?orderCode={payOsOrderCode}";
+            var description = order.OrderCode;
+
+            var payOsResult = await _payOs.CreatePaymentLinkAsync(order, description, returnUrl, cancelUrl, cancellationToken);
+
+            order.PaymentUrl = $"{payOsResult.CheckoutUrl}|{payOsResult.QrCode}|{payOsResult.AccountNumber}|{payOsResult.AccountName}|{payOsResult.Bin}|{description}";
+            order.GatewayTransactionId = payOsOrderCode.ToString();
 
             await _paymentRepository.AddAsync(order, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return MapPurchaseResponse(order, BusinessMessages.PaymentOrderCreated, initiation.BankTransfer);
+            return MapPurchaseResponse(order, BusinessMessages.PaymentOrderCreated, payOsResult.CheckoutUrl, payOsResult.QrCode);
         }
 
         public async Task<PaymentOrderStatusDto> GetOrderStatusAsync(int orderId, int userId, CancellationToken cancellationToken = default)
@@ -113,8 +133,9 @@ namespace ProxiJob.Identity.Application.Services
 
         public async Task<IReadOnlyList<AdminPaymentOrderDto>> GetPendingBankTransferOrdersAsync(CancellationToken cancellationToken = default)
         {
+            // Lấy cả đơn BankTransfer và PayOS pending
             var orders = await _paymentRepository.GetByStatusAsync(
-                PaymentOrderStatus.Pending, PaymentGatewayType.BankTransfer, cancellationToken);
+                PaymentOrderStatus.Pending, null, cancellationToken);
 
             var result = new List<AdminPaymentOrderDto>();
             foreach (var order in orders)
@@ -133,7 +154,8 @@ namespace ProxiJob.Identity.Application.Services
             string? adminNote,
             CancellationToken cancellationToken = default)
         {
-            var order = await GetBankTransferOrderAsync(orderId, cancellationToken);
+            var order = await _paymentRepository.GetByIdAsync(orderId, cancellationToken)
+                ?? throw new InvalidOperationException(BusinessMessages.PaymentOrderNotFound);
 
             if (order.Status == PaymentOrderStatus.Paid)
                 return await MapAdminOrderAsync(order, cancellationToken);
@@ -154,7 +176,8 @@ namespace ProxiJob.Identity.Application.Services
             string? adminNote,
             CancellationToken cancellationToken = default)
         {
-            var order = await GetBankTransferOrderAsync(orderId, cancellationToken);
+            var order = await _paymentRepository.GetByIdAsync(orderId, cancellationToken)
+                ?? throw new InvalidOperationException(BusinessMessages.PaymentOrderNotFound);
 
             if (order.Status != PaymentOrderStatus.Pending)
                 throw new InvalidOperationException(BusinessMessages.PaymentOrderNotPending);
@@ -172,15 +195,17 @@ namespace ProxiJob.Identity.Application.Services
             return await MapAdminOrderAsync(order, cancellationToken);
         }
 
-        private async Task<PaymentOrder> GetBankTransferOrderAsync(int orderId, CancellationToken cancellationToken)
+        public async Task HandlePayOsWebhookAsync(string webhookBody, CancellationToken cancellationToken = default)
         {
-            var order = await _paymentRepository.GetByIdAsync(orderId, cancellationToken)
-                ?? throw new InvalidOperationException(BusinessMessages.PaymentOrderNotFound);
+            var result = await _payOs.VerifyWebhookDataAsync(webhookBody, cancellationToken);
+            if (!result.Success)
+                return;
 
-            if (order.Gateway != PaymentGatewayType.BankTransfer)
-                throw new InvalidOperationException(BusinessMessages.BankTransferOnly);
+            var order = await _paymentRepository.GetByPayOsOrderCodeAsync(result.OrderCode, cancellationToken);
+            if (order == null || order.Status != PaymentOrderStatus.Pending)
+                return;
 
-            return order;
+            await CompletePaidOrderAsync(order, result.TransactionId, "PayOS Webhook", $"PayOS auto-confirm: {result.Description}", cancellationToken);
         }
 
         private async Task CompletePaidOrderAsync(
@@ -233,19 +258,42 @@ namespace ProxiJob.Identity.Application.Services
         private async Task<PaymentOrderStatusDto> MapStatusAsync(PaymentOrder order, CancellationToken cancellationToken)
         {
             var plan = await _subscriptionRepository.GetByIdAsync(order.SubscriptionId, cancellationToken);
+            var gatewayName = PaymentGatewayNames.ToName(order.Gateway);
+
+            var checkoutUrl = order.Status == PaymentOrderStatus.Pending ? order.PaymentUrl : null;
+            string? finalCheckoutUrl = null;
+            string? finalQrCode = null;
             BankTransferInstructionsDto? bankTransfer = null;
 
-            if (order.Status == PaymentOrderStatus.Pending)
+            if (!string.IsNullOrEmpty(checkoutUrl))
             {
-                var initiation = _bankTransfer.CreateInstructions(order, _publicBaseUrl);
-                bankTransfer = initiation.BankTransfer;
+                var parts = checkoutUrl.Split('|');
+                finalCheckoutUrl = parts[0];
+                if (parts.Length > 1)
+                {
+                    finalQrCode = parts[1];
+                }
+                if (parts.Length > 5)
+                {
+                    var bin = parts[4];
+                    var friendlyBankName = bin == "970422" ? "MB Bank" : $"Bank {bin}";
+                    bankTransfer = new BankTransferInstructionsDto
+                    {
+                        AccountNumber = parts[2],
+                        AccountHolder = parts[3],
+                        BankName = friendlyBankName,
+                        TransferContent = parts[5],
+                        Amount = order.Amount,
+                        QrImageUrl = finalQrCode
+                    };
+                }
             }
 
             return new PaymentOrderStatusDto
             {
                 OrderId = order.Id,
                 OrderCode = order.OrderCode,
-                Gateway = PaymentGatewayNames.BankTransfer,
+                Gateway = gatewayName,
                 Status = order.Status.ToString(),
                 Amount = order.Amount,
                 PlanId = order.SubscriptionId,
@@ -253,6 +301,8 @@ namespace ProxiJob.Identity.Application.Services
                 ExpiresAt = order.ExpiresAt,
                 PaidAt = order.PaidAt,
                 FailureReason = order.FailureReason,
+                CheckoutUrl = finalCheckoutUrl,
+                QrCode = finalQrCode,
                 BankTransfer = bankTransfer
             };
         }
@@ -284,25 +334,76 @@ namespace ProxiJob.Identity.Application.Services
         private static PurchasePlanResponseDto MapPurchaseResponse(
             PaymentOrder order,
             string message,
-            BankTransferInstructionsDto? bankTransfer = null)
+            string? checkoutUrl = null,
+            string? qrCode = null)
         {
-            bankTransfer ??= new BankTransferInstructionsDto
+            var dbPaymentUrl = order.PaymentUrl;
+            var finalCheckoutUrl = checkoutUrl;
+            var finalQrCode = qrCode;
+            BankTransferInstructionsDto? bankTransfer = null;
+
+            if (string.IsNullOrEmpty(finalCheckoutUrl) && !string.IsNullOrEmpty(dbPaymentUrl))
             {
-                TransferContent = order.OrderCode,
-                Amount = order.Amount,
-                QrImageUrl = order.PaymentUrl
-            };
+                var parts = dbPaymentUrl.Split('|');
+                finalCheckoutUrl = parts[0];
+                if (parts.Length > 1)
+                {
+                    finalQrCode = parts[1];
+                }
+            }
+
+            if (!string.IsNullOrEmpty(dbPaymentUrl))
+            {
+                var parts = dbPaymentUrl.Split('|');
+                if (parts.Length > 5)
+                {
+                    var bin = parts[4];
+                    var friendlyBankName = bin == "970422" ? "MB Bank" : $"Bank {bin}";
+                    bankTransfer = new BankTransferInstructionsDto
+                    {
+                        AccountNumber = parts[2],
+                        AccountHolder = parts[3],
+                        BankName = friendlyBankName,
+                        TransferContent = parts[5],
+                        Amount = order.Amount,
+                        QrImageUrl = finalQrCode
+                    };
+                }
+            }
 
             return new PurchasePlanResponseDto
             {
                 OrderId = order.Id,
                 OrderCode = order.OrderCode,
-                Gateway = PaymentGatewayNames.BankTransfer,
+                Gateway = PaymentGatewayNames.ToName(order.Gateway),
                 Amount = order.Amount,
                 ExpiresAt = order.ExpiresAt,
                 Message = message,
+                CheckoutUrl = finalCheckoutUrl,
+                QrCode = finalQrCode,
                 BankTransfer = bankTransfer
             };
+        }
+
+        public async Task<IReadOnlyList<AdminPaymentOrderDto>> GetAllOrdersAsync(CancellationToken cancellationToken = default)
+        {
+            var orders = await _paymentRepository.GetAllAsync(cancellationToken);
+            var result = new List<AdminPaymentOrderDto>();
+            foreach (var order in orders)
+            {
+                await ExpireIfNeededAsync(order, cancellationToken);
+                result.Add(await MapAdminOrderAsync(order, cancellationToken));
+            }
+            return result;
+        }
+
+        /// <summary>Tạo mã orderCode cho PayOS (long, tối đa 9007199254740991)</summary>
+        private static long GeneratePayOsOrderCode()
+        {
+            // Lấy Unix timestamp (giây) * 10000 + random 4 chữ số → đảm bảo unique
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var random = Random.Shared.Next(1000, 9999);
+            return timestamp * 10000 + random;
         }
     }
 }

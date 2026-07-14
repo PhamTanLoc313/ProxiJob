@@ -19,4 +19,7 @@ public class IdentityUserContextSnapshot
     public double ReputationScore { get; init; }
     public bool IsActive { get; init; }
     public IReadOnlyList<string> Features { get; init; } = Array.Empty<string>();
+    public int MaxEmployees { get; init; }
+    public int MaxActiveQrs { get; init; }
+    public int MaxSearchRadius { get; init; }
 }

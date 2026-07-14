@@ -17,38 +17,56 @@ public class GenerateQrCodeCommand : IRequest<string>
 public class GenerateQrCodeCommandHandler : IRequestHandler<GenerateQrCodeCommand, string>
 {
     private readonly IManagementDbContext _context;
+    private readonly ICurrentUserService _currentUser;
 
-    public GenerateQrCodeCommandHandler(IManagementDbContext context)
+    public GenerateQrCodeCommandHandler(IManagementDbContext context, ICurrentUserService currentUser)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<string> Handle(GenerateQrCodeCommand request, CancellationToken cancellationToken)
     {
         var existingQr = await _context.BusinessQrCodes
-            .FirstOrDefaultAsync(q => q.BusinessId == request.BusinessId && q.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(q => q.BusinessId == request.BusinessId, cancellationToken);
 
-        if (existingQr != null)
+        bool willIncreaseActiveCount = existingQr == null || !existingQr.IsActive;
+        if (willIncreaseActiveCount)
         {
-            existingQr.IsActive = false;
-            existingQr.UpdatedBy = request.CreatedBy;
-            existingQr.UpdatedAt = DateTime.UtcNow;
-            _context.BusinessQrCodes.Update(existingQr);
+            var maxActiveQrs = _currentUser.IdentityUser?.MaxActiveQrs ?? 0;
+            var activeCount = await _context.BusinessQrCodes
+                .CountAsync(q => q.BusinessId == request.BusinessId && q.IsActive, cancellationToken);
+
+            if (activeCount >= maxActiveQrs)
+            {
+                throw new UnauthorizedAccessException("Số lượng mã QR Code chấm công đang hoạt động đã đạt giới hạn tối đa cho gói cước hiện tại. Vui lòng nâng cấp gói cước!");
+            }
         }
 
         var newQrToken = Guid.NewGuid().ToString();
 
-        var newQr = new BusinessQrCode
+        if (existingQr != null)
         {
-            BusinessId = request.BusinessId,
-            QrToken = newQrToken,
-            AllowedRadiusMeters = 100, // default
-            IsActive = true,
-            CreatedBy = request.CreatedBy,
-            CreatedAt = DateTime.UtcNow
-        };
+            existingQr.QrToken = newQrToken;
+            existingQr.IsActive = true;
+            existingQr.UpdatedBy = request.CreatedBy;
+            existingQr.UpdatedAt = DateTime.UtcNow;
+            _context.BusinessQrCodes.Update(existingQr);
+        }
+        else
+        {
+            var newQr = new BusinessQrCode
+            {
+                BusinessId = request.BusinessId,
+                QrToken = newQrToken,
+                AllowedRadiusMeters = 100, // default
+                IsActive = true,
+                CreatedBy = request.CreatedBy,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.BusinessQrCodes.Add(newQr);
+        }
 
-        _context.BusinessQrCodes.Add(newQr);
         await _context.SaveChangesAsync(cancellationToken);
 
         return newQrToken;

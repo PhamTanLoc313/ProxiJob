@@ -8,8 +8,10 @@ import {
   getStoredToken,
   getStoredUser,
   getStoredRefreshToken,
-  refreshTokensApi
+  refreshTokensApi,
+  loginWithGoogleApi
 } from '../api/auth';
+import { getBusinessProfileApi } from '../api/businessApi';
 
 export const translateError = (error) => {
   if (!error) return 'Đăng nhập không thành công. Vui lòng thử lại sau.';
@@ -78,11 +80,32 @@ export const useAuth = ({
 
   useEffect(() => {
     if (user) {
-      const premiumTiers = ['Enterprise', 'Premium', 'Standard'];
+      const premiumTiers = ['Enterprise', 'HRM Basic', 'Standard', 'Premium'];
       setIsEnterprise(premiumTiers.includes(user?.subscriptionTier));
     } else {
       setIsEnterprise(false);
     }
+  }, [user]);
+
+  useEffect(() => {
+    async function syncBusinessProfileAvatar() {
+      if (user && user.role === 'employer') {
+        try {
+          const profile = await getBusinessProfileApi();
+          if (profile && profile.avatarUrl) {
+            setUser(prev => {
+              if (prev && prev.avatarUrl !== profile.avatarUrl) {
+                return { ...prev, avatarUrl: profile.avatarUrl };
+              }
+              return prev;
+            });
+          }
+        } catch (e) {
+          console.log('[useAuth] Sync business avatar failed:', e.message);
+        }
+      }
+    }
+    syncBusinessProfileAvatar();
   }, [user]);
 
   const login = useCallback(async (email, password) => {
@@ -106,9 +129,38 @@ export const useAuth = ({
       }
 
       addNotification('Bảo mật', `Đăng nhập thành công với vai trò ${userRole === 'student' ? 'Sinh viên' : 'Chủ quán'}`, 'Vừa xong');
-      showToast(`Đăng nhập thành công!`, 'success');
     } catch (error) {
       console.log('[ProxiJob Login] Auth execution error:', error.message);
+      const friendlyMsg = translateError(error);
+      throw new Error(friendlyMsg);
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [showToast, addNotification]);
+
+  const loginWithGoogle = useCallback(async (googleToken, role) => {
+    try {
+      setAuthLoading(true);
+      const { token, refreshToken, user: resUser } = await loginWithGoogleApi(googleToken, role);
+      await saveAuthSession(token, refreshToken, resUser);
+
+      setUser(resUser);
+
+      const userRole = resUser?.role || 'student';
+      const mappedRoleValue = userRole === 'student' ? 0 : 1;
+      setSelectedRole(mappedRoleValue);
+
+      if (userRole === 'student') {
+        setCurrentScreenRef.current?.('student_dashboard');
+        setNavigationStackRef.current?.(['student_dashboard']);
+      } else {
+        setCurrentScreenRef.current?.('employer_approvals');
+        setNavigationStackRef.current?.(['employer_approvals']);
+      }
+
+      addNotification('Bảo mật', `Đăng nhập bằng Google thành công với vai trò ${userRole === 'student' ? 'Sinh viên' : 'Chủ quán'}`, 'Vừa xong');
+    } catch (error) {
+      console.log('[ProxiJob Login Google] Auth execution error:', error.message);
       const friendlyMsg = translateError(error);
       showToast(friendlyMsg, 'error');
     } finally {
@@ -185,7 +237,7 @@ export const useAuth = ({
                 await clearAuthSession();
               }
             } else {
-              console.log('[ProxiJob Auth] Stored session invalid, clearing:', apiError.message);
+              console.log('[ProxiJob Auth] No valid refresh token, clearing session:', apiError.message);
               await clearAuthSession();
             }
           }
@@ -197,7 +249,22 @@ export const useAuth = ({
         setAuthLoading(false);
       }
     }
-    restoreSession();
+
+    // Add overall timeout to prevent app from hanging on black screen
+    let didFinish = false;
+    const timeoutId = setTimeout(() => {
+      if (!didFinish) {
+        console.log('[ProxiJob Auth] Session restore timed out, showing login screen.');
+        clearAuthSession().catch(() => {});
+        setIsRestoringSession(false);
+        setAuthLoading(false);
+      }
+    }, 8000);
+
+    restoreSession().finally(() => {
+      didFinish = true;
+      clearTimeout(timeoutId);
+    });
   }, []);
 
   return {
@@ -214,6 +281,7 @@ export const useAuth = ({
     isEnterprise,
     setIsEnterprise,
     login,
+    loginWithGoogle,
     register,
     logout
   };

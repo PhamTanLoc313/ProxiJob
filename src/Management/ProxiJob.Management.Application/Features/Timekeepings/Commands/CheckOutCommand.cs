@@ -30,6 +30,7 @@ public class CheckOutCommandHandler : IRequestHandler<CheckOutCommand, bool>
     {
         var timekeeping = await _context.Timekeepings
             .Include(t => t.Employee)
+            .Include(t => t.WorkSchedule)
             .FirstOrDefaultAsync(t => t.Id == request.TimekeepingId && t.Employee.UserId == request.UserId, cancellationToken);
 
         if (timekeeping == null)
@@ -40,6 +41,21 @@ public class CheckOutCommandHandler : IRequestHandler<CheckOutCommand, bool>
         if (timekeeping.CheckOutTime.HasValue)
         {
             throw new Exception("Already checked out.");
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        if (timekeeping.WorkSchedule != null && nowUtc < timekeeping.WorkSchedule.EndTime.AddMinutes(-5))
+        {
+            var nowLocal = nowUtc.AddHours(7);
+            var earlyMsg = $"Ra sớm lúc {nowLocal:HH:mm}";
+            if (string.IsNullOrEmpty(timekeeping.Note))
+            {
+                timekeeping.Note = earlyMsg;
+            }
+            else if (!timekeeping.Note.Contains("Ra sớm"))
+            {
+                timekeeping.Note = $"{timekeeping.Note}; {earlyMsg}";
+            }
         }
 
         timekeeping.CheckOutTime = DateTime.UtcNow;

@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "ProxiJob_Mobile",
-    "slug": "ProxiJob_Mobile",
+    "name": "ProxiJob",
+    "slug": "proxijob-mobile",
+    "scheme": "proxijob",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,12 +11,18 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "vn.io.proxijob",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -27,7 +34,16 @@
           "photosPermission": "Cho phép ProxiJob truy cập thư viện ảnh của bạn.",
           "cameraPermission": "Cho phép ProxiJob truy cập camera của bạn."
         }
-      ]
-    ]
+      ],
+      "expo-font",
+      "@react-native-google-signin/google-signin",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b670a2a5-ddd7-4aab-ac0e-ef5bb8b63bbd"
+      }
+    },
+    "owner": "proxijob-team"
   }
 }

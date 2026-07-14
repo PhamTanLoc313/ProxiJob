@@ -39,11 +39,11 @@ export default function RegisterScreen() {
   const validateForm = () => {
     let tempErrors = {};
 
-    if (!fullName.trim()) {
+    if (!fullName || !fullName.trim()) {
       tempErrors.fullName = 'Họ và tên không được để trống.';
     }
 
-    if (!email.trim()) {
+    if (!email || !email.trim()) {
       tempErrors.email = 'Email không được để trống.';
     } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -52,15 +52,15 @@ export default function RegisterScreen() {
       }
     }
 
-    if (!password) {
+    if (!password || !password.trim()) {
       tempErrors.password = 'Mật khẩu không được để trống.';
-    } else if (password.length < 8) {
+    } else if (password.trim().length < 8) {
       tempErrors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
     }
 
-    if (!confirmPassword) {
+    if (!confirmPassword || !confirmPassword.trim()) {
       tempErrors.confirmPassword = 'Xác nhận mật khẩu không được để trống.';
-    } else if (confirmPassword !== password) {
+    } else if (confirmPassword.trim() !== password.trim()) {
       tempErrors.confirmPassword = 'Mật khẩu xác nhận không trùng khớp.';
     }
 
@@ -73,8 +73,8 @@ export default function RegisterScreen() {
       const success = await register(
         fullName.trim(),
         email.trim(),
-        password,
-        confirmPassword,
+        password.trim(),
+        confirmPassword.trim(),
         selectedRole
       );
       if (success) {
@@ -94,7 +94,7 @@ export default function RegisterScreen() {
           {/* Logo / Header Area */}
           <View style={styles.logoContainer}>
             <Image
-              source={require('../img/proxijob logo.png')}
+              source={require('../img/logoproxijobcamden.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
@@ -291,6 +291,16 @@ export default function RegisterScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Continue as Guest */}
+          <TouchableOpacity
+            style={styles.guestButton}
+            onPress={() => navigateTo('student_dashboard')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="home-outline" size={16} color={theme.colors.textMuted || "#6B7280"} style={{ marginRight: 6 }} />
+            <Text style={styles.guestButtonText}>Tiếp tục xem việc làm (Khách)</Text>
+          </TouchableOpacity>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -453,5 +463,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: 48,
+  },
+  guestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#F8FAFC',
+    marginTop: 10,
+    width: '100%',
+    maxWidth: 400,
+  },
+  guestButtonText: {
+    color: theme.colors.textMuted || '#64748B',
+    fontSize: 13,
+    fontWeight: '600',
   }
 });

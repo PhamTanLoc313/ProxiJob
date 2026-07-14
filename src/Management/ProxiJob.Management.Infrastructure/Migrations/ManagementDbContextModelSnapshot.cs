@@ -183,6 +183,10 @@ namespace ProxiJob.Management.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BusinessId");
+
+                    b.HasIndex("UserId");
+
                     b.ToTable("management_employees", (string)null);
                 });
 
@@ -207,6 +211,10 @@ namespace ProxiJob.Management.Infrastructure.Migrations
                         .HasColumnType("decimal(10,2)")
                         .HasColumnName("base_amount");
 
+                    b.Property<string>("Comments")
+                        .HasColumnType("text")
+                        .HasColumnName("comments");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -228,6 +236,14 @@ namespace ProxiJob.Management.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("employee_id");
 
+                    b.Property<string>("EmployerComments")
+                        .HasColumnType("text")
+                        .HasColumnName("employer_comments");
+
+                    b.Property<int?>("EmployerRating")
+                        .HasColumnType("integer")
+                        .HasColumnName("employer_rating");
+
                     b.Property<decimal>("FinalAmount")
                         .HasColumnType("decimal(10,2)")
                         .HasColumnName("final_amount");
@@ -240,6 +256,10 @@ namespace ProxiJob.Management.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("pay_date");
 
+                    b.Property<int?>("Rating")
+                        .HasColumnType("integer")
+                        .HasColumnName("rating");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text")
@@ -248,6 +268,10 @@ namespace ProxiJob.Management.Infrastructure.Migrations
                     b.Property<decimal>("TotalHours")
                         .HasColumnType("decimal(10,2)")
                         .HasColumnName("total_hours");
+
+                    b.Property<string>("TransactionPhoto")
+                        .HasColumnType("text")
+                        .HasColumnName("transaction_photo");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")

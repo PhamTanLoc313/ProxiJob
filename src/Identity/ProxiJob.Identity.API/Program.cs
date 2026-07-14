@@ -5,6 +5,8 @@ using ProxiJob.Identity.Application;
 using ProxiJob.Identity.Infrastructure;
 using ProxiJob.Identity.Infrastructure.Data;
 using ProxiJob.Identity.Infrastructure.Services;
+using ProxiJob.Identity.API.Hubs;
+using MassTransit;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,6 +38,26 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddGrpc();
+builder.Services.AddSignalR();
+
+builder.Services.AddMassTransit(x =>
+{
+    x.AddConsumer<ProxiJob.Identity.API.Messaging.Consumers.NotificationConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host(builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost", "/", h =>
+        {
+            h.Username(builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest");
+            h.Password(builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest");
+        });
+
+        cfg.ReceiveEndpoint("identity.notification", e =>
+        {
+            e.ConfigureConsumer<ProxiJob.Identity.API.Messaging.Consumers.NotificationConsumer>(context);
+        });
+    });
+});
 
 builder.Services.AddControllers(options =>
     options.Filters.Add<ForbiddenAccessExceptionFilter>());
@@ -101,6 +123,7 @@ await IdentityDatabaseInitializer.InitializeAsync(
 
 app.MapControllers();
 app.MapGrpcService<IdentityGrpcServiceImpl>();
+app.MapHub<ChatHub>("/hub/chat");
 
 Console.WriteLine("\n--> Click to open Swagger: http://localhost:5231/swagger\n");
 

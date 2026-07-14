@@ -7,12 +7,15 @@ import { JOB_API_BASE_URL, getAuthHeader } from './apiConfig';
  * @param {number} [pageSize=10] 
  * @returns {Promise<object>}
  */
-export async function getPublishedJobs(categoryId, pageNumber = 1, pageSize = 20) {
+export async function getPublishedJobs(categoryId, pageNumber = 1, pageSize = 20, latitude = null, longitude = null) {
   try {
     const headers = await getAuthHeader();
     let url = `${JOB_API_BASE_URL}/job-posts/published?pageNumber=${pageNumber}&pageSize=${pageSize}`;
     if (categoryId) {
       url += `&categoryId=${categoryId}`;
+    }
+    if (latitude !== null && longitude !== null) {
+      url += `&latitude=${latitude}&longitude=${longitude}`;
     }
 
     const response = await fetch(url, { headers });
@@ -389,6 +392,35 @@ export async function deleteJobPostApi(id, businessId, deletedBy = 'Business') {
     return resData.data !== undefined ? resData.data : resData;
   } catch (error) {
     console.log('[ProxiJob Jobs API] deleteJobPostApi error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Cancel an approved shift application (Request leave / swap)
+ * @param {number} id 
+ * @param {number} businessId 
+ * @param {string} note 
+ * @param {string} updatedBy 
+ * @returns {Promise<object>}
+ */
+export async function cancelApplicationApi(id, businessId, note, updatedBy = 'Student') {
+  try {
+    const headers = await getAuthHeader();
+    const response = await fetch(`${JOB_API_BASE_URL}/applications/${id}/cancel`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ applicationId: id, businessId, note, updatedBy })
+    });
+
+    const resData = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const errorMsg = resData.message || (typeof resData === 'string' ? resData : 'Không thể yêu cầu nghỉ ca.');
+      throw new Error(errorMsg);
+    }
+    return resData.data !== undefined ? resData.data : resData;
+  } catch (error) {
+    console.log('[ProxiJob Jobs API] cancelApplicationApi error:', error);
     throw error;
   }
 }

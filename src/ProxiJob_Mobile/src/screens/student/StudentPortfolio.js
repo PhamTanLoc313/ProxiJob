@@ -12,15 +12,25 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  Dimensions
+  Dimensions,
+  RefreshControl,
+  Keyboard
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../../styles/theme';
 import { AppContext } from '../../context/AppContext';
+import { useShiftsQuery, usePayrollsQuery } from '../../hooks/queries';
+import { Ionicons } from '@expo/vector-icons';
+
+// TÍCH HỢP THƯ VIỆN ĐỊNH VỊ GPS PHẦN CỨNG CỦA EXPO
+import * as Location from 'expo-location';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const FONT_REGULAR = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular';
+const FONT_BOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Bold';
+const FONT_EXTRABOLD = Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-ExtraBold';
 import { getStudentProfileApi, updateStudentProfileApi, registerStudentProfileApi } from '../../api/studentApi';
 import { supabase } from '../../db/dbConfig';
 import * as ImagePicker from 'expo-image-picker';
@@ -52,6 +62,91 @@ const formatDateToDisplay = (isoString) => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
+};
+
+const GOOGLE_MAPS_API_KEY = 'CvNapWs3C3Vt7ZTRZf0uZliN9v3q8TBJKxd2CEcW';
+
+const cleanAddress = (rawAddress) => {
+  if (!rawAddress) return '';
+  let cleaned = rawAddress.replace(/,\s*(Việt Nam|Vietnam)\s*$/i, '');
+  cleaned = cleaned.replace(/,\s*\d{5,6}\b/g, '');
+  return cleaned.trim();
+};
+
+const reverseGeocode = async (lat, lng) => {
+  let addressVal = '';
+  let cityVal = 'TP. Hồ Chí Minh';
+
+  if (GOOGLE_MAPS_API_KEY) {
+    try {
+      const response = await fetch(
+        `https://rsapi.goong.io/Geocode?latlng=${lat},${lng}&api_key=${GOOGLE_MAPS_API_KEY}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+          const result = data.results[0];
+          addressVal = cleanAddress(result.formatted_address);
+
+          if (result.address_components) {
+            const cityComponent = result.address_components.find(comp =>
+              comp.types && (comp.types.includes('administrative_area_level_1') || comp.types.includes('city'))
+            );
+            if (cityComponent) {
+              cityVal = cityComponent.long_name;
+            }
+          }
+          return { address: addressVal, city: cityVal };
+        }
+      }
+    } catch (e) {
+      console.log('Goong reverse geocoding error:', e);
+    }
+  }
+
+  // Fallback to OSM Nominatim
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      if (data.display_name) {
+        addressVal = cleanAddress(data.display_name);
+      } else {
+        const road = data.address?.road || '';
+        const suburb = data.address?.suburb || data.address?.quarter || '';
+        const city = data.address?.city || data.address?.town || data.address?.state || '';
+        addressVal = [road, suburb, city].filter(Boolean).join(', ');
+      }
+      cityVal = data.address?.city || data.address?.town || data.address?.state || 'TP. Hồ Chí Minh';
+      return { address: addressVal, city: cityVal };
+    }
+  } catch (e) {
+    console.log('OSM reverse geocoding error:', e);
+  }
+
+  return {
+    address: `Tọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+    city: 'TP. Hồ Chí Minh'
+  };
+};
+
+const fetchGeocode = async (q) => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
+      { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    }
+  } catch (err) {
+    console.log('fetchGeocode error:', err);
+  }
+  return null;
 };
 
 const parseDateInput = (str) => {
@@ -109,15 +204,56 @@ const decodeBase64ToArrayBuffer = (base64String) => {
 };
 
 export default function StudentPortfolio() {
-  const { reviews, shifts, user, setUser, showToast, studentCoords, setStudentCoords } = useContext(AppContext);
+  const { user, setUser, showToast, studentCoords, setStudentCoords, navigateTo } = useContext(AppContext);
+  const { data: shifts = [] } = useShiftsQuery(user, studentCoords);
+  const { data: payrolls = [] } = usePayrollsQuery(user);
+
+  // Dynamic reviews mapped from real database payrolls rated by employers
+  const reviews = (payrolls || [])
+    .filter(p => (p.rating && p.rating > 0) || (p.Rating && p.Rating > 0))
+    .map(p => ({
+      id: p.id || p.Id,
+      author: p.shopName || p.ShopName || 'Chủ cửa hàng ProxiJob',
+      date: p.payDate || p.PayDate || 'Gần đây',
+      rating: p.rating || p.Rating || 5,
+      comment: p.comments || p.Comments || 'Làm việc tốt, thái độ phục vụ khách hàng tốt.'
+    }));
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState(null);
   const [profileExists, setProfileExists] = useState(false);
+  const [skillInput, setSkillInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [formErrors, setFormErrors] = useState({});
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorModalMessage, setErrorModalMessage] = useState('');
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  // State phục vụ quét định vị thiết bị
+  const [gpsScanning, setGpsScanning] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [selectedLat, setSelectedLat] = useState(10.7769);
   const [selectedLng, setSelectedLng] = useState(106.7009);
+  const [mapStartCoords, setMapStartCoords] = useState({ lat: 10.7769, lng: 106.7009 });
 
   const [avatarMenuVisible, setAvatarMenuVisible] = useState(false);
   const [viewingAvatar, setViewingAvatar] = useState(false);
@@ -129,7 +265,7 @@ export default function StudentPortfolio() {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
           setAvatarMenuVisible(false);
-          Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh để đổi ảnh đại diện.');
+          showToast('Bạn cần cho phép truy cập thư viện ảnh để đổi ảnh đại diện.', 'warning');
           return;
         }
       }
@@ -152,7 +288,7 @@ export default function StudentPortfolio() {
     } catch (error) {
       setAvatarMenuVisible(false);
       console.log('[StudentPortfolio] handlePickImage error:', error);
-      Alert.alert('Lỗi', 'Không thể chọn hình ảnh.');
+      showToast('Lỗi: Không thể chọn hình ảnh.', 'error');
     }
   };
 
@@ -162,7 +298,7 @@ export default function StudentPortfolio() {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           setAvatarMenuVisible(false);
-          Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập camera để chụp ảnh đại diện.');
+          showToast('Bạn cần cho phép truy cập camera để chụp ảnh đại diện.', 'warning');
           return;
         }
       }
@@ -185,7 +321,7 @@ export default function StudentPortfolio() {
     } catch (error) {
       setAvatarMenuVisible(false);
       console.log('[StudentPortfolio] handleTakePhoto error:', error);
-      Alert.alert('Lỗi', 'Không thể chụp ảnh.');
+      showToast('Lỗi: Không thể chụp ảnh.', 'error');
     }
   };
 
@@ -215,8 +351,6 @@ export default function StudentPortfolio() {
         .from('avatars')
         .getPublicUrl(filePath);
 
-      console.log('[StudentPortfolio] generated publicUrl:', publicUrl);
-
       const updatedProfileData = {
         phoneNumber: profile?.phoneNumber || '',
         avatarUrl: publicUrl,
@@ -224,6 +358,8 @@ export default function StudentPortfolio() {
         gender: profile?.gender || 'Nam',
         address: profile?.address || '',
         city: profile?.city || '',
+        latitude: profile?.latitude || null,
+        longitude: profile?.longitude || null,
         school: profile?.school || '',
         major: profile?.major || '',
         yearOfStudy: profile?.yearOfStudy || 1,
@@ -238,11 +374,10 @@ export default function StudentPortfolio() {
         setProfileExists(true);
       }
 
-      // Update the global user context so it updates the header immediately!
-      const updatedUser = { 
-        ...user, 
+      const updatedUser = {
+        ...user,
         avatarUrl: `${publicUrl.split('?')[0]}?t=${Date.now()}`,
-        gender: updatedProfileData.gender 
+        gender: updatedProfileData.gender
       };
       if (setUser) {
         setUser(updatedUser);
@@ -256,7 +391,7 @@ export default function StudentPortfolio() {
       showToast('Cập nhật ảnh đại diện thành công!', 'success');
     } catch (err) {
       console.log('[StudentPortfolio] Upload avatar error:', err);
-      Alert.alert('Lỗi', err.message || 'Không thể tải ảnh lên.');
+      showToast(err.message || 'Không thể tải ảnh lên.', 'error');
     } finally {
       setUploadingAvatar(false);
     }
@@ -304,7 +439,6 @@ export default function StudentPortfolio() {
   const [showYearList, setShowYearList] = useState(false);
   const [showGenderDropdown, setShowGenderDropdown] = useState(false);
 
-  // Sync calendar date when form date changes
   useEffect(() => {
     if (form.dateOfBirth) {
       const d = new Date(form.dateOfBirth);
@@ -353,6 +487,7 @@ export default function StudentPortfolio() {
             const dateStr = `${calYear}-${monthStr}-${dayStr}`;
             setForm(prev => ({ ...prev, dateOfBirth: dateStr }));
             setCalendarVisible(false);
+            if (formErrors.dateOfBirth) setFormErrors(prev => ({ ...prev, dateOfBirth: null }));
           }}
         >
           <Text style={[styles.calDayText, isSelected && styles.calDayTextActive]}>
@@ -377,8 +512,7 @@ export default function StudentPortfolio() {
             data.avatarUrl = '';
           }
         }
-        
-        // Sync with global user context
+
         if (user && (user.avatarUrl !== (data.avatarUrl || '') || user.gender !== data.gender)) {
           const updatedUser = { ...user, avatarUrl: data.avatarUrl || '', gender: data.gender };
           setUser(updatedUser);
@@ -391,17 +525,15 @@ export default function StudentPortfolio() {
             console.log('[StudentPortfolio] error saving auth session during sync:', e);
           }
         }
-
-         console.log('[StudentPortfolio] profile data loaded:', data);
-         if (data.latitude && data.longitude) {
-           const coords = { latitude: data.latitude, longitude: data.longitude };
-           await AsyncStorage.setItem('@student_custom_gps', JSON.stringify(coords));
-           if (setStudentCoords) {
-             setStudentCoords(coords);
-           }
-         }
-         setProfile(data);
-         setProfileExists(true);
+        if (data.latitude && data.longitude) {
+          const coords = { latitude: data.latitude, longitude: data.longitude };
+          await AsyncStorage.setItem('@student_custom_gps', JSON.stringify(coords));
+          if (setStudentCoords) {
+            setStudentCoords(coords);
+          }
+        }
+        setProfile(data);
+        setProfileExists(true);
       }
     } catch (err) {
       console.log('[StudentPortfolio] Error loading profile:', err.message);
@@ -411,6 +543,13 @@ export default function StudentPortfolio() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadProfile();
+    setRefreshing(false);
   };
 
   useEffect(() => {
@@ -427,7 +566,7 @@ export default function StudentPortfolio() {
             setSelectedLng(data.lng);
           }
         } catch (e) {
-          // Ignore non-JSON or unrelated messages
+          // Ignore non-JSON
         }
       };
       window.addEventListener('message', handleMessage);
@@ -476,36 +615,184 @@ export default function StudentPortfolio() {
   };
 
   const geocodeAddress = async (addressText, cityText) => {
+    const query = `${addressText}${cityText ? ', ' + cityText : ''}`;
+
+    if (GOOGLE_MAPS_API_KEY) {
+      try {
+        const url = `https://rsapi.goong.io/Geocode?address=${encodeURIComponent(query)}&api_key=${GOOGLE_MAPS_API_KEY}`;
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.results && data.results.length > 0) {
+            const loc = data.results[0].geometry.location;
+            return {
+              latitude: loc.lat,
+              longitude: loc.lng
+            };
+          }
+        }
+      } catch (e) {
+        console.log('Goong geocoding API error:', e);
+      }
+    }
+
     try {
-      const query = `${addressText}${cityText ? ', ' + cityText : ''}, Viet Nam`;
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`, {
+      let cleaned = addressText.trim();
+      cleaned = cleaned.replace(/^\d+([/.-]\d+)*[a-zA-Z]?\s+/, '');
+      cleaned = cleaned.replace(/^(hẻm|ngõ|kiệt)\s+\d+([/.-]\d+)*[a-zA-Z]?\s+/, '');
+
+      const fallbackQuery = `${cleaned}${cityText ? ', ' + cityText : ''}, Viet Nam`;
+      let response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallbackQuery)}&format=json&limit=1`, {
         headers: {
           'User-Agent': 'ProxiJobApp/1.0'
         }
       });
-      if (!response.ok) return null;
-      const data = await response.json();
+      let data = await response.json().catch(() => []);
       if (data && data.length > 0) {
         return {
           latitude: parseFloat(data[0].lat),
           longitude: parseFloat(data[0].lon)
         };
       }
+
+      const lower = addressText.toLowerCase();
+      let fallbackQuery2 = '';
+      if (lower.includes('trường thọ')) {
+        fallbackQuery2 = 'Trường Thọ, Thủ Đức, Viet Nam';
+      } else if (lower.includes('thủ đức')) {
+        fallbackQuery2 = 'Thủ Đức, Viet Nam';
+      } else {
+        const parts = addressText.split(/[,.-]/);
+        if (parts.length > 1) {
+          fallbackQuery2 = `${parts[parts.length - 2].trim()}, ${parts[parts.length - 1].trim()}, Viet Nam`;
+        }
+      }
+
+      if (fallbackQuery2) {
+        response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallbackQuery2)}&format=json&limit=1`, {
+          headers: {
+            'User-Agent': 'ProxiJobApp/1.0'
+          }
+        });
+        data = await response.json().catch(() => []);
+        if (data && data.length > 0) {
+          return {
+            latitude: parseFloat(data[0].lat),
+            longitude: parseFloat(data[0].lon)
+          };
+        }
+      }
     } catch (e) {
-      console.log('Geocoding error:', e);
+      console.log('OSM Geocoding error:', e);
     }
     return null;
   };
 
+  const handleAddSkillTag = () => {
+    const trimmedInput = skillInput.trim();
+    if (!trimmedInput) return;
+
+    // Check if tag already exists in comma separated string
+    const currentSkills = form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : [];
+    if (currentSkills.includes(trimmedInput)) {
+      showToast('Kỹ năng này đã được thêm!', 'warning');
+      return;
+    }
+
+    const updatedSkills = [...currentSkills, trimmedInput].join(', ');
+    setForm(prev => ({ ...prev, skills: updatedSkills }));
+    setSkillInput('');
+    if (formErrors.skills) setFormErrors(prev => ({ ...prev, skills: null }));
+  };
+
+  const handleRemoveSkillTag = (skillToRemove) => {
+    const currentSkills = form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const updatedSkills = currentSkills.filter(s => s !== skillToRemove).join(', ');
+    setForm(prev => ({ ...prev, skills: updatedSkills }));
+    if (formErrors.skills) setFormErrors(prev => ({ ...prev, skills: null }));
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!form.phoneNumber || !form.phoneNumber.trim()) {
+      newErrors.phoneNumber = 'Số điện thoại không được để trống.';
+    } else {
+      const phoneRegex = /^0\d{9}$/;
+      if (!phoneRegex.test(form.phoneNumber.trim())) {
+        newErrors.phoneNumber = 'Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.';
+      }
+    }
+
+    if (!form.dateOfBirth) {
+      newErrors.dateOfBirth = 'Ngày sinh không được để trống.';
+    } else {
+      const birthDate = new Date(form.dateOfBirth);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      if (isNaN(age)) {
+        newErrors.dateOfBirth = 'Ngày sinh không hợp lệ.';
+      } else if (age < 16 || age > 60) {
+        newErrors.dateOfBirth = 'Độ tuổi của sinh viên phải từ 16 đến 60 tuổi.';
+      }
+    }
+
+    if (!form.gender || !form.gender.trim()) {
+      newErrors.gender = 'Vui lòng chọn giới tính.';
+    }
+
+    if (!form.school || !form.school.trim()) {
+      newErrors.school = 'Trường học không được để trống.';
+    }
+
+    if (!form.major || !form.major.trim()) {
+      newErrors.major = 'Chuyên ngành không được để trống.';
+    }
+
+    const yearNum = parseInt(form.yearOfStudy, 10);
+    if (!form.yearOfStudy || isNaN(yearNum) || yearNum < 1 || yearNum > 6) {
+      newErrors.yearOfStudy = 'Năm học phải là số từ 1 đến 6.';
+    }
+
+    if (!form.address || !form.address.trim()) {
+      newErrors.address = 'Địa chỉ không được để trống.';
+    }
+
+    if (!form.city || !form.city.trim()) {
+      newErrors.city = 'Thành phố không được để trống.';
+    }
+
+    if (!form.bio || !form.bio.trim()) {
+      newErrors.bio = 'Tiểu sử (Bio) không được để trống.';
+    } else if (form.bio.trim().length < 20) {
+      newErrors.bio = `Tiểu sử phải có ít nhất 20 ký tự (Hiện tại: ${form.bio.trim().length} ký tự).`;
+    }
+
+    if (!form.skills || !form.skills.trim()) {
+      newErrors.skills = 'Vui lòng thêm ít nhất một kỹ năng.';
+    }
+
+    setFormErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSaveProfile = async () => {
+    if (!validateForm()) {
+      showToast('Vui lòng kiểm tra lại các trường thông tin!', 'warning');
+      return;
+    }
+
     try {
       setSaving(true);
 
       let currentLat = form.latitude;
       let currentLng = form.longitude;
 
-      // Auto geocode address input if custom coords not explicitly picked
-      if (form.address && form.address !== initialForm?.address) {
+      if (form.address && form.address !== initialForm?.address && !form.latitude) {
         const coords = await geocodeAddress(form.address, form.city);
         if (coords) {
           currentLat = coords.latitude;
@@ -519,19 +806,19 @@ export default function StudentPortfolio() {
       }
 
       const payload = {
-        phoneNumber: form.phoneNumber,
+        phoneNumber: form.phoneNumber.trim(),
         avatarUrl: form.avatarUrl,
         dateOfBirth: parseDateInput(form.dateOfBirth),
-        gender: form.gender,
-        address: form.address,
-        city: form.city,
+        gender: form.gender.trim(),
+        address: form.address.trim(),
+        city: form.city.trim(),
         latitude: currentLat,
         longitude: currentLng,
-        school: form.school,
-        major: form.major,
+        school: form.school.trim(),
+        major: form.major.trim(),
         yearOfStudy: parseInt(form.yearOfStudy, 10) || 0,
-        bio: form.bio,
-        skills: form.skills,
+        bio: form.bio.trim(),
+        skills: form.skills.trim(),
       };
 
       if (profileExists) {
@@ -546,7 +833,9 @@ export default function StudentPortfolio() {
       setEditModalVisible(false);
     } catch (err) {
       console.log('Error saving profile:', err);
-      Alert.alert('Thất bại', err.message || 'Không thể lưu thông tin hồ sơ.');
+      let errMsg = err.message || 'Không thể lưu thông tin hồ sơ.';
+      setErrorModalMessage(errMsg);
+      setErrorModalVisible(true);
     } finally {
       setSaving(false);
     }
@@ -555,41 +844,22 @@ export default function StudentPortfolio() {
   const handleConfirmMapLocation = async () => {
     try {
       setSaving(true);
-      // Reverse geocode chosen coordinates to get a human-readable address
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${selectedLat}&lon=${selectedLng}&format=json`, {
-        headers: {
-          'User-Agent': 'ProxiJobApp/1.0'
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const displayName = data.display_name || '';
-        const addressVal = data.address?.road || data.address?.suburb || data.address?.quarter || displayName.split(',')[0] || 'Địa chỉ chọn trên bản đồ';
-        const cityVal = data.address?.city || data.address?.town || data.address?.state || 'TP. Hồ Chí Minh';
-        
-        setForm(prev => ({
-          ...prev,
-          address: addressVal,
-          city: cityVal,
-          latitude: selectedLat,
-          longitude: selectedLng
-        }));
-      } else {
-        setForm(prev => ({
-          ...prev,
-          address: `Tọa độ: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`,
-          city: 'TP. Hồ Chí Minh',
-          latitude: selectedLat,
-          longitude: selectedLng
-        }));
-      }
-      
+      const { address: addressVal, city: cityVal } = await reverseGeocode(selectedLat, selectedLng);
+
+      setForm(prev => ({
+        ...prev,
+        address: addressVal,
+        city: cityVal,
+        latitude: selectedLat,
+        longitude: selectedLng
+      }));
+
       const coords = { latitude: selectedLat, longitude: selectedLng };
       await AsyncStorage.setItem('@student_custom_gps', JSON.stringify(coords));
       if (setStudentCoords) {
         setStudentCoords(coords);
       }
-      
+
       setMapModalVisible(false);
       setTimeout(() => {
         setEditModalVisible(true);
@@ -612,14 +882,262 @@ export default function StudentPortfolio() {
       setSaving(false);
     }
   };
-  // Compute stats based on completed shifts
+
+  const handleOpenMapPicker = async () => {
+    let lat = form.latitude || studentCoords?.latitude || 10.7769;
+    let lng = form.longitude || studentCoords?.longitude || 106.7009;
+
+    setSelectedLat(lat);
+    setSelectedLng(lng);
+    setMapStartCoords({ lat, lng });
+    setEditModalVisible(false);
+
+    setTimeout(() => {
+      setMapModalVisible(true);
+    }, 400);
+  };
+
+  const handleGetCurrentGPSLocation = async () => {
+    try {
+      setGpsScanning(true);
+      showToast('Đang quét GPS độ chính xác cao...', 'info');
+
+      // 1. Hỏi xin quyền sử dụng định vị của thiết bị
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status !== 'granted') {
+        showToast('Quyền định vị bị từ chối! Vui lòng cho phép trong cài đặt.', 'warning');
+        return;
+      }
+
+      // 2. Ép phần cứng quét tọa độ thời gian thực
+      const geoPosition = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.BestForNavigation,
+      });
+
+      if (geoPosition && geoPosition.coords) {
+        const { latitude, longitude } = geoPosition.coords;
+        console.log('[GPS Lấy vị trí hiện tại]:', latitude, longitude);
+
+        // 3. Gọi reverse geocode để điền địa chỉ
+        const { address: addressVal, city: cityVal } = await reverseGeocode(latitude, longitude);
+
+        setForm(prev => ({
+          ...prev,
+          address: addressVal,
+          city: cityVal,
+          latitude: latitude,
+          longitude: longitude
+        }));
+
+        setSelectedLat(latitude);
+        setSelectedLng(longitude);
+        setMapStartCoords({ lat: latitude, lng: longitude });
+
+        const coords = { latitude, longitude };
+        await AsyncStorage.setItem('@student_custom_gps', JSON.stringify(coords));
+        if (setStudentCoords) {
+          setStudentCoords(coords);
+        }
+
+        showToast('Đã lấy vị trí hiện tại và điền địa chỉ thành công!', 'success');
+      } else {
+        showToast('Không nhận được tín hiệu GPS từ thiết bị.', 'error');
+      }
+    } catch (error) {
+      console.log('Error getting current GPS location:', error);
+      showToast('Không lấy được vị trí GPS hiện tại.', 'error');
+    } finally {
+      setGpsScanning(false);
+    }
+  };
+
+  const handleSearchAddress = async () => {
+    if (!form.address) {
+      showToast('Vui lòng nhập địa chỉ trước khi tìm kiếm!', 'warning');
+      return;
+    }
+    try {
+      setGpsScanning(true);
+      showToast('Đang định vị địa chỉ của bạn...', 'info');
+      const coords = await geocodeAddress(form.address, form.city);
+      if (coords) {
+        setForm(prev => ({
+          ...prev,
+          latitude: coords.latitude,
+          longitude: coords.longitude
+        }));
+        setSelectedLat(coords.latitude);
+        setSelectedLng(coords.longitude);
+        setMapStartCoords({ lat: coords.latitude, lng: coords.longitude });
+
+        // Save to AsyncStorage and update context coordinates
+        const coordsObj = { latitude: coords.latitude, longitude: coords.longitude };
+        await AsyncStorage.setItem('@student_custom_gps', JSON.stringify(coordsObj));
+        if (setStudentCoords) {
+          setStudentCoords(coordsObj);
+        }
+
+        showToast('Định vị địa chỉ thành công!', 'success');
+      } else {
+        showToast('Không tìm thấy tọa độ cho địa chỉ này. Vui lòng nhập chi tiết hơn.', 'error');
+      }
+    } catch (err) {
+      console.log('Error geocoding typed address:', err);
+      showToast('Lỗi khi định vị địa chỉ!', 'error');
+    } finally {
+      setGpsScanning(false);
+    }
+  };
+
+  const handleAddressChange = async (text) => {
+    setForm(prev => ({ ...prev, address: text }));
+    if (formErrors.address) setFormErrors(prev => ({ ...prev, address: null }));
+    if (text.length < 4) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      setSuggestionsLoading(true);
+      if (GOOGLE_MAPS_API_KEY) {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/AutoComplete?input=${encodeURIComponent(text)}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.predictions) {
+            const formatted = data.predictions.map(item => ({
+              display_name: item.description,
+              place_id: item.place_id,
+              isGoogle: true
+            }));
+            setAddressSuggestions(formatted);
+            setShowSuggestions(formatted.length > 0);
+          }
+        }
+      } else {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5`,
+          { headers: { 'User-Agent': 'ProxiJobApp/1.0' } }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const formatted = data.map(item => ({
+            display_name: cleanAddress(item.display_name),
+            lat: parseFloat(item.lat),
+            lon: parseFloat(item.lon)
+          }));
+          setAddressSuggestions(formatted);
+          setShowSuggestions(formatted.length > 0);
+        }
+      }
+    } catch (e) {
+      console.log('Suggestions fetch error:', e);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  };
+
+  const handleSelectSuggestion = async (suggestion) => {
+    let cityVal = form.city || 'TP. Hồ Chí Minh';
+    const lowerAddr = suggestion.display_name.toLowerCase();
+    if (lowerAddr.includes('hồ chí minh') || lowerAddr.includes('hcm')) {
+      cityVal = 'Thành phố Hồ Chí Minh';
+    } else if (lowerAddr.includes('hà nội')) {
+      cityVal = 'Thành phố Hà Nội';
+    } else if (lowerAddr.includes('đà nẵng')) {
+      cityVal = 'Thành phố Đà Nẵng';
+    } else if (lowerAddr.includes('bình dương')) {
+      cityVal = 'Tỉnh Bình Dương';
+    } else if (lowerAddr.includes('đồng nai')) {
+      cityVal = 'Tỉnh Đồng Nai';
+    }
+
+    setForm(prev => ({
+      ...prev,
+      address: suggestion.display_name,
+      city: cityVal
+    }));
+    setShowSuggestions(false);
+
+    try {
+      setGpsScanning(true);
+      let lat = 0;
+      let lon = 0;
+      if (suggestion.isGoogle) {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/Detail?place_id=${suggestion.place_id}&api_key=${GOOGLE_MAPS_API_KEY}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.result) {
+            if (data.result.geometry?.location) {
+              lat = data.result.geometry.location.lat;
+              lon = data.result.geometry.location.lng;
+            }
+            if (data.result.address_components) {
+              const cityComponent = data.result.address_components.find(comp => 
+                comp.types && (comp.types.includes('administrative_area_level_1') || comp.types.includes('city'))
+              );
+              if (cityComponent) {
+                cityVal = cityComponent.long_name;
+              }
+            }
+          }
+        }
+      } else {
+        lat = suggestion.lat;
+        lon = suggestion.lon;
+      }
+
+      if (lat && lon) {
+        setForm(prev => ({
+          ...prev,
+          city: cityVal,
+          latitude: lat,
+          longitude: lon
+        }));
+        setSelectedLat(lat);
+        setSelectedLng(lon);
+        setMapStartCoords({ lat, lng: lon });
+
+        // Save to AsyncStorage and update context coordinates
+        const coordsObj = { latitude: lat, longitude: lon };
+        await AsyncStorage.setItem('@student_custom_gps', JSON.stringify(coordsObj));
+        if (setStudentCoords) {
+          setStudentCoords(coordsObj);
+        }
+
+        showToast('Đã chọn địa chỉ & lấy tọa độ thành công!', 'success');
+      } else {
+        showToast('Không lấy được tọa độ cho vị trí này.', 'warning');
+      }
+    } catch (err) {
+      console.log('Select suggestion error:', err);
+    } finally {
+      setGpsScanning(false);
+    }
+  };
+
   const completedShifts = shifts.filter(s => s.status === 'completed');
-  const totalCompletedShifts = completedShifts.length + (profile?.reviewCount || 12);
+  const totalCompletedShifts = completedShifts.length + (profile?.reviewCount ?? 0);
   const averageRating = profile?.reputationScore !== undefined ? profile.reputationScore.toFixed(1) : '4.9';
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right", "bottom"]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.student]}
+            tintColor={theme.colors.student}
+          />
+        }
+      >
         {loading && (
           <View style={{ paddingVertical: 10, alignItems: 'center', backgroundColor: 'rgba(255, 107, 0, 0.05)', borderRadius: 10, marginHorizontal: 16, marginBottom: 12 }}>
             <ActivityIndicator size="small" color={theme.colors.student} />
@@ -639,13 +1157,13 @@ export default function StudentPortfolio() {
                 <ActivityIndicator size="small" color={theme.colors.student} />
               </View>
             ) : (
-              <Image 
-                source={getAvatarSource(user?.avatarUrl || profile?.avatarUrl, profile?.gender || user?.gender, profile?.fullName || user?.name)} 
-                style={styles.avatarImage} 
+              <Image
+                source={getAvatarSource(user?.avatarUrl || profile?.avatarUrl, profile?.gender || user?.gender, profile?.fullName || user?.name)}
+                style={styles.avatarImage}
               />
             )}
             <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✓</Text>
+              <Ionicons name="checkmark-circle" size={16} color="#FFF" />
             </View>
           </TouchableOpacity>
 
@@ -660,51 +1178,183 @@ export default function StudentPortfolio() {
           </Text>
 
           <TouchableOpacity style={styles.editButton} onPress={openEditModal}>
-            <Text style={styles.editButtonText}>📝 Chỉnh sửa thông tin</Text>
+            <Ionicons name="create-outline" size={16} color="#FF6B00" style={{ marginRight: 6 }} />
+            <Text style={styles.editButtonText}>Chỉnh sửa hồ sơ</Text>
           </TouchableOpacity>
         </View>
 
         {/* Reputation Stats Summary */}
         <View style={styles.statsRow}>
-          <View style={[styles.statBox, theme.shadows.light]}>
-            <Text style={styles.statValue}>⭐ {averageRating}</Text>
-            <Text style={styles.statLabel}>Đánh giá trung bình</Text>
+          <View style={[styles.statBox, styles.statBoxRating, theme.shadows.light]}>
+            <View style={styles.statIconContainer}>
+              <Ionicons name="star" size={18} color="#EAB308" />
+            </View>
+            <Text style={styles.statValue}>{averageRating}</Text>
+            <Text style={styles.statLabel}>Đánh giá</Text>
           </View>
 
-          <View style={[styles.statBox, theme.shadows.light]}>
+          <View style={[styles.statBox, styles.statBoxShifts, theme.shadows.light]}>
+            <View style={styles.statIconContainer}>
+              <Ionicons name="briefcase" size={18} color="#2563EB" />
+            </View>
             <Text style={styles.statValue}>{totalCompletedShifts}</Text>
             <Text style={styles.statLabel}>Ca đã làm</Text>
           </View>
 
-          <View style={[styles.statBox, theme.shadows.light]}>
+          <View style={[styles.statBox, styles.statBoxPercent, theme.shadows.light]}>
+            <View style={styles.statIconContainer}>
+              <Ionicons name="ribbon" size={18} color="#10B981" />
+            </View>
             <Text style={styles.statValue}>{profile?.completionPercent !== undefined ? `${profile.completionPercent}%` : '100%'}</Text>
-            <Text style={styles.statLabel}>Độ hoàn thiện HS</Text>
+            <Text style={styles.statLabel}>Hoàn thiện HS</Text>
+          </View>
+        </View>
+
+        {/* Student Apply Quota details */}
+        <View style={{
+          backgroundColor: '#FFF7ED',
+          borderRadius: 20,
+          borderWidth: 1.5,
+          borderColor: '#FFD3B6',
+          padding: 16,
+          marginTop: 14,
+          shadowColor: '#FF6B00',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.05,
+          shadowRadius: 10,
+          elevation: 2,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: '#FF6B0018',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 12,
+              }}>
+                <Ionicons name="ticket-outline" size={22} color="#FF6B00" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, color: '#1E293B', fontFamily: FONT_EXTRABOLD }}>Lượt ứng tuyển còn lại</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', fontFamily: FONT_REGULAR, marginTop: 2 }}>
+                  Đã dùng: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{profile?.appliesUsed ?? 0}</Text> / Hạn mức: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{profile?.appliesLimit ?? 3}</Text>
+                </Text>
+              </View>
+            </View>
+            <View style={{ justifyContent: 'center' }}>
+              <View style={{
+                backgroundColor: '#FF6B00',
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#FF6B00',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+                elevation: 2,
+                minWidth: 70,
+              }}>
+                <Text style={{ fontSize: 18, color: '#FFFFFF', fontFamily: FONT_EXTRABOLD, lineHeight: 22 }}>
+                  {profile ? Math.max(0, profile.appliesLimit - profile.appliesUsed) : 3}
+                </Text>
+                <Text style={{ fontSize: 8, color: '#FFFFFF', fontFamily: FONT_BOLD, textTransform: 'uppercase', letterSpacing: 0.2, marginTop: 1 }}>
+                  Lượt còn
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={{ height: 6, backgroundColor: '#FFE4D1', borderRadius: 3, overflow: 'hidden', marginBottom: 14 }}>
+            <View style={{
+              height: '100%',
+              width: profile && profile.appliesLimit > 0
+                ? `${(Math.min(profile.appliesLimit, profile.appliesUsed) / profile.appliesLimit) * 100}%`
+                : '0%',
+              backgroundColor: '#FF6B00',
+              borderRadius: 3
+            }} />
+          </View>
+
+          {/* Upgrade Call to action */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#FFE4D1' }}>
+            <Text style={{ fontSize: 11, color: '#7C2D12', fontWeight: '600', fontFamily: FONT_REGULAR, flex: 1, marginRight: 8 }}>
+              Nâng cấp gói Pro để cộng thêm lượt và nhận các quyền lợi ưu tiên duyệt hồ sơ!
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigateTo('student_upgrade')}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#FF6B00',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                shadowColor: '#FF6B00',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: '#FFFFFF', fontWeight: '800', fontFamily: FONT_BOLD, marginRight: 2 }}>Mua thêm</Text>
+              <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* Contact & Personal Details Section */}
-        <Text style={styles.sectionHeader}>Thông tin liên hệ & Cá nhân</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="person-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
+          <Text style={styles.sectionHeader}>Thông tin cá nhân</Text>
+        </View>
         <View style={[styles.detailsCard, theme.shadows.light]}>
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>📞 Số điện thoại:</Text>
+            <View style={styles.detailLabelRow}>
+              <Ionicons name="call-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+              <Text style={styles.detailLabel}>Số điện thoại</Text>
+            </View>
             <Text style={styles.detailValue}>{profile?.phoneNumber || 'Chưa cập nhật'}</Text>
           </View>
+
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>🎂 Ngày sinh:</Text>
+            <View style={styles.detailLabelRow}>
+              <Ionicons name="calendar-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+              <Text style={styles.detailLabel}>Ngày sinh</Text>
+            </View>
             <Text style={styles.detailValue}>{formatDateToDisplay(profile?.dateOfBirth)}</Text>
           </View>
+
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>🚻 Giới tính:</Text>
+            <View style={styles.detailLabelRow}>
+              <Ionicons name="male-female-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+              <Text style={styles.detailLabel}>Giới tính</Text>
+            </View>
             <Text style={styles.detailValue}>{profile?.gender || 'Chưa cập nhật'}</Text>
           </View>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>📍 Địa chỉ:</Text>
-            <Text style={styles.detailValue}>{profile?.address ? `${profile.address}, ${profile.city || ''}` : 'Chưa cập nhật'}</Text>
+
+          <View style={[styles.detailItem, { borderBottomWidth: 0 }]}>
+            <View style={styles.detailLabelRow}>
+              <Ionicons name="location-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+              <Text style={styles.detailLabel}>Địa chỉ</Text>
+            </View>
+            <Text style={[styles.detailValue, { flex: 1, textAlign: 'right', marginLeft: 16 }]} numberOfLines={2}>
+              {profile?.address ? `${profile.address}, ${profile.city || ''}` : 'Chưa cập nhật'}
+            </Text>
           </View>
         </View>
 
         {/* Skills Section */}
-        <Text style={styles.sectionHeader}>Kỹ năng nổi bật</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="extension-puzzle-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
+          <Text style={styles.sectionHeader}>Kỹ năng nổi bật</Text>
+        </View>
         <View style={styles.skillsContainer}>
           {profile?.skills ? (
             profile.skills.split(',').map((skill, index) => (
@@ -724,28 +1374,40 @@ export default function StudentPortfolio() {
         </View>
 
         {/* E-Portfolio Feedbacks */}
-        <Text style={styles.sectionHeader}>Đánh giá từ chủ quán ({reviews.length})</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="chatbubbles-outline" size={18} color="#FF6B00" style={{ marginRight: 6 }} />
+          <Text style={styles.sectionHeader}>Đánh giá từ chủ quán ({reviews.length})</Text>
+        </View>
         <View style={styles.reviewsList}>
           {reviews.length > 0 ? (
             reviews.map((review) => (
               <View key={review.id} style={[styles.reviewCard, theme.shadows.light]}>
                 <View style={styles.reviewHeader}>
-                  <Text style={styles.reviewAuthor}>{review.author}</Text>
-                  <Text style={styles.reviewDate}>{review.date}</Text>
-                </View>
-
-                <View style={styles.starRow}>
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Text key={i} style={[
-                      styles.star,
-                      i < review.rating ? styles.starFilled : styles.starEmpty
-                    ]}>
-                      ★
+                  <View style={styles.reviewerAvatar}>
+                    <Text style={styles.reviewerAvatarText}>
+                      {(review.author || 'Q').slice(0, 2).toUpperCase()}
                     </Text>
-                  ))}
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.reviewAuthor}>{review.author}</Text>
+                    <Text style={styles.reviewDate}>{review.date}</Text>
+                  </View>
+                  <View style={styles.starRow}>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Ionicons
+                        key={i}
+                        name={i < review.rating ? "star" : "star-outline"}
+                        size={14}
+                        color="#EAB308"
+                        style={{ marginRight: 2 }}
+                      />
+                    ))}
+                  </View>
                 </View>
 
-                <Text style={styles.reviewComment}>"{review.comment}"</Text>
+                <View style={styles.reviewQuoteBg}>
+                  <Text style={styles.reviewComment}>"{review.comment}"</Text>
+                </View>
               </View>
             ))
           ) : (
@@ -754,7 +1416,6 @@ export default function StudentPortfolio() {
             </View>
           )}
         </View>
-
       </ScrollView>
 
       {/* Edit Profile Modal */}
@@ -764,53 +1425,59 @@ export default function StudentPortfolio() {
         transparent={true}
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{profileExists ? 'Chỉnh sửa hồ sơ' : 'Tạo hồ sơ năng lực'}</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Text style={styles.closeText}>✕</Text>
+              <TouchableOpacity style={styles.closeBtnCircle} onPress={() => setEditModalVisible(false)}>
+                <Ionicons name="close" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalForm}>
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[styles.modalForm, { paddingBottom: keyboardHeight > 0 ? keyboardHeight - 20 : 20 }]}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Số điện thoại</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.phoneNumber && { borderColor: '#EF4444' }]}
                   value={form.phoneNumber}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, phoneNumber: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, phoneNumber: val }));
+                    if (formErrors.phoneNumber) setFormErrors(prev => ({ ...prev, phoneNumber: null }));
+                  }}
                   placeholder="Nhập số điện thoại"
                   keyboardType="phone-pad"
                 />
+                {formErrors.phoneNumber && <Text style={styles.fieldErrorText}>{formErrors.phoneNumber}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Ngày sinh</Text>
                 <TouchableOpacity
-                  style={styles.datePickerBtn}
+                  style={[styles.datePickerBtn, formErrors.dateOfBirth && { borderColor: '#EF4444' }]}
                   onPress={() => setCalendarVisible(true)}
                 >
                   <Text style={styles.datePickerBtnText}>
                     {form.dateOfBirth ? formatDateToDisplay(form.dateOfBirth) : 'Chọn ngày sinh...'}
                   </Text>
-                  <Text style={styles.calendarIcon}>📅</Text>
+                  <Ionicons name="calendar-outline" size={18} color="#64748B" />
                 </TouchableOpacity>
+                {formErrors.dateOfBirth && <Text style={styles.fieldErrorText}>{formErrors.dateOfBirth}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Giới tính</Text>
                 <TouchableOpacity
-                  style={styles.dropdownBtn}
+                  style={[styles.dropdownBtn, formErrors.gender && { borderColor: '#EF4444' }]}
                   onPress={() => setShowGenderDropdown(prev => !prev)}
                 >
                   <Text style={styles.dropdownBtnText}>
                     {form.gender || 'Chọn giới tính...'}
                   </Text>
-                  <Text style={styles.dropdownIcon}>▾</Text>
+                  <Ionicons name="chevron-down" size={18} color="#64748B" />
                 </TouchableOpacity>
 
                 {showGenderDropdown && (
@@ -822,6 +1489,7 @@ export default function StudentPortfolio() {
                         onPress={() => {
                           setForm(prev => ({ ...prev, gender: g }));
                           setShowGenderDropdown(false);
+                          if (formErrors.gender) setFormErrors(prev => ({ ...prev, gender: null }));
                         }}
                       >
                         <Text style={styles.dropdownItemText}>{g}</Text>
@@ -829,94 +1497,229 @@ export default function StudentPortfolio() {
                     ))}
                   </View>
                 )}
+                {formErrors.gender && <Text style={styles.fieldErrorText}>{formErrors.gender}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Trường học</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.school && { borderColor: '#EF4444' }]}
                   value={form.school}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, school: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, school: val }));
+                    if (formErrors.school) setFormErrors(prev => ({ ...prev, school: null }));
+                  }}
                   placeholder="Ví dụ: Đại học Bách Khoa"
                 />
+                {formErrors.school && <Text style={styles.fieldErrorText}>{formErrors.school}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Chuyên ngành</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.major && { borderColor: '#EF4444' }]}
                   value={form.major}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, major: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, major: val }));
+                    if (formErrors.major) setFormErrors(prev => ({ ...prev, major: null }));
+                  }}
                   placeholder="Ví dụ: Công nghệ thông tin"
                 />
+                {formErrors.major && <Text style={styles.fieldErrorText}>{formErrors.major}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Năm học hiện tại</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.yearOfStudy && { borderColor: '#EF4444' }]}
                   value={form.yearOfStudy}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, yearOfStudy: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, yearOfStudy: val }));
+                    if (formErrors.yearOfStudy) setFormErrors(prev => ({ ...prev, yearOfStudy: null }));
+                  }}
                   placeholder="Ví dụ: 2"
                   keyboardType="numeric"
                 />
+                {formErrors.yearOfStudy && <Text style={styles.fieldErrorText}>{formErrors.yearOfStudy}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Địa chỉ</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ position: 'relative', marginBottom: 12, zIndex: 10 }}>
                   <TextInput
-                    style={[styles.input, { flex: 1, marginRight: 8 }]}
+                    style={[styles.input, { paddingRight: 105, marginBottom: 0 }, formErrors.address && { borderColor: '#EF4444' }]}
+                    placeholder="Nhập địa chỉ hoặc nhấn nút GPS bên dưới..."
                     value={form.address}
-                    onChangeText={(val) => setForm(prev => ({ ...prev, address: val }))}
-                    placeholder="Nhập địa chỉ nhà"
+                    onChangeText={handleAddressChange}
                   />
                   <TouchableOpacity
-                    style={styles.mapIconButton}
-                    onPress={() => {
-                      setSelectedLat(studentCoords?.latitude || 10.7769);
-                      setSelectedLng(studentCoords?.longitude || 106.7009);
-                      setEditModalVisible(false);
-                      setTimeout(() => {
-                        setMapModalVisible(true);
-                      }, 400);
+                    style={{
+                      position: 'absolute',
+                      right: 8,
+                      top: 7,
+                      backgroundColor: '#64748B',
+                      borderRadius: 10,
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      height: 34,
+                      justifyContent: 'center',
                     }}
+                    disabled={gpsScanning}
+                    onPress={handleSearchAddress}
                   >
-                    <Text style={styles.mapIconButtonText}>📍 Bản đồ</Text>
+                    {gpsScanning ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' }}>Tìm Tọa Độ</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {showSuggestions && (
+                    <View style={{
+                      position: 'absolute',
+                      top: 48,
+                      left: 0,
+                      right: 0,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 8,
+                      elevation: 4,
+                      maxHeight: 200,
+                      zIndex: 9999,
+                    }}>
+                      <ScrollView keyboardShouldPersistTaps="always">
+                        {addressSuggestions.map((item, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={{
+                              paddingVertical: 12,
+                              paddingHorizontal: 16,
+                              borderBottomWidth: index === addressSuggestions.length - 1 ? 0 : 1,
+                              borderBottomColor: '#F1F5F9',
+                            }}
+                            onPress={() => handleSelectSuggestion(item)}
+                          >
+                            <Text style={{ fontSize: 13, color: '#334155', fontWeight: '500' }}>{item.display_name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+                {formErrors.address && <Text style={styles.fieldErrorText}>{formErrors.address}</Text>}
+
+                {/* Location Buttons Row */}
+                <View style={styles.locationButtonsRow}>
+                  <TouchableOpacity
+                    style={[styles.gpsButton, { flex: 1, marginRight: 8, marginBottom: 0 }]}
+                    onPress={handleGetCurrentGPSLocation}
+                    disabled={gpsScanning}
+                  >
+                    {gpsScanning ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.gpsButtonText}>📍 GPS Hiện Tại</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.mapButton, { flex: 1 }]}
+                    onPress={handleOpenMapPicker}
+                  >
+                    <Text style={styles.mapButtonText}>🗺 Bản Đồ</Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Coordinates */}
+                {form.latitude && form.longitude ? (
+                  <View style={styles.coordsRow}>
+                    <View style={styles.coordBox}>
+                      <Text style={styles.coordLabel}>Lat: {parseFloat(form.latitude).toFixed(6)}</Text>
+                    </View>
+                    <View style={styles.coordBox}>
+                      <Text style={styles.coordLabel}>Long: {parseFloat(form.longitude).toFixed(6)}</Text>
+                    </View>
+                    <View style={[styles.coordBox, { backgroundColor: '#10B98120', borderColor: '#10B981', borderWidth: 1 }]}>
+                      <Text style={[styles.coordLabel, { color: '#10B981' }]}>✓ GPS Đã kết nối</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.coordsRow}>
+                    <View style={[styles.coordBox, { backgroundColor: '#EF444420', borderColor: '#EF4444', borderWidth: 1 }]}>
+                      <Text style={[styles.coordLabel, { color: '#EF4444' }]}>⚠ Chưa có tọa độ GPS</Text>
+                    </View>
+                  </View>
+                )}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Thành phố</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, formErrors.city && { borderColor: '#EF4444' }]}
                   value={form.city}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, city: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, city: val }));
+                    if (formErrors.city) setFormErrors(prev => ({ ...prev, city: null }));
+                  }}
                   placeholder="Ví dụ: TP. Hồ Chí Minh"
                 />
+                {formErrors.city && <Text style={styles.fieldErrorText}>{formErrors.city}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Mô tả bản thân (Bio)</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[styles.input, styles.textArea, formErrors.bio && { borderColor: '#EF4444' }]}
                   value={form.bio}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, bio: val }))}
+                  onChangeText={(val) => {
+                    setForm(prev => ({ ...prev, bio: val }));
+                    if (formErrors.bio) setFormErrors(prev => ({ ...prev, bio: null }));
+                  }}
                   placeholder="Giới thiệu ngắn gọn về bản thân bạn..."
                   multiline={true}
                   numberOfLines={3}
                 />
+                {formErrors.bio && <Text style={styles.fieldErrorText}>{formErrors.bio}</Text>}
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Kỹ năng (Phân cách bằng dấu phẩy)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={form.skills}
-                  onChangeText={(val) => setForm(prev => ({ ...prev, skills: val }))}
-                  placeholder="Pha chế, Giao tiếp, Đúng giờ..."
-                />
+                <Text style={styles.label}>Kỹ năng</Text>
+                <View style={styles.skillInputRow}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, marginBottom: 0 }, formErrors.skills && { borderColor: '#EF4444' }]}
+                    value={skillInput}
+                    onChangeText={(val) => {
+                      setSkillInput(val);
+                      if (formErrors.skills) setFormErrors(prev => ({ ...prev, skills: null }));
+                    }}
+                    placeholder="Nhập kỹ năng (ví dụ: Rửa chén)..."
+                    onSubmitEditing={handleAddSkillTag}
+                  />
+                  <TouchableOpacity style={styles.btnAddSkillTag} onPress={handleAddSkillTag}>
+                    <Ionicons name="add" size={24} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Skill tag list */}
+                <View style={styles.skillTagsWrapper}>
+                  {form.skills ? (
+                    form.skills.split(',').map(s => s.trim()).filter(Boolean).map((skill, index) => (
+                      <View key={index} style={styles.skillTagBadge}>
+                        <Text style={styles.skillTagText}>#{skill}</Text>
+                        <TouchableOpacity onPress={() => handleRemoveSkillTag(skill)} style={styles.btnRemoveSkillTag}>
+                          <Ionicons name="close" size={14} color="#94A3B8" />
+                        </TouchableOpacity>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.noSkillsText}>Chưa có kỹ năng nào được thêm.</Text>
+                  )}
+                </View>
               </View>
             </ScrollView>
 
@@ -940,7 +1743,7 @@ export default function StudentPortfolio() {
               </TouchableOpacity>
             </View>
 
-            {/* Calendar Picker Absolute Overlay inside modalContent */}
+            {/* Calendar Picker Absolute Overlay */}
             {calendarVisible && (
               <View style={styles.calOverlay}>
                 <View style={styles.calContent}>
@@ -973,9 +1776,7 @@ export default function StudentPortfolio() {
                     </View>
                   ) : (
                     <View>
-                      {/* Month / Year Nav Row */}
                       <View style={styles.calNavRow}>
-                        {/* Month Nav */}
                         <View style={styles.calNavGroup}>
                           <TouchableOpacity
                             style={styles.calNavBtn}
@@ -1006,23 +1807,22 @@ export default function StudentPortfolio() {
                           </TouchableOpacity>
                         </View>
 
-                        {/* Year Nav */}
                         <TouchableOpacity
                           style={styles.calYearBadge}
-                          onPress={() => setShowYearList(true)}
+                          onPress={() => {
+                            setShowYearList(true);
+                          }}
                         >
                           <Text style={styles.calYearBadgeText}>Năm {calYear} ▾</Text>
                         </TouchableOpacity>
                       </View>
 
-                      {/* Weekdays Row */}
                       <View style={styles.calWeekdays}>
                         {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d, i) => (
                           <Text key={i} style={styles.weekdayLabel}>{d}</Text>
                         ))}
                       </View>
 
-                      {/* Days Grid */}
                       <View style={styles.calDaysGrid}>
                         {renderCalendarDays()}
                       </View>
@@ -1041,7 +1841,7 @@ export default function StudentPortfolio() {
               </View>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Map Picker Modal */}
@@ -1056,88 +1856,38 @@ export default function StudentPortfolio() {
           }, 400);
         }}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-          <View style={{
-            height: 56,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: '#E5E9EB'
-          }}>
-            <TouchableOpacity
-              onPress={() => {
-                setMapModalVisible(false);
-                setTimeout(() => {
-                  setEditModalVisible(true);
-                }, 400);
-              }}
-              style={{ padding: 8 }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textMuted }}>Hủy</Text>
-            </TouchableOpacity>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.text }}>📍 Định vị trên bản đồ</Text>
-            <TouchableOpacity onPress={handleConfirmMapLocation} style={{ padding: 8, backgroundColor: theme.colors.student, borderRadius: 8, paddingHorizontal: 12 }}>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' }}>Xác nhận</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={{ flex: 1, position: 'relative' }}>
-            {Platform.OS === 'web' ? (
-              <iframe
-                srcDoc={`
-                  <!DOCTYPE html>
-                  <html>
-                  <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                    <style>
-                      body { margin: 0; padding: 0; }
-                      #map { height: 100vh; width: 100vw; }
-                    </style>
-                  </head>
-                  <body>
-                    <div id="map"></div>
-                    <script>
-                      var map = L.map('map', { zoomControl: true }).setView([${selectedLat}, ${selectedLng}], 15);
-                      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        <SafeAreaProvider>
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={["top", "left", "right", "bottom"]}>
+            <View style={{
+              height: 56,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: '#E5E9EB'
+            }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setMapModalVisible(false);
+                  setTimeout(() => {
+                    setEditModalVisible(true);
+                  }, 400);
+                }}
+                style={{ padding: 8 }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textMuted }}>Hủy</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.text }}>📍 Định vị trên bản đồ</Text>
+              <TouchableOpacity onPress={handleConfirmMapLocation} style={{ padding: 8, backgroundColor: theme.colors.student, borderRadius: 8, paddingHorizontal: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' }}>Xác nhận</Text>
+              </TouchableOpacity>
+            </View>
 
-                      var marker = L.marker([${selectedLat}, ${selectedLng}], {
-                        draggable: true
-                      }).addTo(map);
-
-                      function sendCoords(lat, lng) {
-                        var payload = JSON.stringify({ lat: lat, lng: lng });
-                        if (window.ReactNativeWebView) {
-                          window.ReactNativeWebView.postMessage(payload);
-                        } else {
-                          window.parent.postMessage(payload, '*');
-                        }
-                      }
-
-                      map.on('click', function(e) {
-                        marker.setLatLng(e.latlng);
-                        sendCoords(e.latlng.lat, e.latlng.lng);
-                      });
-
-                      marker.on('dragend', function(e) {
-                        var position = marker.getLatLng();
-                        sendCoords(position.lat, position.lng);
-                      });
-                    </script>
-                  </body>
-                  </html>
-                `}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-                title="Bản đồ chọn vị trí"
-              />
-            ) : (
-              <WebView
-                originWhitelist={['*']}
-                source={{
-                  html: `
+            <View style={{ flex: 1, position: 'relative' }}>
+              {Platform.OS === 'web' ? (
+                <iframe
+                  srcDoc={`
                     <!DOCTYPE html>
                     <html>
                     <head>
@@ -1152,12 +1902,10 @@ export default function StudentPortfolio() {
                     <body>
                       <div id="map"></div>
                       <script>
-                        var map = L.map('map', { zoomControl: true }).setView([${selectedLat}, ${selectedLng}], 15);
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                        var map = L.map('map', { zoomControl: true, tap: false }).setView([${mapStartCoords.lat}, ${mapStartCoords.lng}], 15);
+                        L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { attribution: 'Google Maps' }).addTo(map);
 
-                        var marker = L.marker([${selectedLat}, ${selectedLng}], {
-                          draggable: true
-                        }).addTo(map);
+                        var marker = L.marker(map.getCenter()).addTo(map);
 
                         function sendCoords(lat, lng) {
                           var payload = JSON.stringify({ lat: lat, lng: lng });
@@ -1168,58 +1916,114 @@ export default function StudentPortfolio() {
                           }
                         }
 
-                        map.on('click', function(e) {
-                          marker.setLatLng(e.latlng);
-                          sendCoords(e.latlng.lat, e.latlng.lng);
+                        map.on('move', function() {
+                          marker.setLatLng(map.getCenter());
                         });
 
-                        marker.on('dragend', function(e) {
-                          var position = marker.getLatLng();
-                          sendCoords(position.lat, position.lng);
+                        map.on('moveend', function() {
+                          var center = map.getCenter();
+                          sendCoords(center.lat, center.lng);
+                        });
+
+                        map.on('click', function(e) {
+                          map.panTo(e.latlng);
                         });
                       </script>
                     </body>
                     </html>
-                  `
-                }}
-                onMessage={(event) => {
-                  try {
-                    const data = JSON.parse(event.nativeEvent.data);
-                    if (data.lat && data.lng) {
-                      setSelectedLat(data.lat);
-                      setSelectedLng(data.lng);
+                  `}
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  title="Bản đồ chọn vị trí"
+                />
+              ) : (
+                <WebView
+                  originWhitelist={['*']}
+                  source={{
+                    html: `
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                        <style>
+                          body { margin: 0; padding: 0; }
+                          #map { height: 100vh; width: 100vw; }
+                        </style>
+                      </head>
+                      <body>
+                        <div id="map"></div>
+                        <script>
+                          var map = L.map('map', { zoomControl: true, tap: false }).setView([${mapStartCoords.lat}, ${mapStartCoords.lng}], 15);
+                          L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { attribution: 'Google Maps' }).addTo(map);
+
+                          var marker = L.marker(map.getCenter()).addTo(map);
+
+                          function sendCoords(lat, lng) {
+                            var payload = JSON.stringify({ lat: lat, lng: lng });
+                            if (window.ReactNativeWebView) {
+                              window.ReactNativeWebView.postMessage(payload);
+                            } else {
+                              window.parent.postMessage(payload, '*');
+                            }
+                          }
+
+                          map.on('move', function() {
+                            marker.setLatLng(map.getCenter());
+                          });
+
+                          map.on('moveend', function() {
+                            var center = map.getCenter();
+                            sendCoords(center.lat, center.lng);
+                          });
+
+                          map.on('click', function(e) {
+                            map.panTo(e.latlng);
+                          });
+                        </script>
+                      </body>
+                      </html>
+                    `
+                  }}
+                  onMessage={(event) => {
+                    try {
+                      const data = JSON.parse(event.nativeEvent.data);
+                      if (data.lat && data.lng) {
+                        setSelectedLat(data.lat);
+                        setSelectedLng(data.lng);
+                      }
+                    } catch (e) {
+                      console.log('Error parsing map webview message:', e);
                     }
-                  } catch (e) {
-                    console.log('Error parsing map webview message:', e);
-                  }
-                }}
-                style={{ flex: 1 }}
-              />
-            )}
-            <View style={{
-              position: 'absolute',
-              bottom: 20,
-              left: 20,
-              right: 20,
-              backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              padding: 12,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: '#E5E9EB',
-              alignItems: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.1,
-              shadowRadius: 6,
-              elevation: 4
-            }}>
-              <Text style={{ fontSize: 12, fontWeight: 'bold', color: theme.colors.student }}>Di chuyển bản đồ hoặc kéo ghim đến đúng vị trí của bạn</Text>
-              <Text style={{ fontSize: 10, color: theme.colors.textMuted, marginTop: 4 }}>
-                Tọa độ hiện tại: {selectedLat.toFixed(5)}, {selectedLng.toFixed(5)}
-              </Text>
+                  }}
+                  style={{ flex: 1 }}
+                />
+              )}
+              <View style={{
+                position: 'absolute',
+                bottom: 20,
+                left: 20,
+                right: 20,
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                padding: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: '#E5E9EB',
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 6,
+                elevation: 4
+              }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: theme.colors.student }}>Di chuyển bản đồ hoặc kéo ghim đến đúng vị trí của bạn</Text>
+                <Text style={{ fontSize: 10, color: theme.colors.textMuted, marginTop: 4 }}>
+                  Tọa độ hiện tại: {selectedLat.toFixed(5)}, {selectedLng.toFixed(5)}
+                </Text>
+              </View>
             </View>
-          </View>
-        </SafeAreaView>
+          </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
 
       {/* Menu lua chon Avatar */}
@@ -1315,193 +2119,261 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: 110,
   },
   profileHeaderCard: {
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginBottom: theme.spacing.md,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 2,
+    position: 'relative',
+    overflow: 'hidden',
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: theme.spacing.sm,
+    marginBottom: 16,
+    zIndex: 2,
   },
   avatarCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: theme.colors.student + '1A',
-    borderColor: theme.colors.student,
-    borderWidth: 2,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#FF6B001A',
+    borderColor: '#FF6B00',
+    borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderColor: theme.colors.student,
-    borderWidth: 2,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderColor: '#FFFFFF',
+    borderWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   avatarText: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: theme.colors.student,
+    color: '#FF6B00',
   },
   verifiedBadge: {
     position: 'absolute',
-    right: 0,
-    bottom: 0,
+    right: 2,
+    bottom: 2,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: theme.colors.success,
+    backgroundColor: '#3B82F6', // Blue verification badge
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: theme.colors.white,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
   verifiedText: {
-    color: theme.colors.white,
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
   },
   userName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.text,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1E293B',
+    textAlign: 'center',
   },
   userRole: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    marginTop: 2,
-    marginBottom: theme.spacing.sm,
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 4,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   userBio: {
-    fontSize: 13,
-    color: theme.colors.textMuted,
+    fontSize: 14,
+    color: '#475569',
     textAlign: 'center',
-    lineHeight: 18,
-    marginTop: 6,
-    paddingHorizontal: theme.spacing.sm,
+    lineHeight: 20,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    fontStyle: 'italic',
   },
   editButton: {
-    marginTop: theme.spacing.md,
-    backgroundColor: theme.colors.student + '15',
-    borderColor: theme.colors.student,
-    borderWidth: 1,
-    borderRadius: theme.borderRadius.sm,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    marginTop: 20,
+    backgroundColor: '#FF6B0010',
+    borderColor: '#FF6B0030',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
   editButtonText: {
-    color: theme.colors.student,
+    color: '#FF6B00',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: theme.spacing.lg,
+    marginBottom: 24,
   },
   statBox: {
     flex: 1,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.sm,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
     marginHorizontal: 4,
     alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  statBoxRating: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#EAB308',
+  },
+  statBoxShifts: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563EB',
+  },
+  statBoxPercent: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  statIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
   },
   statLabel: {
-    fontSize: 9,
-    color: theme.colors.textMuted,
+    fontSize: 10,
+    color: '#64748B',
     textAlign: 'center',
     marginTop: 4,
+    fontWeight: '600',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E293B',
   },
   detailsCard: {
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginBottom: theme.spacing.md,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
   },
   detailItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: theme.spacing.xs,
+    alignItems: 'center',
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border + '50',
+    borderBottomColor: '#F1F5F9',
+  },
+  detailLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   detailLabel: {
-    fontSize: 13,
-    color: theme.colors.textMuted,
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
   },
   detailValue: {
-    fontSize: 13,
-    color: theme.colors.text,
-    fontWeight: '500',
-  },
-  sectionHeader: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
+    fontSize: 14,
+    color: '#1E293B',
+    fontWeight: '700',
   },
   skillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: theme.spacing.lg,
+    marginBottom: 24,
+    paddingHorizontal: 4,
   },
   skillBadge: {
-    backgroundColor: theme.colors.surfaceSecondary,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: theme.borderRadius.full,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
     marginRight: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: '#E2E8F0',
   },
   featuredSkill: {
-    backgroundColor: theme.colors.student + '1A',
-    borderColor: theme.colors.student + '33',
+    backgroundColor: '#FF6B0010',
+    borderColor: '#FF6B0025',
   },
   skillText: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    fontWeight: '500',
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '600',
   },
   featuredSkillText: {
-    color: theme.colors.student,
-    fontWeight: 'bold',
+    color: '#FF6B00',
+    fontWeight: '700',
   },
   reviewsList: {
     width: '100%',
+    marginBottom: 20,
   },
   reviewCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
   },
   reviewHeader: {
     flexDirection: 'row',
@@ -1538,42 +2410,48 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 18,
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: theme.spacing.lg,
   },
   modalContent: {
     width: '100%',
-    maxWidth: 360,
-    maxHeight: '80%',
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.md,
+    maxWidth: 380,
+    maxHeight: '85%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: theme.spacing.md,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
   modalTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  closeBtnCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   closeText: {
     fontSize: 18,
@@ -1581,25 +2459,28 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   modalForm: {
-    padding: theme.spacing.md,
+    padding: 20,
   },
   formGroup: {
-    marginBottom: theme.spacing.sm,
+    marginBottom: 16,
   },
   label: {
     fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.textMuted,
-    marginBottom: 4,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.sm,
-    padding: 10,
-    fontSize: 13,
-    color: theme.colors.text,
-    backgroundColor: theme.colors.background,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    color: '#1E293B',
+    backgroundColor: '#F8FAFC',
   },
   textArea: {
     height: 80,
@@ -1608,41 +2489,48 @@ const styles = StyleSheet.create({
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    padding: theme.spacing.md,
+    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    paddingBottom: Platform.OS === 'ios' ? 24 : theme.spacing.md,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
   },
   btnCancel: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: theme.borderRadius.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
     marginRight: theme.spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   btnCancelText: {
-    color: theme.colors.textMuted,
+    color: '#64748B',
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: 14,
   },
   btnSave: {
-    backgroundColor: theme.colors.student,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: theme.borderRadius.sm,
+    backgroundColor: '#FF6B00',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#FF6B00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   btnSaveDisabled: {
-    backgroundColor: theme.colors.textLight,
-    opacity: 0.6,
+    backgroundColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   btnSaveText: {
-    color: theme.colors.white,
-    fontWeight: '600',
-    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
-  // Gender Selector Styles
   genderContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1650,67 +2538,61 @@ const styles = StyleSheet.create({
   },
   genderOption: {
     flex: 1,
-    height: 40,
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
+    height: 44,
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: 4,
   },
   genderOptionActive: {
-    backgroundColor: theme.colors.student + '15',
-    borderColor: theme.colors.student,
+    backgroundColor: '#FF6B0015',
+    borderColor: '#FF6B00',
   },
   genderOptionText: {
     fontSize: 13,
-    color: theme.colors.textMuted,
+    color: '#64748B',
     fontWeight: '500',
   },
   genderOptionActiveText: {
-    color: theme.colors.student,
+    color: '#FF6B00',
     fontWeight: 'bold',
   },
-
-  // DatePicker styles
   datePickerBtn: {
-    height: 46,
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
+    height: 48,
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: theme.borderRadius.sm,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
   },
   datePickerBtnText: {
     fontSize: 13,
-    color: theme.colors.text,
+    color: '#1E293B',
     fontWeight: '500',
   },
   calendarIcon: {
     fontSize: 16,
   },
-
-  // Dropdown selector styles
   dropdownBtn: {
-    height: 46,
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
+    height: 48,
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: theme.borderRadius.sm,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
   },
   dropdownBtnText: {
     fontSize: 13,
-    color: theme.colors.text,
+    color: '#1E293B',
     fontWeight: '500',
   },
   dropdownIcon: {
@@ -1718,30 +2600,28 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
   },
   dropdownList: {
-    backgroundColor: theme.colors.white,
-    borderColor: theme.colors.border,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: theme.borderRadius.sm,
-    marginTop: 2,
+    borderRadius: 12,
+    marginTop: 4,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   dropdownItem: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderBottomWidth: 0.5,
-    borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   dropdownItemText: {
     fontSize: 13,
-    color: theme.colors.text,
+    color: '#1E293B',
   },
-
-  // Custom Calendar Styles
   calOverlay: {
     position: 'absolute',
     top: 0,
@@ -1996,5 +2876,188 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
+  locationButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  gpsButton: {
+    backgroundColor: '#10B981',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  gpsButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  mapButton: {
+    backgroundColor: '#FF6B00',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF6B00',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  mapButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  coordsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  coordBox: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 99,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  coordLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#64748B',
+  },
+  skillInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  btnAddSkillTag: {
+    backgroundColor: '#FF6B00',
+    width: 48,
+    height: 48,
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  skillTagsWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  skillTagBadge: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FFD8A8',
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  skillTagText: {
+    color: '#D9480F',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  btnRemoveSkillTag: {
+    marginLeft: 6,
+    padding: 2,
+  },
+  noSkillsText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  fieldErrorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  errorDialogOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 999,
+  },
+  errorDialogContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '85%',
+    maxWidth: 320,
+    padding: 24,
+    alignItems: 'center',
+    position: 'relative',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  errorDialogCloseBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorDialogIconBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  errorDialogTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 8,
+  },
+  errorDialogScroll: {
+    maxHeight: 180,
+    width: '100%',
+    marginBottom: 16,
+  },
+  errorDialogText: {
+    fontSize: 13,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  errorDialogButton: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  errorDialogButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });
-

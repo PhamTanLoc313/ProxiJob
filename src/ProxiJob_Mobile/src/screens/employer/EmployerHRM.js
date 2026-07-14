@@ -13,16 +13,22 @@ import {
 } from 'react-native';
 import { AppContext } from '../../context/AppContext';
 import * as Font from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
 import { getAvatarSource } from '../../utils/avatarHelper';
+import { handleCallUser } from '../../utils/callHelper';
+import { useStaffListQuery, useAddStaffMemberMutation, useRemoveStaffMemberMutation, useUpdateStaffMemberMutation } from '../../hooks/queries';
 
 export default function EmployerHRM() {
   const {
-    staffList,
-    addStaffMember,
-    removeStaffMember,
-    loadStaffList,
-    user
+    user,
+    navigateTo,
+    showToast
   } = useContext(AppContext);
+
+  const { data: staffList = [], isLoading: loadingStaff, refetch: loadStaffList } = useStaffListQuery(user);
+  const addStaffMutation = useAddStaffMemberMutation(user, showToast);
+  const removeStaffMutation = useRemoveStaffMemberMutation(user, showToast);
+  const updateStaffMutation = useUpdateStaffMemberMutation(user, showToast);
 
   const [activeTab, setActiveTab] = useState('internal'); // 'internal' | 'single'
   const [modalVisible, setModalVisible] = useState(false);
@@ -31,8 +37,10 @@ export default function EmployerHRM() {
   const [newStaffPhone, setNewStaffPhone] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [errors, setErrors] = useState({});
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [expandedIds, setExpandedIds] = useState({});
+  const [editingStaff, setEditingStaff] = useState(null);
 
   const toggleExpand = (id) => {
     setExpandedIds(prev => ({
@@ -70,22 +78,87 @@ export default function EmployerHRM() {
   const internalStaff = (staffList || []).filter(s => !s.isExternal);
   const externalStaff = (staffList || []).filter(s => s.isExternal);
 
-  const handleAddStaff = async () => {
-    if (newStaffName.trim() && newStaffRole.trim() && newStaffPhone.trim()) {
-      setIsAdding(true);
-      await addStaffMember(newStaffName, newStaffRole, newStaffPhone);
+  const handleSaveStaff = async () => {
+    const newErrors = {};
+    if (!newStaffName.trim()) {
+      newErrors.name = 'Vui lòng nhập họ và tên nhân viên!';
+    }
+    if (!newStaffRole.trim()) {
+      newErrors.role = 'Vui lòng nhập vị trí/vai trò!';
+    }
+    
+    const phoneTrimmed = newStaffPhone.trim();
+    if (!phoneTrimmed) {
+      newErrors.phone = 'Vui lòng nhập số điện thoại!';
+    } else if (!phoneTrimmed.startsWith('0')) {
+      newErrors.phone = 'Số điện thoại phải bắt đầu bằng số 0!';
+    } else if (phoneTrimmed.length !== 10 && phoneTrimmed.length !== 11) {
+      newErrors.phone = 'Số điện thoại phải có 10 hoặc 11 chữ số!';
+    } else if (!/^\d+$/.test(phoneTrimmed)) {
+      newErrors.phone = 'Số điện thoại chỉ được chứa các chữ số!';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
+    setIsAdding(true);
+    try {
+      if (editingStaff) {
+        await updateStaffMutation.mutateAsync({
+          id: editingStaff.id,
+          name: newStaffName,
+          role: newStaffRole,
+          phone: newStaffPhone
+        });
+      } else {
+        await addStaffMutation.mutateAsync({
+          name: newStaffName,
+          role: newStaffRole,
+          phone: newStaffPhone
+        });
+      }
       setNewStaffName('');
       setNewStaffRole('');
       setNewStaffPhone('');
+      setEditingStaff(null);
       setModalVisible(false);
+    } catch (err) {
+      console.log('Error saving staff:', err);
+    } finally {
       setIsAdding(false);
     }
   };
 
+  const handleEditPress = (staff) => {
+    setEditingStaff(staff);
+    setNewStaffName(staff.name);
+    setNewStaffRole(staff.role);
+    setNewStaffPhone(staff.phone);
+    setErrors({});
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setNewStaffName('');
+    setNewStaffRole('');
+    setNewStaffPhone('');
+    setEditingStaff(null);
+    setErrors({});
+    setModalVisible(false);
+  };
+
   const handleDelete = async (id) => {
     setDeletingId(id);
-    await removeStaffMember(id);
-    setDeletingId(null);
+    try {
+      await removeStaffMutation.mutateAsync(id);
+    } catch (err) {
+      console.log('Error deleting staff:', err);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const getInitials = (name) => {
@@ -107,7 +180,7 @@ export default function EmployerHRM() {
     const isFirst = index === 0;
     const isExpanded = !!expandedIds[staff.id];
     // Premium Bento Avatar Image
-    const avatarSource = getAvatarSource(null, staff.gender, staff.name);
+    const avatarSource = getAvatarSource(staff.avatarUrl, staff.gender, staff.name);
 
     return (
       <TouchableOpacity
@@ -116,13 +189,11 @@ export default function EmployerHRM() {
         onPress={() => toggleExpand(staff.id)}
         style={[styles.accordionItem, isExpanded && styles.accordionItemActive]}
       >
-        {/* Viewfinder corners on first card */}
-        {isFirst && (
-          <>
-            <View style={styles.viewfinderTL} />
-            <View style={styles.viewfinderBR} />
-          </>
-        )}
+        {/* Viewfinder corners on all cards */}
+        <>
+          <View style={styles.viewfinderTL} />
+          <View style={styles.viewfinderBR} />
+        </>
 
         <View style={styles.accordionHeader}>
           <View style={styles.headerLeft}>
@@ -155,6 +226,7 @@ export default function EmployerHRM() {
                 activeOpacity={0.7}
                 onPress={(e) => {
                   e.stopPropagation();
+                  handleCallUser(staff.phone);
                 }}
               >
                 <Text style={[styles.actionBtnText, { color: '#FF6B00' }]}>📞</Text>
@@ -164,6 +236,17 @@ export default function EmployerHRM() {
                 activeOpacity={0.7}
                 onPress={(e) => {
                   e.stopPropagation();
+                  if (staff.userId) {
+                    navigateTo('employer_chat', {
+                      partnerId: staff.userId,
+                      partnerName: staff.name,
+                      partnerPhone: staff.phone,
+                      partnerGender: staff.gender,
+                      fromScreen: 'employer_hrm'
+                    });
+                  } else {
+                    navigateTo('employer_chat');
+                  }
                 }}
               >
                 <Text style={[styles.actionBtnText, { color: '#FF6B00' }]}>💬</Text>
@@ -190,21 +273,34 @@ export default function EmployerHRM() {
                   <Text style={styles.metaValueText}>{staff.phone}</Text>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.deleteBtnFull}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleDelete(staff.id);
-                  }}
-                  disabled={isDeleting}
-                  activeOpacity={0.8}
-                >
-                  {isDeleting ? (
-                    <ActivityIndicator size="small" color="#BA1A1A" />
-                  ) : (
-                    <Text style={styles.deleteBtnText}>XÓA NHÂN VIÊN</Text>
-                  )}
-                </TouchableOpacity>
+                <View style={styles.buttonsRow}>
+                  <TouchableOpacity
+                    style={styles.editBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleEditPress(staff);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.editBtnText}>✏️ Chỉnh sửa</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDelete(staff.id);
+                    }}
+                    disabled={isDeleting}
+                    activeOpacity={0.8}
+                  >
+                    {isDeleting ? (
+                      <ActivityIndicator size="small" color="#BA1A1A" />
+                    ) : (
+                      <Text style={styles.deleteBtnText}>🗑️ Xóa</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
               <View style={styles.accordionInnerCard}>
@@ -238,21 +334,34 @@ export default function EmployerHRM() {
                   </View>
                 )}
 
-                <TouchableOpacity
-                  style={styles.deleteBtnFull}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleDelete(staff.id);
-                  }}
-                  disabled={isDeleting}
-                  activeOpacity={0.8}
-                >
-                  {isDeleting ? (
-                    <ActivityIndicator size="small" color="#BA1A1A" />
-                  ) : (
-                    <Text style={styles.deleteBtnText}>XÓA NHÂN VIÊN</Text>
-                  )}
-                </TouchableOpacity>
+                <View style={styles.buttonsRow}>
+                  <TouchableOpacity
+                    style={styles.editBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleEditPress(staff);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.editBtnText}>✏️ Chỉnh sửa</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDelete(staff.id);
+                    }}
+                    disabled={isDeleting}
+                    activeOpacity={0.8}
+                  >
+                    {isDeleting ? (
+                      <ActivityIndicator size="small" color="#BA1A1A" />
+                    ) : (
+                      <Text style={styles.deleteBtnText}>🗑️ Xóa</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </View>
@@ -263,36 +372,22 @@ export default function EmployerHRM() {
 
   // ─── External Staff Card (VÃNG LAI) ────────
   const renderExternalCard = (staff, index) => {
-    const isFirst = index === 0;
+    const isDeleting = deletingId === staff.id;
     const isExpanded = !!expandedIds[staff.id];
-    // Simulate different shift states based on position
-    const shiftStates = [
-      { icon: '🕐', label: 'Ca hiện tại:', value: '16:50 - 20:50', status: 'AI Face Verified', statusColor: '#A04100', bgColor: '#F8FAFC' },
-      { icon: '📅', label: 'Lịch làm:', value: '08:00 - 12:00 (Mai)', status: 'Chờ vào ca ⏳', statusColor: '#5A4136', bgColor: '#F8FAFC' },
-      { icon: '🕑', label: 'Kết thúc:', value: '13:00 - 17:00', status: 'Chờ quyết toán 💰', statusColor: '#A04100', bgColor: '#F8FAFC' },
-    ];
-    const shiftState = shiftStates[index % shiftStates.length];
-    const isCompleted = index % 3 === 2; // Third card has reduced opacity
-    const avatarSource = getAvatarSource(null, staff.gender, staff.name);
+    const avatarSource = getAvatarSource(staff.avatarUrl, staff.gender, staff.name);
 
     return (
       <TouchableOpacity
         key={staff.id}
         activeOpacity={0.9}
         onPress={() => toggleExpand(staff.id)}
-        style={[
-          styles.accordionItem,
-          isExpanded && styles.accordionItemActive,
-          isCompleted && { opacity: 0.8 }
-        ]}
+        style={[styles.accordionItem, isExpanded && styles.accordionItemActive]}
       >
-        {/* Viewfinder corners on first card */}
-        {isFirst && (
-          <>
-            <View style={styles.viewfinderTL} />
-            <View style={styles.viewfinderBR} />
-          </>
-        )}
+        {/* Viewfinder corners on all cards */}
+        <>
+          <View style={styles.viewfinderTL} />
+          <View style={styles.viewfinderBR} />
+        </>
 
         <View style={styles.accordionHeader}>
           <View style={styles.headerLeft}>
@@ -325,6 +420,7 @@ export default function EmployerHRM() {
                 activeOpacity={0.7}
                 onPress={(e) => {
                   e.stopPropagation();
+                  handleCallUser(staff.phone);
                 }}
               >
                 <Text style={[styles.actionBtnText, { color: '#5B00DF' }]}>📞</Text>
@@ -334,6 +430,17 @@ export default function EmployerHRM() {
                 activeOpacity={0.7}
                 onPress={(e) => {
                   e.stopPropagation();
+                  if (staff.userId) {
+                    navigateTo('employer_chat', {
+                      partnerId: staff.userId,
+                      partnerName: staff.name,
+                      partnerPhone: staff.phone,
+                      partnerGender: staff.gender,
+                      fromScreen: 'employer_hrm'
+                    });
+                  } else {
+                    navigateTo('employer_chat');
+                  }
                 }}
               >
                 <Text style={[styles.actionBtnText, { color: '#5B00DF' }]}>💬</Text>
@@ -348,57 +455,68 @@ export default function EmployerHRM() {
         {/* Accordion Content */}
         {isExpanded && (
           <View style={styles.accordionContentContainer}>
-            {staff.name === 'Lương Hoàng Thông' || index % 3 === 2 ? (
-              <View style={styles.accordionInnerCard}>
-                <View style={styles.flexRowBetween}>
-                  <Text style={styles.metaLabelText}>LỊCH LÀM VIỆC</Text>
-                  <Text style={[styles.badgeText, { color: '#5B00DF', fontWeight: 'bold' }]}>Full-time</Text>
+            <View style={styles.accordionInnerCard}>
+              <View style={styles.grid2Col}>
+                <View style={styles.gridCol}>
+                  <Text style={styles.metaLabelText}>LOẠI NHÂN SỰ</Text>
+                  <Text style={styles.metaValueText}>Vãng lai</Text>
                 </View>
-                <Text style={styles.scheduleText}>Tất cả các ngày: 08:00 - 17:00</Text>
+                <View style={styles.gridCol}>
+                  <Text style={styles.metaLabelText}>HIỆU SUẤT</Text>
+                  <View style={styles.ratingWrapper}>
+                    <Text style={styles.metaValueText}>4.8</Text>
+                    <Text style={styles.starIconYellow}>★</Text>
+                  </View>
+                </View>
               </View>
-            ) : (
-              <View style={{ gap: 8 }}>
-                <View style={styles.accordionInnerCard}>
-                  <View style={styles.flexRowBetween}>
-                    <Text style={styles.metaLabelText}>TRẠNG THÁI CA</Text>
-                    <View style={[styles.badgeItem, { backgroundColor: 'rgba(255, 107, 0, 0.1)', paddingHorizontal: 8, paddingVertical: 2 }]}>
-                      <Text style={[styles.badgeText, { color: '#FF6B00', fontWeight: 'bold' }]}>Đang làm</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.scheduleText}>
-                    {shiftState.label} {shiftState.value}
-                  </Text>
-                  <View style={styles.aiVerifiedRow}>
-                    <Text style={[styles.verifiedIcon, { color: '#5B00DF' }]}>✓</Text>
-                    <Text style={styles.aiVerifiedText}>AI VERIFIED</Text>
-                  </View>
-                </View>
 
-                {/* Show approve/reject buttons for second card pattern */}
-                {index % 3 === 1 && (
-                  <View style={styles.approvalButtonsRow}>
-                    <TouchableOpacity
-                      style={styles.rejectBtn}
-                      activeOpacity={0.8}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      <Text style={styles.rejectBtnText}>TỪ CHỐI</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.approveBtn}
-                      activeOpacity={0.85}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      <Text style={styles.approveBtnText}>DUYỆT ĐỔI ⚡</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+              <View style={styles.contactDetailsRow}>
+                <Text style={styles.metaLabelText}>SỐ ĐIỆN THOẠI</Text>
+                <Text style={styles.metaValueText}>{staff.phone}</Text>
               </View>
-            )}
+
+              {staff.shiftsCount > 0 && (
+                <View style={[styles.contactDetailsRow, { marginTop: 8 }]}>
+                  <Text style={styles.metaLabelText}>SỐ CA ĐÃ LÀM</Text>
+                  <Text style={styles.metaValueText}>{staff.shiftsCount} ca</Text>
+                </View>
+              )}
+
+              <View style={styles.buttonsRow}>
+                <TouchableOpacity
+                  style={styles.editBtn}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleEditPress(staff);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="pencil-outline" size={13} color="#5B00DF" style={{ marginRight: 4 }} />
+                    <Text style={styles.editBtnText}>Chỉnh sửa</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDelete(staff.id);
+                  }}
+                  disabled={isDeleting}
+                  activeOpacity={0.8}
+                >
+                  {isDeleting ? (
+                    <ActivityIndicator size="small" color="#BA1A1A" />
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="trash-outline" size={13} color="#BA1A1A" style={{ marginRight: 4 }} />
+                      <Text style={styles.deleteBtnText}>Xóa</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         )}
       </TouchableOpacity>
@@ -413,7 +531,7 @@ export default function EmployerHRM() {
     </View>
   );
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || loadingStaff) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F7FAFC' }}>
         <ActivityIndicator size="large" color="#FF6B00" />
@@ -424,14 +542,8 @@ export default function EmployerHRM() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Big Title & Description */}
-        <View style={styles.headerSection}>
-          <Text style={styles.heroTitleCentered}>QUẢN LÝ NHÂN VIÊN</Text>
-          <Text style={styles.heroSubtitle}>Theo dõi ca làm, thông tin liên lạc và phê duyệt lịch đổi ca của nhân viên nội bộ & vãng lai</Text>
-        </View>
-
         {/* Capsule Tab Selector - 2 tabs */}
-        <View style={styles.tabContainer}>
+        <View style={[styles.tabContainer, { marginTop: 16 }]}>
           <TouchableOpacity
             style={[styles.tabBtn, activeTab === 'internal' && styles.tabBtnActive]}
             onPress={() => setActiveTab('internal')}
@@ -476,24 +588,24 @@ export default function EmployerHRM() {
         <View style={styles.fabPlusVertical} />
       </TouchableOpacity>
 
-      {/* Add Staff Modal */}
+      {/* Add/Edit Staff Modal */}
       <Modal
         visible={modalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Thêm Nhân Viên Mới</Text>
-                <Text style={styles.modalSubtitle}>Thêm nhân viên cố định vào hệ thống</Text>
+                <Text style={styles.modalTitle}>{editingStaff ? 'Chỉnh Sửa Nhân Viên' : 'Thêm Nhân Viên Mới'}</Text>
+                <Text style={styles.modalSubtitle}>{editingStaff ? 'Cập nhật thông tin nhân viên cố định' : 'Thêm nhân viên cố định vào hệ thống'}</Text>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
-                onPress={() => setModalVisible(false)}
+                onPress={handleCloseModal}
               >
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
@@ -510,6 +622,7 @@ export default function EmployerHRM() {
                   onChangeText={setNewStaffName}
                 />
               </View>
+              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
 
               <Text style={styles.inputLabel}>VỊ TRÍ / VAI TRÒ</Text>
               <View style={styles.inputWrapper}>
@@ -521,6 +634,7 @@ export default function EmployerHRM() {
                   onChangeText={setNewStaffRole}
                 />
               </View>
+              {errors.role && <Text style={styles.errorText}>{errors.role}</Text>}
 
               <Text style={styles.inputLabel}>SỐ ĐIỆN THOẠI</Text>
               <View style={styles.inputWrapper}>
@@ -533,20 +647,21 @@ export default function EmployerHRM() {
                   onChangeText={setNewStaffPhone}
                 />
               </View>
+              {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
 
               <TouchableOpacity
                 style={[
                   styles.submitBtn,
-                  (!newStaffName.trim() || !newStaffRole.trim() || !newStaffPhone.trim()) && styles.submitBtnDisabled
+                  isAdding && styles.submitBtnDisabled
                 ]}
-                onPress={handleAddStaff}
-                disabled={isAdding || !newStaffName.trim() || !newStaffRole.trim() || !newStaffPhone.trim()}
+                onPress={handleSaveStaff}
+                disabled={isAdding}
                 activeOpacity={0.85}
               >
                 {isAdding ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.submitBtnText}>Xác nhận thêm nhân viên</Text>
+                  <Text style={styles.submitBtnText}>{editingStaff ? 'Lưu thay đổi' : 'Xác nhận thêm nhân viên'}</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
@@ -1053,8 +1168,8 @@ const styles = StyleSheet.create({
   // ─── FAB ──────────────────────────────────
   fab: {
     position: 'absolute',
-    bottom: 28,
-    right: 20,
+    bottom: 110,
+    right: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -1090,39 +1205,50 @@ const styles = StyleSheet.create({
   // ─── Modal ────────────────────────────────
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingBottom: 40,
+    borderRadius: 24,
+    paddingBottom: 24,
+    width: '100%',
+    maxWidth: 340,
     maxHeight: '85%',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 20,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F4F6',
   },
   modalTitle: {
     fontFamily: FONT_EXTRABOLD,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: getFontWeight('800'),
     color: '#181C1E',
     letterSpacing: -0.3,
   },
   modalSubtitle: {
     fontFamily: FONT_REGULAR,
-    fontSize: 12,
+    fontSize: 11,
     color: '#5A4136',
     opacity: 0.6,
-    marginTop: 3,
+    marginTop: 2,
   },
   modalCloseBtn: {
     width: 32,
@@ -1139,8 +1265,8 @@ const styles = StyleSheet.create({
     fontWeight: getFontWeight('700'),
   },
   modalForm: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   inputLabel: {
     fontFamily: FONT_EXTRABOLD,
@@ -1165,6 +1291,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#181C1E',
   },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: -16,
+    marginBottom: 16,
+    marginLeft: 4,
+    fontFamily: FONT_REGULAR,
+  },
   submitBtn: {
     height: 52,
     borderRadius: 9999,
@@ -1188,5 +1323,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: getFontWeight('800'),
+  },
+  buttonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  editBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 107, 0, 0.1)',
+    paddingVertical: 10,
+    borderRadius: 9999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editBtnText: {
+    fontFamily: FONT_BOLD,
+    fontSize: 12,
+    fontWeight: getFontWeight('700'),
+    color: '#FF6B00',
+  },
+  deleteBtn: {
+    flex: 1,
+    backgroundColor: '#ffdad6',
+    paddingVertical: 10,
+    borderRadius: 9999,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

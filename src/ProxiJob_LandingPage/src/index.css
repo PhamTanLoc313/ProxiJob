@@ -1,0 +1,293 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand colors */
+  --color-primary: #a04100;
+  --color-primary-container: #ff6b00;
+  --color-secondary: #5b00df;
+  --color-tertiary: #624abf;
+  --color-brand-bg: #f7fafc;
+  --color-brand-tile: #ffffff;
+  --color-brand-border: #e5e9eb;
+  --color-brand-text: #181c1e;
+  --color-brand-text-variant: #5a4136;
+
+  /* Theme surface containers mapping */
+  --color-surface: #f7fafc;
+  --color-on-surface: #181c1e;
+  --color-on-surface-variant: #5a4136;
+  --color-surface-container-low: #f1f4f6;
+  --color-outline-variant: #e2bfb0;
+
+  /* Typography */
+  --font-sora: 'Plus Jakarta Sans', sans-serif;
+  --font-hanken: 'Inter', sans-serif;
+
+  /* Spacing and Radius */
+  --spacing-bento-gap: 24px;
+  --spacing-container-padding: 32px;
+  --spacing-section-margin: 64px;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;      /* 8px */
+  --radius-md: 1.5rem;     /* 24px */
+  --radius-lg: 2rem;       /* 32px */
+  --radius-xl: 3rem;       /* 48px */
+  --radius-4xl: 2.5rem;    /* 40px - matching user bento cards */
+
+  /* Shadows */
+  --shadow-organic: 0 24px 60px rgba(15, 23, 42, 0.04);
+  --shadow-glow: 0 0 15px rgba(255, 107, 0, 0.3);
+  --shadow-glow-violet: 0 0 15px rgba(91, 0, 223, 0.15);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    background-color: #f7fafc;
+    font-size: 14px; /* Mobile base */
+  }
+
+  @media (min-width: 768px) {
+    html {
+      font-size: 15px; /* Tablet base */
+    }
+  }
+
+  @media (min-width: 1024px) {
+    html {
+      font-size: 16px; /* Laptop & Desktop standard base */
+    }
+  }
+  
+  body {
+    font-family: 'Inter', 'Plus Jakarta Sans', sans-serif;
+    color: #0f172a; /* slate-900 */
+    background-color: transparent;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Radar waves animations */
+  .radar-wave {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: rgba(255, 107, 0, 0.04);
+    border: 1px solid rgba(255, 107, 0, 0.15);
+    animation: radar-ping 4s infinite linear;
+    pointer-events: none;
+  }
+
+  @keyframes radar-ping {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0.8; }
+    100% { transform: translate(-50%, -50%) scale(3); opacity: 0; }
+  }
+
+  /* Viewfinder corner brackets decoration */
+  .viewfinder-container {
+    position: relative;
+  }
+
+  .viewfinder-bracket {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-color: #ff6b00;
+    border-width: 3px;
+    pointer-events: none;
+  }
+
+  .viewfinder-top-left {
+    top: -12px;
+    left: -12px;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  .viewfinder-bottom-right {
+    bottom: -12px;
+    right: -12px;
+    border-left: 0;
+    border-top: 0;
+  }
+
+  /* Dot Grid Pattern */
+  .map-bg-pattern {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .grid-bg-dots {
+    background-image: radial-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .grid-bg-lines {
+    background-image: 
+      linear-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 0, 0, 0.02) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+  
+  .animate-glow {
+    animation: pulse-glow 2s infinite ease-in-out;
+  }
+
+  /* Bento Card Base styling with high-end Acrylic Glassmorphism */
+  .bento-card {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .bento-card:hover {
+    background: rgba(255, 255, 255, 0.85);
+    transform: translateY(-6px) scale(1.005);
+    box-shadow: 0 45px 85px -15px rgba(15, 23, 42, 0.08);
+    border-color: rgba(255, 107, 0, 0.35);
+    z-index: 10;
+  }
+
+  /* Keyframe Scroll Animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in-up {
+    opacity: 0;
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+
+  /* Custom flow path animation */
+  @keyframes flowLight {
+    0% {
+      stroke-dashoffset: 340;
+    }
+    100% {
+      stroke-dashoffset: -340;
+    }
+  }
+  .animate-flow-light {
+    animation: flowLight 4s infinite linear;
+  }
+
+  /* Floating badge animations */
+  @keyframes floatSlow {
+    0%, 100% { transform: translateY(0px) rotate(-1deg); }
+    50% { transform: translateY(-10px) rotate(1deg); }
+  }
+  @keyframes floatMedium {
+    0%, 100% { transform: translateY(0px) rotate(1deg); }
+    50% { transform: translateY(-15px) rotate(-1deg); }
+  }
+  @keyframes floatFast {
+    0%, 100% { transform: translateY(0px) rotate(-2deg); }
+    50% { transform: translateY(-8px) rotate(2deg); }
+  }
+  .animate-float-slow {
+    animation: floatSlow 5s infinite ease-in-out;
+  }
+  .animate-float-medium {
+    animation: floatMedium 4.2s infinite ease-in-out;
+  }
+  .animate-float-fast {
+    animation: floatFast 3.4s infinite ease-in-out;
+  }
+
+  /* Drifting background gradient blobs */
+  @keyframes driftSlow {
+    0%, 100% { transform: translate(0px, 0px) scale(1); }
+    33% { transform: translate(30px, -20px) scale(1.08); }
+    66% { transform: translate(-15px, 15px) scale(0.95); }
+  }
+  @keyframes driftMedium {
+    0%, 100% { transform: translate(0px, 0px) scale(1); }
+    50% { transform: translate(-40px, 30px) scale(1.12); }
+  }
+  .animate-drift-slow {
+    animation: driftSlow 28s infinite ease-in-out;
+  }
+  .animate-drift-medium {
+    animation: driftMedium 22s infinite ease-in-out;
+  }
+
+  /* Smooth color shift animation for mesh gradients */
+  @keyframes hueShift {
+    0% { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+  }
+  .animate-hue-shift {
+    animation: hueShift 35s infinite linear;
+  }
+
+  /* Wavy breathing orange background gradient blobs */
+  @keyframes orangeWaveFirst {
+    0%, 100% {
+      transform: translate(0px, 0px) scale(1) rotate(0deg);
+      opacity: 0.8;
+    }
+    50% {
+      transform: translate(-30px, 20px) scale(1.15) rotate(15deg);
+      opacity: 1;
+    }
+  }
+  @keyframes orangeWaveSecond {
+    0%, 100% {
+      transform: translate(0px, 0px) scale(1) rotate(0deg);
+      opacity: 0.6;
+    }
+    50% {
+      transform: translate(30px, -20px) scale(0.85) rotate(-15deg);
+      opacity: 0.85;
+    }
+  }
+  .animate-orange-wave-first {
+    animation: orangeWaveFirst 14s infinite ease-in-out;
+  }
+  .animate-orange-wave-second {
+    animation: orangeWaveSecond 18s infinite ease-in-out;
+  }
+
+  /* Left-side ambient wave animation */
+  @keyframes orangeWaveLeft {
+    0%, 100% {
+      transform: translate(0px, 0px) scale(1) rotate(0deg);
+      opacity: 0.7;
+    }
+    50% {
+      transform: translate(25px, 20px) scale(1.12) rotate(10deg);
+      opacity: 0.95;
+    }
+  }
+  .animate-orange-wave-left {
+    animation: orangeWaveLeft 16s infinite ease-in-out;
+  }
+}
