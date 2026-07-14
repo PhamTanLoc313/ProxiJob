@@ -191,63 +191,182 @@ namespace ProxiJob.Identity.API.Controllers
         }
 
         /// <summary>
-        /// Google OAuth callback endpoint.
-        /// Google redirects here after user authenticates. Since the id_token arrives in the
-        /// URL fragment (#), we serve a small HTML page that reads the fragment client-side
-        /// and redirects to the mobile app's custom scheme (proxijob://).
-        /// This removes the dependency on Expo auth proxy (auth.expo.io).
+        /// Server-side Google OAuth: Step 1 - Redirect user to Google login page.
+        /// Mobile app opens this URL in a browser. Backend handles everything.
+        /// </summary>
+        [HttpGet("google-login")]
+        [AllowAnonymous]
+        public IActionResult GoogleLoginRedirect([FromQuery] string role = "student")
+        {
+            var clientId = "761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com";
+            // Build the callback URL dynamically based on the incoming request
+            var scheme = Request.Scheme;
+            var host = Request.Host;
+            // In production behind reverse proxy, use X-Forwarded headers
+            if (Request.Headers.ContainsKey("X-Forwarded-Proto"))
+                scheme = Request.Headers["X-Forwarded-Proto"].ToString();
+            if (Request.Headers.ContainsKey("X-Forwarded-Host"))
+                host = new HostString(Request.Headers["X-Forwarded-Host"].ToString());
+
+            var callbackUrl = $"{scheme}://{host}/api/auth/google-callback";
+            
+            var state = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(role));
+            var nonce = Guid.NewGuid().ToString("N");
+
+            var googleUrl = $"https://accounts.google.com/o/oauth2/v2/auth?" +
+                $"client_id={clientId}" +
+                $"&redirect_uri={Uri.EscapeDataString(callbackUrl)}" +
+                $"&response_type=code" +
+                $"&scope=openid%20profile%20email" +
+                $"&state={state}" +
+                $"&nonce={nonce}" +
+                $"&access_type=offline" +
+                $"&prompt=select_account";
+
+            return Redirect(googleUrl);
+        }
+
+        /// <summary>
+        /// Server-side Google OAuth: Step 2 - Handle callback from Google.
+        /// Exchanges authorization code for tokens, creates/finds user, issues JWT,
+        /// then redirects to mobile app via custom scheme with JWT in URL.
         /// </summary>
         [HttpGet("google-callback")]
         [AllowAnonymous]
-        public IActionResult GoogleCallback()
+        public async Task<IActionResult> GoogleCallback(
+            [FromQuery] string? code, 
+            [FromQuery] string? error,
+            [FromQuery] string? state,
+            CancellationToken cancellationToken)
         {
-            var html = @"<!DOCTYPE html>
-<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>ProxiJob - Đang chuyển hướng...</title>
-<style>
-body{font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f8fafc;color:#334155}
-.container{text-align:center;padding:2rem}
-.spinner{width:40px;height:40px;border:4px solid #e2e8f0;border-top:4px solid #3b82f6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem}
-@keyframes spin{to{transform:rotate(360deg)}}
-</style></head><body>
-<div class='container'>
-<div class='spinner'></div>
-<p>Đang chuyển hướng về ProxiJob...</p>
-<p id='error' style='color:#ef4444;display:none'></p>
-</div>
+            // Handle Google errors
+            if (!string.IsNullOrEmpty(error))
+            {
+                return Content(BuildErrorHtml($"Google đăng nhập thất bại: {error}"), "text/html");
+            }
+
+            if (string.IsNullOrEmpty(code))
+            {
+                return Content(BuildErrorHtml("Không nhận được mã xác thực từ Google."), "text/html");
+            }
+
+            try
+            {
+                // Decode role from state
+                var role = "student";
+                if (!string.IsNullOrEmpty(state))
+                {
+                    try { role = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(state)); }
+                    catch { /* fallback to student */ }
+                }
+
+                // Build callback URL (same as in google-login)
+                var scheme = Request.Scheme;
+                var host = Request.Host;
+                if (Request.Headers.ContainsKey("X-Forwarded-Proto"))
+                    scheme = Request.Headers["X-Forwarded-Proto"].ToString();
+                if (Request.Headers.ContainsKey("X-Forwarded-Host"))
+                    host = new HostString(Request.Headers["X-Forwarded-Host"].ToString());
+                var callbackUrl = $"{scheme}://{host}/api/auth/google-callback";
+
+                var clientId = "761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com";
+                var clientSecret = "GOCSPX-HP9Q_placeholder"; // Will be loaded from config
+
+                // Try to load client secret from configuration
+                var config = HttpContext.RequestServices.GetService<IConfiguration>();
+                clientSecret = config?["GoogleAuth:ClientSecret"] ?? clientSecret;
+
+                // Exchange authorization code for tokens
+                using var httpClient = new HttpClient();
+                var tokenRequest = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["code"] = code,
+                    ["client_id"] = clientId,
+                    ["client_secret"] = clientSecret,
+                    ["redirect_uri"] = callbackUrl,
+                    ["grant_type"] = "authorization_code"
+                });
+
+                var tokenResponse = await httpClient.PostAsync(
+                    "https://oauth2.googleapis.com/token", tokenRequest, cancellationToken);
+                var tokenContent = await tokenResponse.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!tokenResponse.IsSuccessStatusCode)
+                {
+                    return Content(BuildErrorHtml($"Không thể đổi mã xác thực: {tokenContent}"), "text/html");
+                }
+
+                using var tokenDoc = System.Text.Json.JsonDocument.Parse(tokenContent);
+                var idToken = tokenDoc.RootElement.TryGetProperty("id_token", out var idTokenProp) 
+                    ? idTokenProp.GetString() : null;
+
+                if (string.IsNullOrEmpty(idToken))
+                {
+                    return Content(BuildErrorHtml("Không nhận được ID Token từ Google."), "text/html");
+                }
+
+                // Use existing GoogleLogin handler to process the token
+                var command = new GoogleLoginCommand(idToken, role);
+                var result = await _mediator.Send(command, cancellationToken);
+
+                // Build the redirect URL to mobile app with JWT tokens
+                var accessToken = Uri.EscapeDataString(result.AccessToken);
+                var refreshToken = Uri.EscapeDataString(result.RefreshToken);
+                var appRedirectUrl = $"proxijob://auth-callback?token={accessToken}&refreshToken={refreshToken}";
+
+                // Return minimal HTML that redirects instantly (no visible UI)
+                var html = $@"<!DOCTYPE html>
+<html><head><meta charset='utf-8'>
+<title>ProxiJob</title>
+</head><body>
 <script>
-(function(){
-  try {
-    var hash = window.location.hash.substring(1);
-    var params = new URLSearchParams(hash);
-    var idToken = params.get('id_token');
-    var accessToken = params.get('access_token');
-    var token = idToken || accessToken;
-    if (token) {
-      window.location.href = 'proxijob://google-callback?id_token=' + encodeURIComponent(token);
-      setTimeout(function(){
-        document.getElementById('error').style.display='block';
-        document.getElementById('error').textContent='Nếu không tự chuyển, vui lòng mở lại ứng dụng ProxiJob.';
-      }, 3000);
-    } else {
-      // Check query params as fallback (authorization code flow)
-      var qp = new URLSearchParams(window.location.search);
-      var error = qp.get('error');
-      if (error) {
-        document.getElementById('error').style.display='block';
-        document.getElementById('error').textContent='Đăng nhập thất bại: ' + (qp.get('error_description') || error);
-      } else {
-        document.getElementById('error').style.display='block';
-        document.getElementById('error').textContent='Không nhận được token từ Google. Vui lòng thử lại.';
-      }
-    }
-  } catch(e) {
-    document.getElementById('error').style.display='block';
-    document.getElementById('error').textContent='Lỗi: ' + e.message;
-  }
-})();
-</script></body></html>";
-            return Content(html, "text/html");
+if (window.opener) {{
+    window.opener.postMessage({{
+        type: 'proxijob-google-auth',
+        token: '{accessToken}',
+        refreshToken: '{refreshToken}'
+    }}, '*');
+    window.close();
+}} else {{
+    window.location.replace('{appRedirectUrl}');
+}}
+</script>
+<noscript><a href='{appRedirectUrl}'>Nhấn vào đây</a></noscript>
+</body></html>";
+
+                return Content(html, "text/html");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Content(BuildErrorHtml($"Xác thực thất bại: {ex.Message}"), "text/html");
+            }
+            catch (Exception ex)
+            {
+                return Content(BuildErrorHtml($"Lỗi hệ thống: {ex.Message}"), "text/html");
+            }
+        }
+
+        private static string BuildErrorHtml(string message)
+        {
+            var encodedMessage = Uri.EscapeDataString(message);
+            var redirectUrl = $"proxijob://auth-error?message={encodedMessage}";
+            return $@"<!DOCTYPE html>
+<html><head><meta charset='utf-8'>
+<title>ProxiJob</title>
+</head><body>
+<script>
+if (window.opener) {{
+    window.opener.postMessage({{
+        type: 'proxijob-google-auth-error',
+        message: '{encodedMessage}'
+    }}, '*');
+    window.close();
+}} else {{
+    window.location.replace('{redirectUrl}');
+}}
+</script>
+<noscript><a href='{redirectUrl}'>Quay về ứng dụng</a></noscript>
+</body></html>";
         }
 
         /// <summary>Seed test accounts dynamically for plan and logic testing</summary>

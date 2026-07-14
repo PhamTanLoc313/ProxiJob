@@ -503,6 +503,7 @@ export default function EmployerApprovals() {
     }
   }, [shifts.length, totalPages, currentPage]);
 
+  const [activeSegment, setActiveSegment] = useState('job_posts'); // 'job_posts' | 'leaves'
   const isMountedRef = useRef(false);
 
   // Only reset to page 1 when activeSegment (tabs) or selectedCategoryFilter changes.
@@ -528,7 +529,7 @@ export default function EmployerApprovals() {
     handleLeaveRequestMutation.mutate({ requestId, status });
   };
 
-  const [activeSegment, setActiveSegment] = useState('job_posts'); // 'job_posts' | 'leaves'
+
 
   // Categories & Skills local states
   const [categories, setCategories] = useState([

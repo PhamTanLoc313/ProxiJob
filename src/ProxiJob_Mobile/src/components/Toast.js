@@ -56,7 +56,7 @@ export default function Toast() {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [visible]);
+  }, [visible, message, type]);
 
   const handleDismiss = () => {
     Animated.parallel([

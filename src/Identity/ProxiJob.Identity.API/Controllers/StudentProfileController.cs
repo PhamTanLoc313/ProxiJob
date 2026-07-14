@@ -66,6 +66,11 @@ namespace ProxiJob.Identity.API.Controllers
             {
                 return NotFound(ApiResponse.Fail(StatusCodes.Status404NotFound, ex.Message));
             }
+            catch (ValidationException ex)
+            {
+                var errorMsg = ex.Errors.FirstOrDefault()?.ErrorMessage ?? ex.Message;
+                return NotFound(ApiResponse.Fail(StatusCodes.Status404NotFound, errorMsg));
+            }
         }
 
         /// <summary>Sửa hồ sơ (sau khi đã đăng ký)</summary>
