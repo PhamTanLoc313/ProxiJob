@@ -49,6 +49,7 @@ services:
       - JwtSettings__SecretKey=${JWT_SECRET_KEY}
       - PaymentSettings__PublicBaseUrl=${PUBLIC_BASE_URL}
       - Identity__PublicBaseUrl=${PUBLIC_BASE_URL}
+      - GoogleAuth__ClientSecret=${GOOGLE_CLIENT_SECRET}
     networks:
       - proxijob-network
     depends_on:

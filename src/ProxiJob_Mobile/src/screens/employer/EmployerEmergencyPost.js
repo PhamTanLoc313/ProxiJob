@@ -2113,7 +2113,9 @@ export default function EmployerEmergencyPost() {
               marginBottom: 24,
               fontFamily: Platform.OS === 'web' ? '"Plus Jakarta Sans", sans-serif' : 'PlusJakartaSans-Regular'
             }}>
-              Bạn đã dùng hết lượt đăng tin miễn phí. Vui lòng nâng cấp gói dịch vụ để tiếp tục đăng tuyển dụng không giới hạn!
+              {user?.subscriptionTier && user.subscriptionTier !== 'Trial' && user.subscriptionTier !== 'Free' && user.subscriptionTier !== 'None'
+                ? `Bạn đã dùng hết hạn mức đăng tin của gói ${user.subscriptionTier}. Vui lòng nâng cấp hoặc mua thêm lượt để tiếp tục đăng tuyển dụng không giới hạn!`
+                : "Bạn đã dùng hết 3 lượt đăng tin miễn phí của gói dùng thử (Trial). Vui lòng nâng cấp gói dịch vụ để tiếp tục đăng tuyển dụng không giới hạn!"}
             </Text>
 
             {/* Premium Features List */}

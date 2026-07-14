@@ -135,6 +135,7 @@ export const AppProvider = ({ children }) => {
         setIsEnterprise: authState.setIsEnterprise,
         login: authState.login,
         loginWithGoogle: authState.loginWithGoogle,
+        loginWithSession: authState.loginWithSession,
         register: authState.register,
         logout: authState.logout,
 

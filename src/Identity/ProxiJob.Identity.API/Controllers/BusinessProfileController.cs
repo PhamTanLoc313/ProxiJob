@@ -59,6 +59,11 @@ namespace ProxiJob.Identity.API.Controllers
             {
                 return NotFound(new { message = ex.Message });
             }
+            catch (ValidationException ex)
+            {
+                var errorMsg = ex.Errors.FirstOrDefault()?.ErrorMessage ?? ex.Message;
+                return NotFound(new { message = errorMsg });
+            }
         }
 
         [HttpPut]
