@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { loginUser } from "./authStorage";
 import { useAuth } from "./AuthContext";
 import { adminLogin } from "../admin/adminData";
+import { Eye, EyeOff } from "lucide-react";
 
 function Login() {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ function Login() {
   const [email, setEmail] = useState(location.state?.registeredEmail ?? "");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
   const [successMessage] = useState(location.state?.message ?? "");
 
   const handleSubmit = async (event) => {
@@ -110,16 +112,25 @@ function Login() {
           >
             Mật khẩu
           </label>
-          <input
-            id="login-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Nhập mật khẩu"
-            className={`h-11 rounded-2xl border px-3 text-base outline-none focus:border-tan-400 focus:shadow-lg focus:shadow-tan-400/15 transition ${
-              errors.password ? "border-red-400" : "border-amber-200"
-            }`}
-          />
+          <div className="relative flex flex-col">
+            <input
+              id="login-password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Nhập mật khẩu"
+              className={`h-11 w-full rounded-2xl border pl-3 pr-10 text-base outline-none focus:border-tan-400 focus:shadow-lg focus:shadow-tan-400/15 transition ${
+                errors.password ? "border-red-400" : "border-amber-200"
+              }`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-0 cursor-pointer text-slate-400 hover:text-slate-600 focus:outline-none flex items-center justify-center p-1"
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
           {errors.password ? (
             <p className="text-xs text-red-600 -mt-2">{errors.password}</p>
           ) : null}

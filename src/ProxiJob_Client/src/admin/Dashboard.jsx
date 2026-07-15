@@ -1,95 +1,98 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Users, Briefcase, CreditCard, DollarSign, Calendar, TrendingUp } from "lucide-react";
 import { getAdminSession, formatCurrency } from "./adminData";
 import { IDENTITY_API_URL, JOB_API_URL } from "../apiConfig";
 
-
 export default function Dashboard() {
-  const [stats, setStats] = useState(null);
   const [timeRange, setTimeRange] = useState("7days");
   const [hoveredData, setHoveredData] = useState(null);
-  
-  // Real raw data states from database
-  const [rawUsers, setRawUsers] = useState([]);
-  const [rawJobs, setRawJobs] = useState([]);
-  const [rawPayments, setRawPayments] = useState([]);
-  
   const chartRef = useRef(null);
 
-  useEffect(() => {
-    const fetchRealData = async () => {
-      let totalUsers = 0;
-      let totalStudents = 0;
-      let totalBusinesses = 0;
-      let totalJobs = 0;
-      let publishedJobs = 0;
-      let pendingPayments = 0;
-      let totalRevenue = 0;
+  const session = getAdminSession();
+  const token = session?.token;
 
-      const session = getAdminSession();
-      if (!session?.token) {
-        return;
-      }
-
-      // Fetch users from Identity Service
-      try {
-        const res = await fetch(`${IDENTITY_API_URL}/admin/users`, {
-          headers: { "Authorization": `Bearer ${session.token}` }
-        });
-        if (res.ok) {
-          const users = await res.json();
-          setRawUsers(users || []);
-          totalUsers = users.length;
-          totalStudents = users.filter(u => u.role === "Student").length;
-          totalBusinesses = users.filter(u => u.role === "Business").length;
-        }
-      } catch (err) {
-        console.log("Failed to fetch real users:", err);
-      }
-
-      // Fetch jobs from Job Service
-      try {
-        const res = await fetch(`${JOB_API_URL}/admin/jobs`);
-        if (res.ok) {
-          const jobs = await res.json();
-          setRawJobs(jobs || []);
-          totalJobs = jobs.length;
-          publishedJobs = jobs.filter(j => j.status === "Published").length;
-        }
-      } catch (err) {
-        console.log("Failed to fetch real jobs:", err);
-      }
-
-      // Fetch payments from Identity Service
-      try {
-        const res = await fetch(`${IDENTITY_API_URL}/admin/payments`, {
-          headers: { "Authorization": `Bearer ${session.token}` }
-        });
-        if (res.ok) {
-          const payments = await res.json();
-          setRawPayments(payments || []);
-          pendingPayments = payments.filter(p => p.status === "Pending").length;
-          totalRevenue = payments.filter(p => p.status === "Paid").reduce((sum, p) => sum + p.amount, 0);
-        }
-      } catch (err) {
-        console.log("Failed to fetch real payments:", err);
-      }
-
-      setStats({
-        totalUsers,
-        totalStudents,
-        totalBusinesses,
-        totalJobs,
-        publishedJobs,
-        pendingPayments,
-        totalRevenue
+  // 1. Fetch Users
+  const { data: rawUsers = [], isLoading: loadingUsers } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/users`, {
+        headers: { "Authorization": `Bearer ${token}` }
       });
-    };
+      if (!res.ok) throw new Error("Failed to fetch users");
+      return res.json();
+    },
+    enabled: !!token
+  });
 
-    fetchRealData();
-  }, []);
+  // 2. Fetch Jobs
+  const { data: rawJobs = [], isLoading: loadingJobs } = useQuery({
+    queryKey: ["jobs"],
+    queryFn: async () => {
+      const res = await fetch(`${JOB_API_URL}/admin/jobs`);
+      if (!res.ok) throw new Error("Failed to fetch jobs");
+      return res.json();
+    }
+  });
 
-  if (!stats) return null;
+  // 3. Fetch Payments
+  const { data: rawPayments = [], isLoading: loadingPayments } = useQuery({
+    queryKey: ["payments"],
+    queryFn: async () => {
+      const res = await fetch(`${IDENTITY_API_URL}/admin/payments`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to fetch payments");
+      return res.json();
+    },
+    enabled: !!token
+  });
+
+  const loading = loadingUsers || loadingJobs || loadingPayments;
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "28px" }} className="admin-page-enter">
+        <div className="admin-stats-grid">
+          <div className="admin-stat-card admin-skeleton admin-skeleton-card"></div>
+          <div className="admin-stat-card admin-skeleton admin-skeleton-card"></div>
+          <div className="admin-stat-card admin-skeleton admin-skeleton-card"></div>
+          <div className="admin-stat-card admin-skeleton admin-skeleton-card"></div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "24px" }}>
+          <div className="admin-chart-container admin-skeleton" style={{ height: "300px", borderRadius: "16px" }}></div>
+          <div className="admin-chart-container admin-skeleton" style={{ height: "300px", borderRadius: "16px" }}></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Reactive derived stats
+  const totalUsers = rawUsers.length;
+  const totalStudents = rawUsers.filter(u => u.role === "Student").length;
+  const totalBusinesses = rawUsers.filter(u => u.role === "Business").length;
+  const totalJobs = rawJobs.length;
+  const publishedJobs = rawJobs.filter(j => j.status === "Published").length;
+  const pendingPayments = rawPayments.filter(p => p.status === "Pending").length;
+  const totalRevenue = rawPayments.filter(p => p.status === "Paid").reduce((sum, p) => sum + p.amount, 0);
+
+  const stats = {
+    totalUsers,
+    totalStudents,
+    totalBusinesses,
+    totalJobs,
+    publishedJobs,
+    pendingPayments,
+    totalRevenue
+  };
+
+  const planBreakdown = rawPayments
+    .filter(p => p.status === "Paid")
+    .reduce((acc, p) => {
+      const planName = p.planName || "Khác";
+      acc[planName] = (acc[planName] || 0) + p.amount;
+      return acc;
+    }, {});
 
   // 1. Dynamic Line Chart Calculations (aggregates from rawPayments)
   const getLineChartData = (payments, range) => {
@@ -237,13 +240,13 @@ export default function Dashboard() {
   const sparkBars = last6Amounts.map(val => (val / maxAmount) * 20 + 5);
 
   // 3. User Distribution Calculations
-  const totalUsers = stats.totalUsers || 1;
+  const totalUsersDist = stats.totalUsers || 1;
   const studentCount = stats.totalStudents || 0;
   const businessCount = stats.totalBusinesses || 0;
-  const adminCount = Math.max(0, totalUsers - studentCount - businessCount);
+  const adminCount = Math.max(0, totalUsersDist - studentCount - businessCount);
 
-  const studentPercent = Math.round((studentCount / totalUsers) * 100);
-  const businessPercent = Math.round((businessCount / totalUsers) * 100);
+  const studentPercent = Math.round((studentCount / totalUsersDist) * 100);
+  const businessPercent = Math.round((businessCount / totalUsersDist) * 100);
   const adminPercent = Math.max(0, 100 - studentPercent - businessPercent);
 
   // 4. Job Categories bar data grouped from rawJobs
@@ -474,7 +477,7 @@ export default function Dashboard() {
         <div className="admin-chart-container" style={{ padding: 24, position: "relative" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <div>
-              <h2 className="admin-chart-title" style={{ margin: 0, fontSize: 16 }}>Thống kê thanh toán gói VIP</h2>
+              <h2 className="admin-chart-title" style={{ margin: 0, fontSize: 16 }}>Thống kê doanh thu dịch vụ</h2>
             </div>
             
             {/* Time range selector */}
@@ -594,6 +597,36 @@ export default function Dashboard() {
                 <span className="admin-chart-tooltip-value">{formatCurrency(hoveredData.value)}</span>
               </div>
             )}
+          </div>
+
+          {/* Revenue breakdown by package type */}
+          <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid var(--admin-border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 11, fontWeight: 750, color: "var(--admin-text-secondary)", letterSpacing: 0.5 }}>PHÂN BỔ DOANH THU THEO GÓI</span>
+              <span style={{ fontSize: 12, color: "var(--admin-text-muted)", fontWeight: 500 }}>{rawPayments.filter(p => p.status === "Paid").length} đơn thành công</span>
+            </div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12 }}>
+              {[
+                { name: "PerShift", label: "Đăng Lẻ 1 Ca", color: "var(--admin-info)" },
+                { name: "Basic", label: "Gói Cơ Bản", color: "var(--admin-warning)" },
+                { name: "Standard", label: "Gói Standard", color: "var(--admin-primary)" },
+                { name: "Premium", label: "Gói Premium", color: "var(--admin-success)" }
+              ].map(plan => {
+                const amount = planBreakdown[plan.name] || 0;
+                const percent = stats.totalRevenue > 0 ? Math.round((amount / stats.totalRevenue) * 100) : 0;
+                return (
+                  <div key={plan.name} style={{ background: "#f8fafc", padding: "10px 14px", borderRadius: 10, border: "1px solid var(--admin-border)", display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: plan.color }}></span>
+                      <span style={{ fontSize: 11, fontWeight: 650, color: "var(--admin-text-secondary)" }}>{plan.label}</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 850, color: "#0f172a", marginTop: 2 }}>{formatCurrency(amount)}</div>
+                    <div style={{ fontSize: 10, color: "var(--admin-text-muted)" }}>Tỷ lệ: {percent}%</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 

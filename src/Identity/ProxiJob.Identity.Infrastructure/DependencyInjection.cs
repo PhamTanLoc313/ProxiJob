@@ -11,6 +11,7 @@ using ProxiJob.Identity.Application.Services;
 using ProxiJob.Identity.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using System.Text;
+using System.Security.Claims;
 
 namespace ProxiJob.Identity.Infrastructure
 {
@@ -62,8 +63,8 @@ namespace ProxiJob.Identity.Infrastructure
                     ValidAudience = audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
                     ClockSkew = TimeSpan.Zero,
-                    NameClaimType = "name",
-                    RoleClaimType = "role"
+                    NameClaimType = ClaimTypes.Name,
+                    RoleClaimType = ClaimTypes.Role
                 };
             });
 

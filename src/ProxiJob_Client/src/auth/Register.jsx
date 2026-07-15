@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { registerUser } from "./authStorage";
+import { Eye, EyeOff } from "lucide-react";
 
 function Register() {
   const navigate = useNavigate();
@@ -10,6 +11,8 @@ function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState("student");
   const [errors, setErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -151,16 +154,25 @@ function Register() {
           >
             Mật khẩu
           </label>
-          <input
-            id="register-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Tối thiểu 6 ký tự"
-            className={`h-11 rounded-2xl border px-3 text-base outline-none focus:border-tan-400 focus:shadow-lg focus:shadow-tan-400/15 transition ${
-              errors.password ? "border-red-400" : "border-amber-200"
-            }`}
-          />
+          <div className="relative flex flex-col">
+            <input
+              id="register-password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Tối thiểu 6 ký tự"
+              className={`h-11 w-full rounded-2xl border pl-3 pr-10 text-base outline-none focus:border-tan-400 focus:shadow-lg focus:shadow-tan-400/15 transition ${
+                errors.password ? "border-red-400" : "border-amber-200"
+              }`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-0 cursor-pointer text-slate-400 hover:text-slate-600 focus:outline-none flex items-center justify-center p-1"
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
           {errors.password ? (
             <p className="text-xs text-red-600 -mt-2">{errors.password}</p>
           ) : null}
@@ -171,16 +183,25 @@ function Register() {
           >
             Xác nhận mật khẩu
           </label>
-          <input
-            id="register-confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            placeholder="Nhập lại mật khẩu"
-            className={`h-11 rounded-2xl border px-3 text-base outline-none focus:border-tan-400 focus:shadow-lg focus:shadow-tan-400/15 transition ${
-              errors.confirmPassword ? "border-red-400" : "border-amber-200"
-            }`}
-          />
+          <div className="relative flex flex-col">
+            <input
+              id="register-confirm-password"
+              type={showConfirmPassword ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="Nhập lại mật khẩu"
+              className={`h-11 w-full rounded-2xl border pl-3 pr-10 text-base outline-none focus:border-tan-400 focus:shadow-lg focus:shadow-tan-400/15 transition ${
+                errors.confirmPassword ? "border-red-400" : "border-amber-200"
+              }`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-0 cursor-pointer text-slate-400 hover:text-slate-600 focus:outline-none flex items-center justify-center p-1"
+            >
+              {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
           {errors.confirmPassword ? (
             <p className="text-xs text-red-600 -mt-2">
               {errors.confirmPassword}

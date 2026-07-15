@@ -112,11 +112,16 @@ export const useAuth = ({
     try {
       setAuthLoading(true);
       const { token, refreshToken, user: resUser } = await loginApi(email, password);
+
+      const userRole = resUser?.role || 'student';
+      if (userRole.toLowerCase() === 'admin') {
+        throw new Error("Tài khoản Admin không được phép đăng nhập trên ứng dụng di động.");
+      }
+
       await saveAuthSession(token, refreshToken, resUser);
 
       setUser(resUser);
 
-      const userRole = resUser?.role || 'student';
       const mappedRoleValue = userRole === 'student' ? 0 : 1;
       setSelectedRole(mappedRoleValue);
 
@@ -142,11 +147,16 @@ export const useAuth = ({
     try {
       setAuthLoading(true);
       const { token, refreshToken, user: resUser } = await loginWithGoogleApi(googleToken, role);
+
+      const userRole = resUser?.role || 'student';
+      if (userRole.toLowerCase() === 'admin') {
+        throw new Error("Tài khoản Admin không được phép đăng nhập trên ứng dụng di động.");
+      }
+
       await saveAuthSession(token, refreshToken, resUser);
 
       setUser(resUser);
 
-      const userRole = resUser?.role || 'student';
       const mappedRoleValue = userRole === 'student' ? 0 : 1;
       setSelectedRole(mappedRoleValue);
 

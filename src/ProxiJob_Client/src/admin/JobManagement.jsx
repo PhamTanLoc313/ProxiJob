@@ -1,150 +1,117 @@
-import { useState, useEffect } from "react";
-import { Search, Eye, Ban, CheckCircle, Briefcase, Plus, Edit2, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Search, Eye, Ban, CheckCircle, Briefcase, Plus, Edit2, Trash2, X, AlertTriangle, Calendar, MapPin, FileText, ClipboardList, Building, Tag } from "lucide-react";
 import { getAdminSession, formatDate } from "./adminData";
 import { JOB_API_URL } from "../apiConfig";
-
+import { useToast } from "./ToastContext";
 
 export default function JobManagement() {
-  const [jobs, setJobs] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [filterStatus, setFilterStatus] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [statusConfirmData, setStatusConfirmData] = useState(null);
+  const [deleteJobId, setDeleteJobId] = useState(null);
+  const [mapError, setMapError] = useState(false);
   
-  // CRUD states
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    requirements: "",
-    categoryId: "",
-    status: "Published",
-    address: "",
-    businessId: "5", // Default mock business (DN Test ProxiJob)
+  const session = getAdminSession();
+
+  const { data: jobs = [], isLoading: loadingJobs, error: jobsError } = useQuery({
+    queryKey: ["jobs"],
+    queryFn: async () => {
+      const res = await fetch(`${JOB_API_URL}/admin/jobs`);
+      if (!res.ok) throw new Error("Không thể tải danh sách việc làm: " + res.status);
+      return res.json();
+    }
   });
 
-  const fetchJobs = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const session = getAdminSession();
-      if (!session?.token) {
-        setError("Chưa đăng nhập admin hoặc phiên làm việc hết hạn.");
-        return;
-      }
-      const res = await fetch(`${JOB_API_URL}/admin/jobs`);
-      if (!res.ok) {
-        setError("Không thể tải danh sách việc làm: " + res.status);
-        return;
-      }
-      const data = await res.json();
-      setJobs(data || []);
-    } catch (err) {
-      setError("Lỗi kết nối tới máy chủ: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
+  const { data: categories = [], isLoading: loadingCategories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
       const res = await fetch(`${JOB_API_URL}/categories`);
-      if (res.ok) {
-        const data = await res.json();
-        setCategories(data || []);
-        if (data.length > 0) {
-          setFormData((prev) => ({ ...prev, categoryId: data[0].id }));
-        }
-      }
-    } catch (err) {
-      console.log("Error loading categories:", err);
+      if (!res.ok) throw new Error("Error loading categories");
+      return res.json();
     }
-  };
-
-  useEffect(() => {
-    fetchJobs();
-    fetchCategories();
-  }, []);
-
-  const handleAddSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${JOB_API_URL}/admin/jobs`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          businessId: parseInt(formData.businessId),
-          categoryId: parseInt(formData.categoryId),
-          title: formData.title,
-          description: formData.description,
-          requirements: formData.requirements,
-          status: formData.status,
-          address: formData.address,
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.message || "Tạo việc làm thất bại.");
-        return;
-      }
-      setShowAddModal(false);
-      resetForm();
-      fetchJobs();
-    } catch (err) {
-      alert("Lỗi kết nối: " + err.message);
-    }
-  };
-
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${JOB_API_URL}/admin/jobs/${selectedJob.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          categoryId: parseInt(formData.categoryId),
-          title: formData.title,
-          description: formData.description,
-          requirements: formData.requirements,
-          status: formData.status,
-          address: formData.address,
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.message || "Cập nhật thất bại.");
-        return;
-      }
-      setShowEditModal(false);
-      resetForm();
-      setSelectedJob(null);
-      fetchJobs();
-    } catch (err) {
-      alert("Lỗi kết nối: " + err.message);
-    }
-  };
+  });
 
   const handleDeleteJob = async (jobId) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa bài tuyển dụng này?")) return;
     try {
       const res = await fetch(`${JOB_API_URL}/admin/jobs/${jobId}`, {
         method: "DELETE"
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.message || "Xóa thất bại.");
+        toast.error(data.message || "Xóa thất bại.");
         return;
       }
-      fetchJobs();
+      toast.success("Đã xóa bài đăng tuyển dụng!");
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
     } catch (err) {
-      alert("Lỗi kết nối: " + err.message);
+      toast.error("Lỗi kết nối: " + err.message);
+    }
+  };
+
+  const handleViewDetails = async (job) => {
+    setSelectedJob(job);
+    setMapError(false);
+    setShowDetailModal(true);
+
+    if (!job.latitude || !job.longitude || parseFloat(job.latitude) === 0 || parseFloat(job.longitude) === 0) {
+      // 1. Try Goong Maps Geocoder
+      try {
+        const goongUrl = `https://rsapi.goong.io/Geocode?address=${encodeURIComponent(job.address)}&api_key=CvNapWs3C3Vt7ZTRZf0uZliN9v3q8TBJKxd2CEcW`;
+        const res = await fetch(goongUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results && data.results.length > 0) {
+            const loc = data.results[0].geometry.location;
+            setSelectedJob(prev => (prev && prev.id === job.id ? { ...prev, latitude: loc.lat, longitude: loc.lng } : prev));
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Goong geocode failed, trying OpenStreetMap...", err);
+      }
+
+      // 2. Try OpenStreetMap Nominatim Geocoder (handles alleys exceptionally well)
+      try {
+        const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(job.address)}&limit=1`;
+        const res = await fetch(osmUrl, {
+          headers: { 'User-Agent': 'ProxiJobAdmin/1.0' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            const loc = data[0];
+            setSelectedJob(prev => (prev && prev.id === job.id ? { ...prev, latitude: parseFloat(loc.lat), longitude: parseFloat(loc.lon) } : prev));
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("OSM geocode failed...", err);
+      }
+
+      // 3. Try simplified address fallback with Goong Geocode (splits by comma and drops the specific house/alley number)
+      const parts = job.address.split(",");
+      if (parts.length > 2) {
+        const simplifiedAddress = parts.slice(1).join(",").trim();
+        try {
+          const goongUrl = `https://rsapi.goong.io/Geocode?address=${encodeURIComponent(simplifiedAddress)}&api_key=CvNapWs3C3Vt7ZTRZf0uZliN9v3q8TBJKxd2CEcW`;
+          const res = await fetch(goongUrl);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.results && data.results.length > 0) {
+              const loc = data.results[0].geometry.location;
+              setSelectedJob(prev => (prev && prev.id === job.id ? { ...prev, latitude: loc.lat, longitude: loc.lng } : prev));
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("Simplified Goong geocode failed...", err);
+        }
+      }
     }
   };
 
@@ -160,35 +127,41 @@ export default function JobManagement() {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.message || "Đổi trạng thái thất bại.");
+        toast.error(data.message || "Đổi trạng thái thất bại.");
         return;
       }
-      fetchJobs();
+      toast.success(newStatus === "Published" ? "Đã duyệt/hiển thị tin tuyển dụng!" : "Đã gỡ/đóng tin tuyển dụng!");
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      setStatusConfirmData(null);
     } catch (err) {
-      alert("Lỗi kết nối: " + err.message);
+      toast.error("Lỗi kết nối: " + err.message);
     }
   };
 
-  const openAddModal = () => {
-    resetForm();
-    setShowAddModal(true);
-  };
+  if (loadingJobs || loadingCategories) {
+    return (
+      <div className="admin-table-container admin-page-enter">
+        <div className="admin-table-toolbar">
+          <div className="admin-skeleton" style={{ width: "150px", height: "30px" }}></div>
+          <div className="admin-skeleton" style={{ width: "300px", height: "38px" }}></div>
+        </div>
+        <div style={{ padding: "20px" }}>
+          <div className="admin-skeleton admin-skeleton-table-row" style={{ height: "40px", marginBottom: "16px" }}></div>
+          <div className="admin-skeleton admin-skeleton-table-row"></div>
+          <div className="admin-skeleton admin-skeleton-table-row"></div>
+          <div className="admin-skeleton admin-skeleton-table-row"></div>
+          <div className="admin-skeleton admin-skeleton-table-row"></div>
+        </div>
+      </div>
+    );
+  }
 
-  const openEditModal = (job) => {
-    setSelectedJob(job);
-    setFormData({
-      title: job.title,
-      description: job.description,
-      requirements: job.requirements,
-      categoryId: job.categoryId.toString(),
-      status: job.status,
-      address: job.address || "",
-      businessId: job.businessId.toString(),
-    });
-    setShowEditModal(true);
-  };
+  if (jobsError) {
+    return <div className="admin-error-box">{jobsError.message}</div>;
+  }
 
   const resetForm = () => {
+    setFieldErrors({});
     setFormData({
       title: "",
       description: "",
@@ -210,33 +183,19 @@ export default function JobManagement() {
 
   const renderStatusBadge = (status) => {
     switch (status) {
-      case "Published": return <span className="admin-badge admin-badge-published">Đang hiển thị</span>;
-      case "Draft": return <span className="admin-badge admin-badge-draft">Bản nháp</span>;
-      case "Closed": return <span className="admin-badge admin-badge-closed">Đã đóng</span>;
-      default: return <span className="admin-badge">{status}</span>;
+      case "Published": return <span className="admin-badge admin-badge-published" style={{ whiteSpace: "nowrap" }}>Đang mở</span>;
+      case "Closed": return <span className="admin-badge admin-badge-closed" style={{ whiteSpace: "nowrap" }}>Đã đóng</span>;
+      default: return <span className="admin-badge" style={{ whiteSpace: "nowrap" }}>{status}</span>;
     }
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "28px" }} className="admin-page-enter">
       <div className="admin-table-container">
-        <div className="admin-table-toolbar" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h2 className="admin-table-title" style={{ margin: 0 }}>Quản lý Việc làm</h2>
-          </div>
-          <button 
-            className="admin-btn admin-btn-success" 
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px" }}
-            onClick={openAddModal}
-          >
-            <Plus size={16} />
-            <span>Đăng việc làm</span>
-          </button>
-        </div>
-
-        <div className="admin-table-toolbar" style={{ borderTop: "none", paddingTop: 0 }}>
-          <div className="admin-table-filters" style={{ width: "100%", justifyContent: "space-between" }}>
-            <div className="admin-search" style={{ maxWidth: 300 }}>
+        <div className="admin-table-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, padding: "20px 24px" }}>
+          {/* Left Side: Search & Filters */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", flex: 1 }}>
+            <div className="admin-search" style={{ maxWidth: 320, width: "100%" }}>
               <Search className="admin-search-icon" />
               <input
                 type="text"
@@ -245,32 +204,25 @@ export default function JobManagement() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {["All", "Published", "Draft", "Closed"].map((st) => (
+            
+            {/* Filter Tabs Switched Layout */}
+            <div style={{ display: "flex", background: "var(--admin-border)", padding: 3, borderRadius: 10, gap: 2 }}>
+              {["All", "Published", "Closed"].map((st) => (
                 <button
                   key={st}
-                  className={`admin-filter-btn ${filterStatus === st ? "active" : ""}`}
+                  className={`admin-dashboard-period-btn ${filterStatus === st ? "active" : ""}`}
+                  style={{ padding: "6px 16px", fontSize: 13, borderRadius: 8, fontWeight: 700 }}
                   onClick={() => setFilterStatus(st)}
                 >
-                  {st === "All" ? "Tất cả" : st}
+                  {st === "All" ? "Tất cả" : st === "Published" ? "Đang mở" : "Đã đóng"}
                 </button>
               ))}
             </div>
           </div>
+
+          {/* Right Side is empty since admin cannot post jobs */}
         </div>
-
-        {error && (
-          <div style={{ padding: "12px 16px", backgroundColor: "rgba(239, 68, 68, 0.1)", color: "var(--admin-danger)", borderRadius: 8, margin: "10px 16px", border: "1px solid rgba(239,68,68,0.2)", fontSize: 14 }}>
-            {error}
-          </div>
-        )}
-
         <div style={{ overflowX: "auto", position: "relative" }}>
-          {loading && (
-            <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
-              <span style={{ padding: "8px 16px", background: "var(--admin-card-bg)", borderRadius: 8, border: "1px solid var(--admin-border)", fontSize: 13, fontWeight: 500 }}>Đang tải...</span>
-            </div>
-          )}
           <table className="admin-table">
             <thead>
               <tr>
@@ -300,31 +252,33 @@ export default function JobManagement() {
                       <div style={{ fontSize: 12, color: "var(--admin-primary-hover)" }}>Doanh nghiệp ID: {job.businessId}</div>
                     </td>
                     <td>{job.categoryName}</td>
-                    <td>{job.address || "—"}</td>
+                    <td style={{ maxWidth: 220, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }} title={job.address || ""}>
+                      {job.address || "—"}
+                    </td>
                     <td>{renderStatusBadge(job.status)}</td>
                     <td>{formatDate(job.createdAt)}</td>
                     <td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
                         <button
                           className="admin-btn-icon"
-                          title="Sửa thông tin"
-                          onClick={() => openEditModal(job)}
+                          title="Xem chi tiết"
+                          onClick={() => handleViewDetails(job)}
                         >
-                          <Edit2 size={14} />
+                          <Eye size={14} />
                         </button>
-                        <button
-                          className="admin-btn-icon"
-                          style={job.status === "Published" ? { color: "var(--admin-warning)", borderColor: "rgba(245,158,11,0.3)" } : { color: "var(--admin-success)", borderColor: "rgba(16,185,129,0.3)" }}
-                          title={job.status === "Published" ? "Gỡ bài (Đóng)" : "Hiển thị lại (Mở)"}
-                          onClick={() => toggleJobStatus(job.id, job.status)}
-                        >
+                         <button
+                           className="admin-btn-icon"
+                           style={job.status === "Published" ? { color: "var(--admin-warning)", borderColor: "rgba(245,158,11,0.3)" } : { color: "var(--admin-success)", borderColor: "rgba(16,185,129,0.3)" }}
+                           title={job.status === "Published" ? "Gỡ bài (Đóng)" : "Hiển thị lại (Mở)"}
+                           onClick={() => setStatusConfirmData({ jobId: job.id, currentStatus: job.status, title: job.title })}
+                         >
                           {job.status === "Published" ? <Ban size={14} /> : <CheckCircle size={14} />}
                         </button>
                         <button
                           className="admin-btn-icon"
                           style={{ color: "var(--admin-danger)", borderColor: "rgba(239,68,68,0.3)" }}
                           title="Xóa"
-                          onClick={() => handleDeleteJob(job.id)}
+                          onClick={() => setDeleteJobId(job.id)}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -338,193 +292,248 @@ export default function JobManagement() {
         </div>
       </div>
 
-      {/* CRUD Add Job Modal */}
-      {showAddModal && (
-        <div className="admin-modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="admin-modal" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h3 className="admin-modal-title">Đăng việc làm mới</h3>
-              <button className="admin-modal-close" onClick={() => setShowAddModal(false)}>
-                <X size={20} />
+      {/* Detail Job Modal */}
+      {selectedJob && showDetailModal && (
+        <div className="admin-modal-overlay" onClick={() => { setShowDetailModal(false); setSelectedJob(null); }}>
+          <div className="admin-modal" style={{ maxWidth: 560, borderRadius: 20, overflow: "hidden", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)" }} onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="admin-modal-header" style={{ borderBottom: "1px solid var(--admin-border)", padding: "20px 24px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  background: "var(--admin-primary-glow)",
+                  color: "var(--admin-primary)",
+                  padding: 10,
+                  borderRadius: 12,
+                  display: "flex",
+                  boxShadow: "inset 0 0 0 1px rgba(249,115,22,0.1)"
+                }}>
+                  <Briefcase size={20} />
+                </div>
+                <div>
+                  <h3 className="admin-modal-title" style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Chi tiết tin tuyển dụng</h3>
+                  <p style={{ fontSize: 11, color: "var(--admin-text-muted)", margin: "2px 0 0" }}>Xem thông tin kiểm duyệt bài đăng của đối tác</p>
+                </div>
+              </div>
+              <button className="admin-modal-close" style={{ background: "#f1f5f9", borderRadius: "50%", padding: 6, display: "flex", border: "none", cursor: "pointer" }} onClick={() => { setShowDetailModal(false); setSelectedJob(null); }}>
+                <X size={14} style={{ color: "var(--admin-text-secondary)" }} />
               </button>
             </div>
 
-            <form onSubmit={handleAddSubmit}>
-              <div className="admin-modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Tiêu đề việc làm</label>
-                  <input
-                    type="text"
-                    className="admin-form-input"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    required
-                  />
+            {/* Modal Body */}
+            <div className="admin-modal-body" style={{ maxHeight: "calc(100vh - 220px)", overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: 20 }}>
+              
+              {/* Job Title & Status */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span className={`admin-badge ${selectedJob.status === "Published" ? "admin-badge-published" : "admin-badge-closed"}`} style={{ fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {selectedJob.status === "Published" ? "Đang mở" : "Đã đóng"}
+                  </span>
+                  <span style={{ fontSize: "12px", color: "var(--admin-text-muted)", fontWeight: 500 }}>
+                    Mã bài viết: #{selectedJob.id}
+                  </span>
                 </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Danh mục</label>
-                  <select
-                    className="admin-form-input"
-                    value={formData.categoryId}
-                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                    style={{ background: "var(--admin-input-bg)" }}
-                    required
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
+                <h2 style={{ fontSize: "20px", fontWeight: 800, color: "var(--admin-text)", margin: 0, lineHeight: 1.4 }}>{selectedJob.title}</h2>
+              </div>
+
+              {/* Meta Grid Information */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontSize: "10.5px", color: "var(--admin-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textTransform: "uppercase" }}>
+                    <Tag size={12} style={{ color: "var(--admin-primary)" }} /> Danh mục
+                  </span>
+                  <span style={{ fontSize: "13px", color: "var(--admin-text)", fontWeight: 700 }}>{selectedJob.categoryName || "Chưa phân loại"}</span>
                 </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Địa chỉ làm việc</label>
-                  <input
-                    type="text"
-                    className="admin-form-input"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    required
-                  />
+
+                <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontSize: "10.5px", color: "var(--admin-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textTransform: "uppercase" }}>
+                    <Building size={12} style={{ color: "#3b82f6" }} /> Doanh nghiệp
+                  </span>
+                  <span style={{ fontSize: "13px", color: "var(--admin-text)", fontWeight: 700 }}>ID: {selectedJob.businessId}</span>
                 </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Mô tả công việc</label>
-                  <textarea
-                    className="admin-form-input"
-                    rows={4}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Yêu cầu công việc</label>
-                  <textarea
-                    className="admin-form-input"
-                    rows={3}
-                    value={formData.requirements}
-                    onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
-                    required
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 12 }}>
-                  <div className="admin-form-group" style={{ flex: 1 }}>
-                    <label className="admin-form-label">Doanh nghiệp ID</label>
-                    <input
-                      type="number"
-                      className="admin-form-input"
-                      value={formData.businessId}
-                      onChange={(e) => setFormData({ ...formData, businessId: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="admin-form-group" style={{ flex: 1 }}>
-                    <label className="admin-form-label">Trạng thái ban đầu</label>
-                    <select
-                      className="admin-form-input"
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      style={{ background: "var(--admin-input-bg)" }}
-                    >
-                      <option value="Published">Published (Hiển thị ngay)</option>
-                      <option value="Draft">Draft (Bản nháp)</option>
-                    </select>
-                  </div>
+
+                <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontSize: "10.5px", color: "var(--admin-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textTransform: "uppercase" }}>
+                    <Calendar size={12} style={{ color: "#10b981" }} /> Đăng ngày
+                  </span>
+                  <span style={{ fontSize: "13px", color: "var(--admin-text)", fontWeight: 700 }}>{formatDate(selectedJob.createdAt)}</span>
                 </div>
               </div>
-              <div className="admin-modal-footer">
-                <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowAddModal(false)}>Hủy</button>
-                <button type="submit" className="admin-btn admin-btn-success">Đăng bài</button>
+
+              {/* Address Map Section */}
+              <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-text)", margin: "0 0 8px 0", display: "flex", alignItems: "center", gap: 6 }}>
+                  <MapPin size={15} style={{ color: "#ef4444" }} /> Địa điểm & Bản đồ
+                </h4>
+                <p style={{ fontSize: "13.5px", color: "var(--admin-text-secondary)", margin: "0 0 10px 0", lineHeight: 1.5 }}>{selectedJob.address || "Chưa có địa chỉ"}</p>
+                
+                {selectedJob.latitude && selectedJob.longitude && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <span style={{ background: "rgba(16,185,129,0.06)", color: "#10b981", border: "1px solid rgba(16,185,129,0.15)", padding: "4px 10px", borderRadius: 20, fontSize: "11px", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
+                        <span style={{ width: 6, height: 6, background: "#10b981", borderRadius: "50%" }}></span>
+                        Lat: {parseFloat(selectedJob.latitude).toFixed(6)}
+                      </span>
+                      <span style={{ background: "rgba(16,185,129,0.06)", color: "#10b981", border: "1px solid rgba(16,185,129,0.15)", padding: "4px 10px", borderRadius: 20, fontSize: "11px", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
+                        <span style={{ width: 6, height: 6, background: "#10b981", borderRadius: "50%" }}></span>
+                        Lng: {parseFloat(selectedJob.longitude).toFixed(6)}
+                      </span>
+                    </div>
+
+                    <div style={{ marginTop: 4, borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0", height: 200, background: "#f8fafc" }}>
+                      <iframe
+                        srcDoc={`
+                          <!DOCTYPE html>
+                          <html>
+                          <head>
+                            <meta charset="utf-8" />
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                            <style>
+                              body { margin: 0; padding: 0; }
+                              #map { height: 100vh; width: 100vw; }
+                              .leaflet-control-attribution { display: none !important; }
+                            </style>
+                          </head>
+                          <body>
+                            <div id="map"></div>
+                            <script>
+                              var map = L.map('map', { zoomControl: true }).setView([${selectedJob.latitude}, ${selectedJob.longitude}], 16);
+                              L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                                maxZoom: 20
+                              }).addTo(map);
+                              L.marker([${selectedJob.latitude}, ${selectedJob.longitude}]).addTo(map);
+                            </script>
+                          </body>
+                          </html>
+                        `}
+                        style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+                        title="Bản đồ định vị công việc"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-            </form>
+
+              {/* Description Section */}
+              <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-text)", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: 6 }}>
+                  <FileText size={15} style={{ color: "var(--admin-primary)" }} /> Mô tả công việc
+                </h4>
+                <div style={{ background: "#fafafb", padding: "14px 16px", borderRadius: 12, border: "1px solid #f1f5f9" }}>
+                  <p style={{ fontSize: "13px", color: "var(--admin-text-secondary)", margin: 0, whiteSpace: "pre-line", lineHeight: 1.6 }}>{selectedJob.description}</p>
+                </div>
+              </div>
+
+              {/* Requirements Section */}
+              <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-text)", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: 6 }}>
+                  <ClipboardList size={15} style={{ color: "#f59e0b" }} /> Yêu cầu tuyển dụng
+                </h4>
+                <div style={{ background: "#fafafb", padding: "14px 16px", borderRadius: 12, border: "1px solid #f1f5f9" }}>
+                  <p style={{ fontSize: "13px", color: "var(--admin-text-secondary)", margin: 0, whiteSpace: "pre-line", lineHeight: 1.6 }}>{selectedJob.requirements}</p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer Close Button */}
+            <div className="admin-modal-footer" style={{ borderTop: "1px solid var(--admin-border)", padding: "16px 24px 20px" }}>
+              <button 
+                type="button" 
+                className="admin-btn" 
+                style={{ 
+                  width: "100%", 
+                  padding: "12px", 
+                  borderRadius: 12, 
+                  background: "linear-gradient(135deg, var(--admin-primary), var(--admin-primary-hover))", 
+                  color: "#ffffff", 
+                  border: "none", 
+                  fontWeight: 700, 
+                  boxShadow: "0 4px 12px var(--admin-primary-glow)",
+                  cursor: "pointer",
+                  transition: "transform 0.2s"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-1px)"}
+                onMouseLeave={(e) => e.currentTarget.style.transform = "none"}
+                onClick={() => { setShowDetailModal(false); setSelectedJob(null); }}
+              >
+                Đóng cửa sổ
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* CRUD Edit Job Modal */}
-      {showEditModal && (
-        <div className="admin-modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="admin-modal" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h3 className="admin-modal-title">Chỉnh sửa bài đăng việc làm</h3>
-              <button className="admin-modal-close" onClick={() => setShowEditModal(false)}>
+      {/* Custom Delete Confirmation Modal */}
+      {deleteJobId && (
+        <div className="admin-modal-overlay" onClick={() => setDeleteJobId(null)}>
+          <div className="admin-modal" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header" style={{ borderBottom: "none", paddingBottom: 0 }}>
+              <h3 className="admin-modal-title" style={{ color: "var(--admin-danger)", display: "flex", alignItems: "center", gap: 8 }}>
+                <Trash2 size={20} />
+                Xác nhận xóa bài đăng
+              </h3>
+              <button className="admin-modal-close" onClick={() => setDeleteJobId(null)}>
                 <X size={20} />
               </button>
             </div>
+            <div className="admin-modal-body" style={{ paddingTop: 12 }}>
+              <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.5 }}>
+                Bạn có chắc chắn muốn xóa bài đăng tuyển dụng này? Toàn bộ thông tin bài đăng sẽ bị xóa vĩnh viễn khỏi hệ thống.
+              </p>
+            </div>
+            <div className="admin-modal-footer" style={{ borderTop: "none", paddingTop: 16 }}>
+              <button className="admin-btn admin-btn-outline" onClick={() => setDeleteJobId(null)}>Hủy</button>
+              <button 
+                className="admin-btn admin-btn-danger" 
+                onClick={() => {
+                  handleDeleteJob(deleteJobId);
+                  setDeleteJobId(null);
+                }}
+              >
+                Xác nhận xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-            <form onSubmit={handleEditSubmit}>
-              <div className="admin-modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Tiêu đề việc làm</label>
-                  <input
-                    type="text"
-                    className="admin-form-input"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Danh mục</label>
-                  <select
-                    className="admin-form-input"
-                    value={formData.categoryId}
-                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                    style={{ background: "var(--admin-input-bg)" }}
-                    required
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Địa chỉ làm việc</label>
-                  <input
-                    type="text"
-                    className="admin-form-input"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Mô tả công việc</label>
-                  <textarea
-                    className="admin-form-input"
-                    rows={4}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Yêu cầu công việc</label>
-                  <textarea
-                    className="admin-form-input"
-                    rows={3}
-                    value={formData.requirements}
-                    onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Trạng thái tuyển dụng</label>
-                  <select
-                    className="admin-form-input"
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    style={{ background: "var(--admin-input-bg)" }}
-                  >
-                    <option value="Published">Published (Hiển thị)</option>
-                    <option value="Draft">Draft (Bản nháp)</option>
-                    <option value="Closed">Closed (Đã đóng)</option>
-                  </select>
-                </div>
-              </div>
-              <div className="admin-modal-footer">
-                <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowEditModal(false)}>Hủy</button>
-                <button type="submit" className="admin-btn admin-btn-success">Lưu thay đổi</button>
-              </div>
-            </form>
+      {/* Custom Status Toggle Confirmation Modal */}
+      {statusConfirmData && (
+        <div className="admin-modal-overlay" onClick={() => setStatusConfirmData(null)}>
+          <div className="admin-modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header" style={{ borderBottom: "none", paddingBottom: 0 }}>
+              <h3 className="admin-modal-title" style={{ color: "var(--admin-warning)", display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={20} />
+                {statusConfirmData.currentStatus === "Published" ? "Xác nhận gỡ bài đăng" : "Xác nhận mở lại bài đăng"}
+              </h3>
+              <button className="admin-modal-close" onClick={() => setStatusConfirmData(null)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="admin-modal-body" style={{ paddingTop: 12 }}>
+              <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.5 }}>
+                Bạn có chắc chắn muốn {statusConfirmData.currentStatus === "Published" ? "gỡ (đóng)" : "mở lại (hiển thị)"} bài đăng tuyển dụng <strong>"{statusConfirmData.title}"</strong> không?
+                {statusConfirmData.currentStatus === "Published"
+                  ? " Sau khi gỡ, sinh viên sẽ không thể tìm thấy và ứng tuyển vào tin này trên ứng dụng di động."
+                  : " Sau khi mở lại, tin đăng sẽ hiển thị công khai trên điện thoại cho các sinh viên nộp hồ sơ ứng tuyển."
+                }
+              </p>
+            </div>
+            <div className="admin-modal-footer" style={{ borderTop: "none", paddingTop: 16 }}>
+              <button className="admin-btn admin-btn-outline" onClick={() => setStatusConfirmData(null)}>Hủy</button>
+              <button 
+                className="admin-btn admin-btn-warning" 
+                style={statusConfirmData.currentStatus === "Published" ? {} : { backgroundColor: "var(--admin-success)", borderColor: "var(--admin-success)" }}
+                onClick={() => {
+                  toggleJobStatus(statusConfirmData.jobId, statusConfirmData.currentStatus);
+                  setStatusConfirmData(null);
+                }}
+              >
+                Xác nhận
+              </button>
+            </div>
           </div>
         </div>
       )}

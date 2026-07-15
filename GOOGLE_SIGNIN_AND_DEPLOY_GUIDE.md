@@ -53,7 +53,7 @@ Tài liệu này hướng dẫn cấu hình đăng nhập Google trên mobile ap
 ### Bước 1: Kiểm tra OAuth Client ID hiện tại
 
 1. Truy cập [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials)
-2. Tìm Client ID: `761339432164-gth4e77gocarke99gj3vk38ti5bkcull`
+2. Tìm Client ID: `761339432164-gbh4o77gocarke99gj3vk38tb9bkculi`
 3. Kiểm tra **Application type** của nó (Web / Android / iOS)
 
 ### Bước 2: Cấu hình theo loại Client ID

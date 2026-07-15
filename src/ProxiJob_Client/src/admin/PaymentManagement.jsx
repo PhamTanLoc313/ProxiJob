@@ -1,53 +1,39 @@
-import { useState, useEffect } from "react";
-import { Check, X, Search, Filter, Eye, CreditCard } from "lucide-react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, X, Search, Filter, Eye, CreditCard, Calendar } from "lucide-react";
 import { getAdminSession, formatCurrency, formatDateTime } from "./adminData";
 import { IDENTITY_API_URL } from "../apiConfig";
-
+import { useToast } from "./ToastContext";
 
 export default function PaymentManagement() {
-  const [orders, setOrders] = useState([]);
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [filterStatus, setFilterStatus] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [modalType, setModalType] = useState(null); // 'confirm' | 'reject' | 'view'
   const [adminNote, setAdminNote] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const session = getAdminSession();
-      if (!session?.token) {
-        setError("Chưa đăng nhập admin hoặc phiên làm việc hết hạn.");
-        return;
-      }
+  const session = getAdminSession();
+  const token = session?.token;
+
+  // Query payments
+  const { data: orders = [], isLoading, error: queryError } = useQuery({
+    queryKey: ["payments"],
+    queryFn: async () => {
       const res = await fetch(`${IDENTITY_API_URL}/admin/payments`, {
-        headers: {
-          "Authorization": `Bearer ${session.token}`
-        }
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
-          setError("Tài khoản không có quyền truy cập xem thông tin thanh toán.");
-        } else {
-          setError("Lỗi tải danh sách thanh toán từ server: " + res.status);
+          throw new Error("Tài khoản không có quyền truy cập xem thông tin thanh toán.");
         }
-        return;
+        throw new Error("Lỗi tải danh sách thanh toán từ server: " + res.status);
       }
-      const data = await res.json();
-      setOrders(data || []);
-    } catch (err) {
-      setError("Lỗi kết nối tới máy chủ: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+      return res.json();
+    },
+    enabled: !!token
+  });
 
   const filteredOrders = orders.filter((o) => {
     const matchStatus = filterStatus === "All" || o.status === filterStatus;
@@ -59,9 +45,8 @@ export default function PaymentManagement() {
 
   const handleConfirm = async (e) => {
     e.preventDefault();
-    const session = getAdminSession();
-    if (!session?.token) {
-      alert("Hết hạn phiên đăng nhập.");
+    if (!token) {
+      toast.error("Hết hạn phiên đăng nhập.");
       return;
     }
     try {
@@ -69,27 +54,28 @@ export default function PaymentManagement() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.token}`
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({ adminNote })
       });
       const data = await res.json();
       if (!res.ok) {
-        alert("Lỗi xác nhận đơn: " + (data.message || res.statusText));
+        toast.error("Lỗi xác nhận đơn: " + (data.message || res.statusText));
         return;
       }
+      toast.success("Xác nhận thanh toán thành công!");
       closeModal();
-      fetchOrders();
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["users"] }); // Invalidate other dependent queries as subscription changes roles
     } catch (err) {
-      alert("Lỗi kết nối: " + err.message);
+      toast.error("Lỗi kết nối: " + err.message);
     }
   };
 
   const handleReject = async (e) => {
     e.preventDefault();
-    const session = getAdminSession();
-    if (!session?.token) {
-      alert("Hết hạn phiên đăng nhập.");
+    if (!token) {
+      toast.error("Hết hạn phiên đăng nhập.");
       return;
     }
     try {
@@ -97,21 +83,44 @@ export default function PaymentManagement() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.token}`
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({ adminNote })
       });
       const data = await res.json();
       if (!res.ok) {
-        alert("Lỗi từ chối đơn: " + (data.message || res.statusText));
+        toast.error("Lỗi từ chối đơn: " + (data.message || res.statusText));
         return;
       }
+      toast.warning("Đã từ chối đơn thanh toán.");
       closeModal();
-      fetchOrders();
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
     } catch (err) {
-      alert("Lỗi kết nối: " + err.message);
+      toast.error("Lỗi kết nối: " + err.message);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="admin-table-container admin-page-enter">
+        <div className="admin-table-toolbar">
+          <div className="admin-skeleton" style={{ width: "150px", height: "30px" }}></div>
+          <div className="admin-skeleton" style={{ width: "300px", height: "38px" }}></div>
+        </div>
+        <div style={{ padding: "20px" }}>
+          <div className="admin-skeleton admin-skeleton-table-row" style={{ height: "40px", marginBottom: "16px" }}></div>
+          <div className="admin-skeleton admin-skeleton-table-row"></div>
+          <div className="admin-skeleton admin-skeleton-table-row"></div>
+          <div className="admin-skeleton admin-skeleton-table-row"></div>
+          <div className="admin-skeleton admin-skeleton-table-row"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (queryError) {
+    return <div className="admin-error-box">{queryError.message}</div>;
+  }
 
   const openModal = (order, type) => {
     setSelectedOrder(order);
@@ -136,12 +145,12 @@ export default function PaymentManagement() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "28px" }} className="admin-page-enter">
       <div className="admin-table-container">
-        <div className="admin-table-toolbar">
-          <h2 className="admin-table-title">Quản lý Đơn Thanh Toán</h2>
-          <div className="admin-table-filters">
-            <div className="admin-search">
+        <div className="admin-table-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, padding: "20px 24px" }}>
+          {/* Left Side: Search & Filters */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", flex: 1, justifyContent: "space-between" }}>
+            <div className="admin-search" style={{ maxWidth: 320, width: "100%" }}>
               <Search className="admin-search-icon" />
               <input
                 type="text"
@@ -150,30 +159,24 @@ export default function PaymentManagement() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            {["All", "Pending", "Paid", "Cancelled", "Expired"].map((st) => (
-              <button
-                key={st}
-                className={`admin-filter-btn ${filterStatus === st ? "active" : ""}`}
-                onClick={() => setFilterStatus(st)}
-              >
-                {st === "All" ? "Tất cả" : st}
-              </button>
-            ))}
+            
+            {/* Filter Tabs Switched Layout */}
+            <div style={{ display: "flex", background: "var(--admin-border)", padding: 3, borderRadius: 10, gap: 2 }}>
+              {["All", "Pending", "Paid", "Cancelled", "Expired"].map((st) => (
+                <button
+                  key={st}
+                  className={`admin-dashboard-period-btn ${filterStatus === st ? "active" : ""}`}
+                  style={{ padding: "6px 16px", fontSize: 13, borderRadius: 8, fontWeight: 700 }}
+                  onClick={() => setFilterStatus(st)}
+                >
+                  {st === "All" ? "Tất cả" : st === "Pending" ? "Chờ duyệt" : st === "Paid" ? "Đã duyệt" : st === "Cancelled" ? "Đã huỷ" : "Hết hạn"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {error && (
-          <div style={{ padding: "12px 16px", backgroundColor: "rgba(239, 68, 68, 0.1)", color: "var(--admin-danger)", borderRadius: 8, margin: "10px 16px", border: "1px solid rgba(239,68,68,0.2)", fontSize: 14 }}>
-            {error}
-          </div>
-        )}
-
         <div style={{ overflowX: "auto", position: "relative" }}>
-          {loading && (
-            <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
-              <span style={{ padding: "8px 16px", background: "var(--admin-card-bg)", borderRadius: 8, border: "1px solid var(--admin-border)", fontSize: 13, fontWeight: 500 }}>Đang tải...</span>
-            </div>
-          )}
           <table className="admin-table">
             <thead>
               <tr>
@@ -264,57 +267,157 @@ export default function PaymentManagement() {
               </button>
             </div>
 
-            <div className="admin-modal-body">
-              <div className="admin-info-grid" style={{ marginBottom: 20 }}>
-                <div className="admin-info-item">
-                  <span className="admin-info-item-label">Mã đơn</span>
-                  <span className="admin-info-item-value">{selectedOrder.orderCode}</span>
-                </div>
-                <div className="admin-info-item">
-                  <span className="admin-info-item-label">Số tiền</span>
-                  <span className="admin-info-item-value" style={{ color: "var(--admin-primary-hover)", fontWeight: 700 }}>
-                    {formatCurrency(selectedOrder.amount)}
+            <div className="admin-modal-body" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              {/* Premium Summary Card */}
+              <div style={{
+                background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
+                border: "1px solid #e2e8f0",
+                borderRadius: "16px",
+                padding: "20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02)"
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--admin-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Chi tiết giao dịch
                   </span>
+                  {renderBadge(selectedOrder.status)}
                 </div>
-                <div className="admin-info-item">
-                  <span className="admin-info-item-label">Người dùng</span>
-                  <span className="admin-info-item-value">{selectedOrder.userFullName}</span>
-                </div>
-                <div className="admin-info-item">
-                  <span className="admin-info-item-label">Gói dịch vụ</span>
-                  <span className="admin-info-item-value">{selectedOrder.planName}</span>
-                </div>
-                <div className="admin-info-item">
-                  <span className="admin-info-item-label">Ngày tạo</span>
-                  <span className="admin-info-item-value">{formatDateTime(selectedOrder.createdAt)}</span>
-                </div>
-                <div className="admin-info-item">
-                  <span className="admin-info-item-label">Trạng thái</span>
-                  <span className="admin-info-item-value">{renderBadge(selectedOrder.status)}</span>
+                
+                <div>
+                  <h4 style={{ fontSize: "17px", fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
+                    {selectedOrder.planName}
+                  </h4>
+                  <div style={{ fontSize: "26px", fontWeight: 800, color: "var(--admin-primary)", marginTop: "4px" }}>
+                    {formatCurrency(selectedOrder.amount)}
+                  </div>
                 </div>
               </div>
 
+              {/* Transaction Metadata Grid */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                padding: "4px 4px"
+              }}>
+                <div className="admin-info-item">
+                  <span className="admin-info-item-label">Mã đơn hàng</span>
+                  <span className="admin-info-item-value" style={{ fontFamily: "monospace", fontSize: "13px", fontWeight: 600, color: "var(--admin-text-secondary)" }}>
+                    {selectedOrder.orderCode}
+                  </span>
+                </div>
+                
+                <div className="admin-info-item">
+                  <span className="admin-info-item-label">Thời gian tạo</span>
+                  <span className="admin-info-item-value" style={{ fontSize: "13px", color: "var(--admin-text-secondary)" }}>
+                    {formatDateTime(selectedOrder.createdAt)}
+                  </span>
+                </div>
+
+                <div className="admin-info-item" style={{ gridColumn: "span 2" }}>
+                  <span className="admin-info-item-label">Khách hàng</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <span className="admin-info-item-value" style={{ fontSize: "14px", fontWeight: 600 }}>
+                      {selectedOrder.userFullName}
+                    </span>
+                    <span style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>
+                      {selectedOrder.userEmail}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Admin Note Section */}
               {modalType !== "view" ? (
-                <form id="actionForm" onSubmit={modalType === "confirm" ? handleConfirm : handleReject}>
-                  <div className="admin-form-group" style={{ marginBottom: 0 }}>
-                    <label className="admin-form-label">
+                <form id="actionForm" onSubmit={modalType === "confirm" ? handleConfirm : handleReject} style={{ margin: 0 }}>
+                  <div className="admin-form-group" style={{ marginBottom: 0, width: "100%" }}>
+                    <label className="admin-form-label" style={{ fontSize: "13px", fontWeight: 600, color: "var(--admin-text-secondary)", marginBottom: "8px" }}>
                       Ghi chú của Admin (Tùy chọn)
                     </label>
                     <textarea
                       className="admin-form-input"
-                      placeholder="Nhập ghi chú hoặc lý do..."
+                      placeholder="Nhập ghi chú hoặc lý do phê duyệt/từ chối giao dịch này..."
                       value={adminNote}
                       onChange={(e) => setAdminNote(e.target.value)}
+                      style={{
+                        width: "100%",
+                        minHeight: "90px",
+                        resize: "none",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "12px",
+                        padding: "12px 14px",
+                        background: "#fff",
+                        fontSize: "13.5px",
+                        lineHeight: "1.5",
+                        outline: "none",
+                        boxSizing: "border-box",
+                        boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)",
+                        transition: "all 0.2s ease"
+                      }}
                     />
                   </div>
                 </form>
               ) : (
-                selectedOrder.adminNote && (
-                  <div className="admin-info-item" style={{ marginTop: 16, padding: 12, background: "rgba(255,255,255,0.03)", borderRadius: 8 }}>
-                    <span className="admin-info-item-label">Ghi chú của Admin</span>
-                    <span className="admin-info-item-value">{selectedOrder.adminNote}</span>
-                  </div>
-                )
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {/* If order is Paid, show processing metadata */}
+                  {selectedOrder.status === "Paid" && (
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "16px",
+                      padding: "12px 16px",
+                      background: "rgba(16,185,129,0.04)",
+                      border: "1px solid rgba(16,185,129,0.15)",
+                      borderRadius: "12px"
+                    }}>
+                      <div className="admin-info-item">
+                        <span className="admin-info-item-label" style={{ color: "var(--admin-success)" }}>Thời gian duyệt</span>
+                        <span style={{ fontSize: "13px", fontWeight: 600 }}>{formatDateTime(selectedOrder.paidAt)}</span>
+                      </div>
+                      <div className="admin-info-item">
+                        <span className="admin-info-item-label" style={{ color: "var(--admin-success)" }}>Người phê duyệt</span>
+                        <span style={{ fontSize: "13px", fontWeight: 600 }}>{selectedOrder.confirmedBy || "Hệ thống"}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* If order is Expired, show expiry metadata */}
+                  {selectedOrder.status === "Expired" && (
+                    <div style={{
+                      padding: "12px 16px",
+                      background: "rgba(148,163,184,0.05)",
+                      border: "1px solid rgba(148,163,184,0.15)",
+                      borderRadius: "12px",
+                      fontSize: "13px",
+                      color: "var(--admin-text-secondary)",
+                      display: "flex",
+                      justifyContent: "space-between"
+                    }}>
+                      <span style={{ fontWeight: 600 }}>Hạn thanh toán:</span>
+                      <span>{formatDateTime(selectedOrder.expiresAt)}</span>
+                    </div>
+                  )}
+
+                  {/* Admin Note if exists */}
+                  {selectedOrder.adminNote && (
+                    <div style={{
+                      padding: "16px",
+                      background: "rgba(255,107,0,0.04)",
+                      border: "1px dashed rgba(255,107,0,0.2)",
+                      borderRadius: "12px"
+                    }}>
+                      <span className="admin-info-item-label" style={{ color: "var(--admin-primary)", display: "block", marginBottom: "6px" }}>
+                        Ghi chú từ Admin
+                      </span>
+                      <span style={{ fontSize: "13.5px", color: "var(--admin-text-secondary)", lineHeight: "1.5" }}>
+                        {selectedOrder.adminNote}
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -322,6 +425,24 @@ export default function PaymentManagement() {
               <button className="admin-btn admin-btn-outline" onClick={closeModal}>
                 Đóng
               </button>
+              {modalType === "view" && selectedOrder.status === "Pending" && (
+                <>
+                  <button 
+                    className="admin-btn admin-btn-danger" 
+                    onClick={() => setModalType("reject")}
+                    style={{ marginLeft: 8 }}
+                  >
+                    Từ chối đơn
+                  </button>
+                  <button 
+                    className="admin-btn admin-btn-success" 
+                    onClick={() => setModalType("confirm")}
+                    style={{ marginLeft: 8 }}
+                  >
+                    Phê duyệt đơn
+                  </button>
+                </>
+              )}
               {modalType === "confirm" && (
                 <button type="submit" form="actionForm" className="admin-btn admin-btn-success">
                   Xác nhận Thanh toán

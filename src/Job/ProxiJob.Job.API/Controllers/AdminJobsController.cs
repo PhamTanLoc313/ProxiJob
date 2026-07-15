@@ -34,7 +34,9 @@ namespace ProxiJob.Job.API.Controllers
                     BusinessId = j.BusinessId,
                     CategoryId = j.CategoryId,
                     CategoryName = j.Category != null ? j.Category.Name : "Chưa phân loại",
-                    Address = j.Location != null ? j.Location.Address : ""
+                    Address = j.Location != null ? j.Location.Address : "",
+                    Latitude = j.Location != null ? j.Location.Latitude : 0,
+                    Longitude = j.Location != null ? j.Location.Longitude : 0
                 })
                 .ToListAsync(cancellationToken);
 

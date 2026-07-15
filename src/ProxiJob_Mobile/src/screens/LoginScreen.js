@@ -32,7 +32,7 @@ export default function LoginScreen() {
   const [selectedGoogleRole, setSelectedGoogleRole] = useState(null);
 
   // Google OAuth Client ID (Web Application type - cần cho cả native SDK lẫn browser flow)
-  const GOOGLE_WEB_CLIENT_ID = '761339432164-gth4e77gocarke99gj3vk38ti5bkcull.apps.googleusercontent.com';
+  const GOOGLE_WEB_CLIENT_ID = '761339432164-gbh4o77gocarke99gj3vk38tb9bkculi.apps.googleusercontent.com';
 
   // Backend callback URL - LUÔN dùng production URL vì Google redirect browser đến đây
   // (URL này phải public và đã đăng ký trên Google Console)
