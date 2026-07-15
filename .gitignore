@@ -18,3 +18,7 @@ src/**/appsettings.Development.json
 *.suo
 *.user
 *.userosscache
+
+## [Phần 4: File nén và cài đặt lớn]
+*.tar.gz
+*.apk

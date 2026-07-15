@@ -17,17 +17,23 @@ namespace ProxiJob.Identity.Application.Features.Auth.Commands.GoogleLogin
         private readonly IAuthRepository _authRepository;
         private readonly IRoleRepository _roleRepository;
         private readonly IAuthSessionService _authSessionService;
+        private readonly IStudentProfileRepository _studentProfileRepository;
+        private readonly IBusinessProfileRepository _businessProfileRepository;
         private readonly IUnitOfWork _unitOfWork;
 
         public GoogleLoginCommandHandler(
             IAuthRepository authRepository,
             IRoleRepository roleRepository,
             IAuthSessionService authSessionService,
+            IStudentProfileRepository studentProfileRepository,
+            IBusinessProfileRepository businessProfileRepository,
             IUnitOfWork unitOfWork)
         {
             _authRepository = authRepository;
             _roleRepository = roleRepository;
             _authSessionService = authSessionService;
+            _studentProfileRepository = studentProfileRepository;
+            _businessProfileRepository = businessProfileRepository;
             _unitOfWork = unitOfWork;
         }
 
@@ -112,15 +118,106 @@ namespace ProxiJob.Identity.Application.Features.Auth.Commands.GoogleLogin
                 // Assign role
                 await _roleRepository.AssignRoleToUserAsync(user.Id, roleName, "GoogleAuth", cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                // Auto-create StudentProfile for new Student users
+                // so the dashboard doesn't crash with "Student profile not found"
+                if (roleName == RoleNames.Student)
+                {
+                    var studentProfile = new StudentProfile
+                    {
+                        UserId = user.Id,
+                        ReadinessStatus = ProfileReadinessStatus.Incomplete,
+                        AppliesLimit = 3,
+                        AppliesUsed = 0,
+                        ReputationScore = 0,
+                        ReviewCount = 0,
+                        CreatedBy = "GoogleAuth"
+                    };
+                    await _studentProfileRepository.AddAsync(studentProfile, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+                // Auto-create BusinessProfile for new Business/Employer users
+                else if (roleName == RoleNames.Business)
+                {
+                    var businessProfile = new BusinessProfile
+                    {
+                        UserId = user.Id,
+                        ReadinessStatus = ProfileReadinessStatus.Incomplete,
+                        BusinessName = user.FullName,
+                        ReputationScore = 0,
+                        ReviewCount = 0,
+                        CreatedBy = "GoogleAuth"
+                    };
+                    await _businessProfileRepository.AddAsync(businessProfile, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
             }
             else
             {
+                // Verify that the existing user's role matches the requested role
+                var existingRole = await _roleRepository.GetUserRoleNameAsync(user.Id, cancellationToken);
+                var requestedRoleName = request.Role.ToLower() switch
+                {
+                    "student" => RoleNames.Student,
+                    "employer" => RoleNames.Business,
+                    "business" => RoleNames.Business,
+                    _ => RoleNames.Student
+                };
+
+                if (existingRole != null && existingRole != requestedRoleName)
+                {
+                    var friendlyExistingRole = existingRole == RoleNames.Student ? "Sinh viên" : "Chủ quán";
+                    var friendlyRequestedRole = requestedRoleName == RoleNames.Student ? "Sinh viên" : "Chủ quán";
+                    throw new UnauthorizedAccessException($"Tài khoản này đã được đăng ký với vai trò {friendlyExistingRole}. Bạn không thể đăng nhập với vai trò {friendlyRequestedRole}.");
+                }
+
                 // Update avatar if provided
                 if (!string.IsNullOrEmpty(picture) && user.AvatarUrl != picture)
                 {
                     user.AvatarUrl = picture;
                     await _authRepository.UpdateUserAsync(user, cancellationToken);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+
+                // Check and auto-create profile if missing for existing user
+                var roleName = requestedRoleName;
+
+                if (roleName == RoleNames.Student)
+                {
+                    var profile = await _studentProfileRepository.GetByUserIdAsync(user.Id, cancellationToken);
+                    if (profile == null)
+                    {
+                        profile = new StudentProfile
+                        {
+                            UserId = user.Id,
+                            ReadinessStatus = ProfileReadinessStatus.Incomplete,
+                            AppliesLimit = 3,
+                            AppliesUsed = 0,
+                            ReputationScore = 0,
+                            ReviewCount = 0,
+                            CreatedBy = "GoogleAuth"
+                        };
+                        await _studentProfileRepository.AddAsync(profile, cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    }
+                }
+                else if (roleName == RoleNames.Business)
+                {
+                    var profile = await _businessProfileRepository.GetByUserIdAsync(user.Id, cancellationToken);
+                    if (profile == null)
+                    {
+                        profile = new BusinessProfile
+                        {
+                            UserId = user.Id,
+                            ReadinessStatus = ProfileReadinessStatus.Incomplete,
+                            BusinessName = user.FullName,
+                            ReputationScore = 0,
+                            ReviewCount = 0,
+                            CreatedBy = "GoogleAuth"
+                        };
+                        await _businessProfileRepository.AddAsync(profile, cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    }
                 }
             }
 
