@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { registerUser } from "./authStorage";
+import { registerApi } from "../api/auth";
 import { Eye, EyeOff } from "lucide-react";
 
 function Register() {
@@ -49,18 +49,20 @@ function Register() {
     }
 
     setErrors({});
-    const result = registerUser({ fullName, email, password, role });
-    if (!result.ok) {
-      setErrors({ submit: result.message });
-      return;
-    }
-
-    navigate("/login", {
-      state: {
-        registeredEmail: email,
-        message: result.message,
-      },
-    });
+    const userType = role === "student" ? 0 : 1;
+    
+    registerApi(fullName, email, password, confirmPassword, userType)
+      .then((res) => {
+        navigate("/login", {
+          state: {
+            registeredEmail: email,
+            message: "Đăng ký thành công. Mời bạn đăng nhập.",
+          },
+        });
+      })
+      .catch((err) => {
+        setErrors({ submit: err.message || "Đăng ký thất bại." });
+      });
   };
 
   return (

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { loginUser } from "./authStorage";
+import { loginApi } from "../api/auth";
 import { useAuth } from "./AuthContext";
 import { adminLogin } from "../admin/adminData";
 import { Eye, EyeOff } from "lucide-react";
@@ -53,14 +53,13 @@ function Login() {
       return;
     }
 
-    const result = loginUser({ email, password });
-    if (!result.ok) {
-      setErrors({ submit: result.message });
-      return;
+    try {
+      const result = await loginApi(email, password);
+      setCurrentUser(result.user);
+      navigate("/");
+    } catch (err) {
+      setErrors({ submit: err.message || "Đăng nhập thất bại." });
     }
-    setCurrentUser(result.user);
-
-    navigate("/");
   };
 
   return (
