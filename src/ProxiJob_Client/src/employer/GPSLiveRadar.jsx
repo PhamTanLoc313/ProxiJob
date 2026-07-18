@@ -198,7 +198,7 @@ export default function GPSLiveRadar() {
           <p className="text-slate-400 text-xs mt-0.5">Giám sát vị trí nhân viên chấm công thời gian thực trong Geofence 100m.</p>
         </div>
         <button
-          onClick={fetchLogs}
+          onClick={loadAll}
           className="p-3 bg-slate-50 border hover:bg-slate-100 rounded-2xl transition"
         >
           <RefreshCw size={18} />

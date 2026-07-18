@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { getPlansApi, purchasePlanApi, getPaymentStatusApi } from "../api/auth";
 import { Star, ShieldCheck, CheckCircle2, ChevronRight, RefreshCw, Clock, ArrowLeft } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../admin/ToastContext";
 
 export default function StudentUpgrade() {
   const { user } = useAuth();
+  const toast = useToast();
   const [plans, setPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
@@ -18,9 +20,16 @@ export default function StudentUpgrade() {
     setLoadingPlans(true);
     try {
       const data = await getPlansApi();
-      const studentPlans = Array.isArray(data)
-        ? data.filter(p => p.planName === 'Student10' || p.Name === 'Student10')
+      const rawPlans = Array.isArray(data)
+        ? data
+        : (data && Array.isArray(data.items))
+        ? data.items
+        : (data && data.data && Array.isArray(data.data.items))
+        ? data.data.items
+        : (data && data.data && Array.isArray(data.data))
+        ? data.data
         : [];
+      const studentPlans = rawPlans.filter(p => p.planName === 'Student10' || p.Name === 'Student10');
       
       if (studentPlans.length === 0) {
         // Fallback mock
@@ -50,7 +59,7 @@ export default function StudentUpgrade() {
       });
       setPaymentStatus("Pending");
     } catch (err) {
-      alert("Tạo đơn hàng thất bại: " + err.message);
+      toast.error("Tạo đơn hàng thất bại: " + err.message);
     } finally {
       setPurchasing(false);
     }
@@ -64,9 +73,9 @@ export default function StudentUpgrade() {
       const status = statusData.status || statusData.Status || "Pending";
       setPaymentStatus(status);
       if (status === "Paid") {
-        alert("Giao dịch thành công! Tài khoản của bạn đã được nâng cấp. 🎉");
+        toast.success("Giao dịch thành công! Tài khoản của bạn đã được nâng cấp. 🎉");
       } else {
-        alert("Đơn hàng chưa được thanh toán hoặc hệ thống đang xử lý. Vui lòng thử lại sau vài giây.");
+        toast.warning("Đơn hàng chưa được thanh toán hoặc hệ thống đang xử lý. Vui lòng thử lại sau vài giây.");
       }
     } catch (err) {
       console.log("Failed to verify payment:", err);
@@ -78,7 +87,7 @@ export default function StudentUpgrade() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 min-h-screen flex flex-col gap-6">
+    <div className="flex flex-col gap-6 p-4 max-w-7xl mx-auto min-h-screen">
       {/* Back to list button if inside checkout */}
       {orderInfo && (
         <div className="flex">
@@ -114,21 +123,24 @@ export default function StudentUpgrade() {
                 {plans.map((plan) => (
                   <div
                     key={plan.id}
-                    className="border border-slate-100 hover:border-orange-200 p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition"
+                    className="border border-slate-100 hover:border-orange-200 hover:bg-orange-50/10 p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition shadow-xs hover:shadow-md"
                   >
                     <div>
-                      <h3 className="font-extrabold text-slate-800 text-base">Gói {plan.planName || 'Student10'}</h3>
-                      <p className="text-xs text-slate-500 mt-1 max-w-md">{plan.description}</p>
-                      <p className="text-[10px] text-slate-400 mt-2 font-bold uppercase">Thời gian: {plan.durationDays} ngày hiệu lực</p>
+                      <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2">
+                        Gói {plan.planName || 'Student10'}
+                        <span className="text-[9px] bg-emerald-50 border border-emerald-200 text-emerald-600 px-2 py-0.5 rounded-full font-extrabold uppercase">Bán Chạy</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-md leading-relaxed">{plan.description}</p>
+                      <p className="text-[10px] text-slate-400 mt-2 font-bold uppercase flex items-center gap-1">⏱️ {plan.durationDays} ngày hiệu lực</p>
                     </div>
 
                     <div className="flex flex-col items-start sm:items-end gap-3 shrink-0 w-full sm:w-auto">
-                      <p className="font-black text-xl text-emerald-600">{(plan.price || 10000).toLocaleString()} đ</p>
+                      <p className="font-black text-2xl text-emerald-600 bg-emerald-50/50 border border-emerald-100 px-3.5 py-1 rounded-xl">{(plan.price || 10000).toLocaleString()} đ</p>
                       <button
                         type="button"
                         disabled={purchasing}
                         onClick={() => handlePurchase(plan)}
-                        className="w-full sm:w-auto px-5 h-10 bg-orange-600 hover:bg-orange-700 disabled:bg-slate-200 text-white rounded-xl font-bold text-xs shadow-md shadow-orange-600/10 transition flex items-center justify-center gap-1.5"
+                        className="w-full sm:w-auto px-5 h-10 bg-orange-600 hover:bg-orange-700 disabled:bg-slate-200 text-white rounded-xl font-bold text-xs shadow-lg shadow-orange-600/15 hover:shadow-orange-600/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         Nâng cấp ngay <ChevronRight size={14} />
                       </button>
@@ -140,21 +152,21 @@ export default function StudentUpgrade() {
           </div>
 
           {/* Card: Benefits */}
-          <div className="md:col-span-4 bg-orange-50 border border-orange-100 rounded-3xl p-6 flex flex-col gap-5">
-            <h3 className="font-extrabold text-orange-900 text-sm flex items-center gap-2">
-              <Star size={16} fill="currentColor" /> Quyền lợi hội viên
+          <div className="md:col-span-4 bg-gradient-to-br from-amber-50 to-orange-50/70 border border-orange-100 shadow-md shadow-orange-500/5 rounded-3xl p-6 flex flex-col gap-5">
+            <h3 className="font-extrabold text-orange-950 text-sm flex items-center gap-2">
+              <Star size={16} fill="currentColor" className="text-orange-500" /> Quyền lợi hội viên
             </h3>
-            <ul className="text-xs text-orange-800 space-y-3 leading-relaxed">
-              <li className="flex items-start gap-2">
-                <span className="text-base leading-none">🚀</span>
+            <ul className="text-xs text-orange-900 space-y-4 leading-relaxed font-semibold">
+              <li className="flex items-start gap-2.5">
+                <span className="text-lg leading-none">🚀</span>
                 <span>Tăng giới hạn ứng tuyển lên thêm 10 lượt chất lượng cao.</span>
               </li>
-              <li className="flex items-start gap-2">
-                <span className="text-base leading-none">🎖️</span>
+              <li className="flex items-start gap-2.5">
+                <span className="text-lg leading-none">🎖️</span>
                 <span>Hồ sơ E-Portfolio được hiển thị ưu tiên trên danh sách chờ duyệt của chủ quán.</span>
               </li>
-              <li className="flex items-start gap-2">
-                <span className="text-base leading-none">🔔</span>
+              <li className="flex items-start gap-2.5">
+                <span className="text-lg leading-none">🔔</span>
                 <span>Nhận thông báo ưu tiên khi có ca trực lương cao gần bạn nhất.</span>
               </li>
             </ul>

@@ -1,34 +1,128 @@
 import { useState, useEffect } from "react";
 import { Calendar, Clock, DollarSign, MapPin, AlertCircle, RefreshCw, XCircle, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { getMyApplications, cancelApplicationApi } from "../api/jobs";
+import { getStudentPayrolls } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
+
+const getWeekDaysForDate = (referenceDate) => {
+  const today = new Date();
+  const currentDay = referenceDate.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
+  const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+
+  const monday = new Date(referenceDate);
+  monday.setDate(referenceDate.getDate() + distanceToMonday);
+
+  const days = [];
+  const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+
+    const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+    const apiDateStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+    const isToday = d.toDateString() === today.toDateString();
+
+    days.push({
+      name: dayNames[i],
+      date: dateStr,
+      apiDateStr: apiDateStr,
+      isToday: isToday,
+      fullYear: d.getFullYear(),
+      month: d.getMonth() + 1,
+      dayOfMonth: d.getDate()
+    });
+  }
+  return days;
+};
+
+const isSameDate = (shiftDateInput, apiDateStr) => {
+  if (!shiftDateInput || !apiDateStr) return false;
+  try {
+    const shiftDate = new Date(shiftDateInput);
+    const [year, month, day] = apiDateStr.split('-').map(Number);
+    return shiftDate.getFullYear() === year &&
+      (shiftDate.getMonth() + 1) === month &&
+      shiftDate.getDate() === day;
+  } catch (e) {
+    return false;
+  }
+};
 
 export default function StudentCalendar() {
   const { user } = useAuth();
   const [applications, setApplications] = useState([]);
+  const [payrolls, setPayrolls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
   const [submittingCancel, setSubmittingCancel] = useState(false);
 
-  const fetchApplications = () => {
+  const [weekDays, setWeekDays] = useState([]);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState("upcoming"); // upcoming | completed
+  const [referenceDate, setReferenceDate] = useState(new Date());
+
+  const loadData = () => {
     if (!user) return;
     setLoading(true);
-    getMyApplications(user.id)
-      .then((data) => {
-        setApplications(Array.isArray(data) ? data : []);
+    Promise.all([
+      getMyApplications(user.id).catch(() => []),
+      getStudentPayrolls().catch(() => [])
+    ])
+      .then(([appsRes, payrollsRes]) => {
+        const rawApps = Array.isArray(appsRes)
+          ? appsRes
+          : (appsRes && Array.isArray(appsRes.items))
+          ? appsRes.items
+          : (appsRes && appsRes.data && Array.isArray(appsRes.data.items))
+          ? appsRes.data.items
+          : (appsRes && appsRes.data && Array.isArray(appsRes.data))
+          ? appsRes.data
+          : [];
+        setApplications(rawApps);
+
+        const rawPayrolls = Array.isArray(payrollsRes)
+          ? payrollsRes
+          : (payrollsRes && Array.isArray(payrollsRes.data))
+          ? payrollsRes.data
+          : [];
+        setPayrolls(rawPayrolls);
         setLoading(false);
       })
       .catch((err) => {
-        console.log("Failed to load applications:", err);
+        console.log("Failed to load data:", err);
         setLoading(false);
       });
   };
 
   useEffect(() => {
-    fetchApplications();
+    loadData();
   }, [user]);
+
+  useEffect(() => {
+    const days = getWeekDaysForDate(referenceDate);
+    setWeekDays(days);
+    const todayIdx = days.findIndex(d => d.isToday);
+    setSelectedDayIndex(todayIdx >= 0 ? todayIdx : 0);
+  }, [referenceDate]);
+
+  const handlePrevWeek = () => {
+    const prev = new Date(referenceDate);
+    prev.setDate(prev.getDate() - 7);
+    setReferenceDate(prev);
+  };
+
+  const handleNextWeek = () => {
+    const next = new Date(referenceDate);
+    next.setDate(next.getDate() + 7);
+    setReferenceDate(next);
+  };
+
+  const handleGoToToday = () => {
+    setReferenceDate(new Date());
+  };
 
   const handleCancelClick = (app) => {
     setSelectedApp(app);
@@ -42,12 +136,11 @@ export default function StudentCalendar() {
 
     setSubmittingCancel(true);
     try {
-      // cancelApplicationApi takes: applicationId, businessId, note, updatedBy
       await cancelApplicationApi(selectedApp.id, selectedApp.businessId || 1, cancelReason || "Em bận lịch đột xuất.");
       setCancelModalOpen(false);
       setSelectedApp(null);
       setCancelReason("");
-      fetchApplications(); // refresh
+      loadData();
     } catch (err) {
       alert(err.message || "Không thể hủy lịch làm việc. Vui lòng liên hệ chủ quán.");
     } finally {
@@ -59,11 +152,11 @@ export default function StudentCalendar() {
     const s = (status || "").toLowerCase();
     switch (s) {
       case "approved":
-        return <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200">Đã duyệt (Chờ làm)</span>;
+        return <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200">Đã duyệt</span>;
       case "pending":
         return <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 border border-amber-200">Chờ duyệt</span>;
       case "completed":
-        return <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-green-50 text-green-600 border border-green-200">Đã hoàn thành</span>;
+        return <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-green-50 text-green-600 border border-green-200">Hoàn thành</span>;
       case "cancelled":
       case "canceled":
         return <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-slate-50 text-slate-400 border border-slate-200">Đã hủy</span>;
@@ -74,8 +167,84 @@ export default function StudentCalendar() {
     }
   };
 
+  const selectedDay = weekDays[selectedDayIndex];
+
+  // Filter application items
+  const filteredApps = applications.filter((app) => {
+    if (!selectedDay) return false;
+    const matchDate = isSameDate(app.shiftDate, selectedDay.apiDateStr);
+    if (!matchDate) return false;
+
+    const status = (app.status || "").toLowerCase();
+    if (activeTab === "upcoming") {
+      return status === "approved" || status === "pending" || status === "applied";
+    } else {
+      return status === "completed" || status === "rejected" || status === "cancelled" || status === "canceled";
+    }
+  });
+
+  const getMonthLabel = () => {
+    if (!selectedDay) return "";
+    return `Tháng ${selectedDay.month}, ${selectedDay.fullYear}`;
+  };
+
+  const hasAppOnDay = (apiDateStr) => {
+    return applications.some(app => isSameDate(app.shiftDate, apiDateStr));
+  };
+
+  // Helper to calculate shift hours
+  const getShiftHours = (app) => {
+    if (!app.shiftStartTime || !app.shiftEndTime) return 4;
+    try {
+      const parseTime = (timeStr, baseDateInput) => {
+        const baseDate = new Date(baseDateInput || new Date());
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const d = new Date(baseDate);
+        d.setHours(hours, minutes, 0, 0);
+        return d;
+      };
+      const start = parseTime(app.shiftStartTime, app.shiftDate);
+      const end = parseTime(app.shiftEndTime, app.shiftDate);
+      const diffMs = end - start;
+      const diffHrs = diffMs / (1000 * 60 * 60);
+      return diffHrs > 0 ? diffHrs : 4;
+    } catch (e) {
+      return 4;
+    }
+  };
+
+  // Monthly Earnings calculation (same as mobile)
+  const currentMonth = selectedDay ? selectedDay.month : (new Date().getMonth() + 1);
+  const currentYear = selectedDay ? selectedDay.fullYear : new Date().getFullYear();
+
+  const completedPayrollEarnings = (payrolls || [])
+    .filter(p => p.status === 'Paid' || p.Status === 'Paid' || p.status === 2 || p.Status === 2)
+    .reduce((sum, p) => sum + (p.finalAmount || p.FinalAmount || 0), 0);
+
+  const completedShiftsValue = applications
+    .filter(app => {
+      if ((app.status || "").toLowerCase() !== "completed") return false;
+      const d = new Date(app.shiftDate);
+      return (d.getMonth() + 1) === currentMonth && d.getFullYear() === currentYear;
+    })
+    .reduce((sum, app) => sum + Math.round((app.shiftSalary || 0) * getShiftHours(app)), 0);
+
+  const upcomingShiftsValue = applications
+    .filter(app => {
+      const status = (app.status || "").toLowerCase();
+      if (status !== "approved") return false;
+      const d = new Date(app.shiftDate);
+      return (d.getMonth() + 1) === currentMonth && d.getFullYear() === currentYear;
+    })
+    .reduce((sum, app) => sum + Math.round((app.shiftSalary || 0) * getShiftHours(app)), 0);
+
+  const totalValue = completedShiftsValue + upcomingShiftsValue;
+  const completedEarnings = completedPayrollEarnings;
+  const projectedEarnings = Math.max(0, totalValue - completedEarnings);
+  const totalEarnings = completedEarnings + projectedEarnings;
+
   return (
-    <div className="flex flex-col gap-6 p-4 max-w-5xl mx-auto min-h-screen">
+    <div className="flex flex-col gap-6 p-4 max-w-7xl mx-auto min-h-screen">
       {/* 1. Header Row */}
       <div className="flex justify-between items-center bg-white border border-slate-100 shadow-md rounded-3xl p-5">
         <div>
@@ -83,89 +252,246 @@ export default function StudentCalendar() {
           <p className="text-slate-400 text-xs mt-0.5">Theo dõi lịch làm việc đã duyệt và lịch sử ca trực của bạn.</p>
         </div>
         <button
-          onClick={fetchApplications}
-          className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-2xl transition"
+          onClick={loadData}
+          className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-2xl transition cursor-pointer"
         >
           <RefreshCw size={18} className="text-slate-600" />
         </button>
       </div>
 
-      {/* 2. Main list layout */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-500 border-t-transparent mb-4" />
-          <p className="text-slate-500 text-sm font-semibold">Đang tải lịch trình ca trực của bạn...</p>
-        </div>
-      ) : applications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-16 bg-white rounded-3xl border border-slate-100 shadow-md text-center">
-          <Calendar className="text-slate-300 mb-4" size={48} />
-          <p className="text-slate-800 font-bold">Lịch roster đang trống</p>
-          <p className="text-slate-400 text-xs mt-1">Bạn chưa đăng ký ca trực nào cả. Hãy tìm việc ngay thôi!</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {applications.map((app) => {
-            const dateObj = app.shiftDate ? new Date(app.shiftDate) : new Date();
-            const weekday = dateObj.toLocaleDateString("vi-VN", { weekday: 'long' });
-            const dayStr = dateObj.toLocaleDateString("vi-VN", { day: 'numeric', month: 'numeric' });
-            
-            const isApproved = (app.status || "").toLowerCase() === "approved";
-            const companyName = app.companyName || app.company || "Cửa hàng";
+      {/* Main Grid: Left for Roster & Right for Earnings */}
+      <div className="grid gap-6 lg:grid-cols-12 items-start">
+        {/* Left column: Calendar & List */}
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          {/* Week Calendar Navigation Bar */}
+          <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-extrabold text-slate-800 text-sm tracking-tight uppercase flex items-center gap-1.5">
+                <span>🗓️</span> {getMonthLabel()}
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrevWeek}
+                  className="p-2 border border-slate-200 hover:bg-slate-50 rounded-xl transition cursor-pointer"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={handleGoToToday}
+                  className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Hôm nay
+                </button>
+                <button
+                  onClick={handleNextWeek}
+                  className="p-2 border border-slate-200 hover:bg-slate-50 rounded-xl transition cursor-pointer"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
 
-            return (
-              <article
-                key={app.id}
-                className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 hover:border-orange-100 transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
-              >
-                {/* Left Side: Date Calendar Icon and Info */}
-                <div className="flex items-center gap-4 w-full md:w-auto">
-                  {/* Calendar Sheet Visual */}
-                  <div className="w-14 h-14 bg-orange-50 border border-orange-100 rounded-2xl flex flex-col items-center justify-center shrink-0">
-                    <span className="text-[10px] font-black uppercase text-orange-600">{weekday.split(' ')[1] || weekday}</span>
-                    <span className="text-lg font-black text-slate-800 -mt-0.5">{dayStr}</span>
-                  </div>
-
-                  {/* Core details */}
-                  <div className="flex flex-col gap-0.5">
-                    <h3 className="font-extrabold text-slate-800 text-base">{app.jobTitle || "Ca làm việc"}</h3>
-                    <p className="text-xs text-slate-400 font-semibold">{companyName}</p>
-
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-slate-500 text-xs">
-                      <span className="flex items-center gap-1">
-                        <Clock size={13} className="text-slate-400" />
-                        <span>{app.shiftStartTime?.slice(0, 5)} - {app.shiftEndTime?.slice(0, 5)}</span>
-                      </span>
-                      <span className="flex items-center gap-1 font-bold text-slate-600">
-                        <DollarSign size={13} className="text-emerald-500" />
-                        <span>{app.shiftSalary?.toLocaleString()} đ/giờ</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Side: Badges & Actions */}
-                <div className="flex sm:flex-row items-start sm:items-center justify-between md:justify-end gap-4 w-full md:w-auto border-t md:border-0 pt-3 md:pt-0">
-                  <div className="flex flex-col items-start sm:items-end gap-1.5">
-                    {getStatusBadge(app.status)}
-                    {app.appliedDate && (
-                      <span className="text-[10px] text-slate-400">Ứng tuyển: {new Date(app.appliedDate).toLocaleDateString()}</span>
+            {/* Days grid */}
+            <div className="grid grid-cols-7 gap-2">
+              {weekDays.map((day, idx) => {
+                const isSelected = idx === selectedDayIndex;
+                const hasShift = hasAppOnDay(day.apiDateStr);
+                return (
+                  <button
+                    key={day.apiDateStr}
+                    onClick={() => setSelectedDayIndex(idx)}
+                    className={`flex flex-col items-center justify-center py-3 rounded-2xl transition cursor-pointer border relative ${
+                      isSelected
+                        ? "bg-orange-600 text-white border-orange-600 shadow-md shadow-orange-600/15"
+                        : day.isToday
+                        ? "bg-orange-50 text-orange-600 border-orange-200"
+                        : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase font-bold tracking-wider opacity-85">
+                      {day.name}
+                    </span>
+                    <span className="text-sm font-black mt-1">
+                      {day.dayOfMonth}
+                    </span>
+                    {/* Shift indicator dot */}
+                    {hasShift && (
+                      <span className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${
+                        isSelected ? "bg-white" : "bg-orange-600 animate-pulse"
+                      }`} />
                     )}
-                  </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-                  {isApproved && (
-                    <button
-                      onClick={() => handleCancelClick(app)}
-                      className="px-4 h-9 bg-slate-50 border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 rounded-xl font-bold text-xs transition shrink-0"
-                    >
-                      Xin Nghỉ Ca 🚫
-                    </button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+          {/* Tab Bar selector */}
+          <div className="flex border border-slate-100 bg-white p-1.5 rounded-2xl shadow-xs max-w-sm">
+            <button
+              onClick={() => setActiveTab("upcoming")}
+              className={`flex-1 py-2 text-xs font-extrabold rounded-xl transition cursor-pointer ${
+                activeTab === "upcoming"
+                  ? "bg-orange-600 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Sắp tới
+            </button>
+            <button
+              onClick={() => setActiveTab("completed")}
+              className={`flex-1 py-2 text-xs font-extrabold rounded-xl transition cursor-pointer ${
+                activeTab === "completed"
+                  ? "bg-orange-600 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Lịch sử ca trực
+            </button>
+          </div>
+
+          {/* Main list layout */}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-500 border-t-transparent mb-4" />
+              <p className="text-slate-500 text-sm font-semibold">Đang tải lịch trình ca trực của bạn...</p>
+            </div>
+          ) : filteredApps.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-16 bg-white rounded-3xl border border-slate-100 shadow-md text-center">
+              <Calendar className="text-slate-300 mb-4" size={48} />
+              <p className="text-slate-800 font-bold">Lịch trình hôm nay trống</p>
+              <p className="text-slate-400 text-xs mt-1">
+                {activeTab === "upcoming"
+                  ? "Bạn không có ca trực nào sắp diễn ra vào ngày này."
+                  : "Bạn không có lịch sử ca trực nào được ghi nhận vào ngày này."}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 animate-in fade-in duration-300">
+              {filteredApps.map((app) => {
+                const dateObj = app.shiftDate ? new Date(app.shiftDate) : new Date();
+                const weekday = dateObj.toLocaleDateString("vi-VN", { weekday: 'long' });
+                const dayStr = dateObj.toLocaleDateString("vi-VN", { day: 'numeric', month: 'numeric' });
+                
+                const isApproved = (app.status || "").toLowerCase() === "approved";
+                const companyName = app.companyName || app.company || "Cửa hàng";
+
+                return (
+                  <article
+                    key={app.id}
+                    className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 hover:border-orange-100 hover:shadow-lg transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4 duration-200"
+                  >
+                    {/* Left Side: Date Calendar Icon and Info */}
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                      {/* Calendar Sheet Visual */}
+                      <div className="w-14 h-14 bg-orange-50 border border-orange-100 rounded-2xl flex flex-col items-center justify-center shrink-0">
+                        <span className="text-[10px] font-black uppercase text-orange-600">{weekday.split(' ')[1] || weekday}</span>
+                        <span className="text-lg font-black text-slate-800 -mt-0.5">{dayStr}</span>
+                      </div>
+
+                      {/* Core details */}
+                      <div className="flex flex-col gap-0.5">
+                        <h3 className="font-extrabold text-slate-800 text-base">{app.jobTitle || "Ca làm việc"}</h3>
+                        <p className="text-xs text-slate-400 font-semibold">{companyName}</p>
+
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-slate-500 text-xs">
+                          <span className="flex items-center gap-1">
+                            <Clock size={13} className="text-slate-400" />
+                            <span>{app.shiftStartTime?.slice(0, 5)} - {app.shiftEndTime?.slice(0, 5)}</span>
+                          </span>
+                          <span className="flex items-center gap-1 font-bold text-slate-600">
+                            <DollarSign size={13} className="text-emerald-500" />
+                            <span>{app.shiftSalary?.toLocaleString()} đ/giờ</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Side: Badges & Actions */}
+                    <div className="flex sm:flex-row items-start sm:items-center justify-between md:justify-end gap-4 w-full md:w-auto border-t md:border-0 pt-3 md:pt-0">
+                      <div className="flex flex-col items-start sm:items-end gap-1.5">
+                        {getStatusBadge(app.status)}
+                        {app.appliedDate && (
+                          <span className="text-[10px] text-slate-400">Ứng tuyển: {new Date(app.appliedDate).toLocaleDateString()}</span>
+                        )}
+                      </div>
+
+                      {isApproved && (
+                        <button
+                          onClick={() => handleCancelClick(app)}
+                          className="px-4 h-9 bg-slate-50 border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 rounded-xl font-bold text-xs transition shrink-0 cursor-pointer"
+                        >
+                          Xin Nghỉ Ca 🚫
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Right column: Sticky Monthly Earnings */}
+        <div className="lg:col-span-4 sticky top-6">
+          <div className="bg-white border border-slate-100 shadow-xl rounded-3xl p-6 flex flex-col gap-6 transition hover:shadow-2xl duration-300">
+            {/* Widget Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Ví thu nhập tháng</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">Tháng này ({getMonthLabel()})</p>
+              </div>
+              <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl shadow-xs">
+                <DollarSign size={20} className="stroke-[2.5]" />
+              </div>
+            </div>
+
+            {/* Total Earnings amount */}
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Tổng thu nhập dự tính</span>
+              <span className="text-3xl font-black text-slate-800 mt-1">
+                {totalEarnings.toLocaleString("vi-VN")} <span className="text-lg font-bold text-orange-600">đ</span>
+              </span>
+            </div>
+
+            {/* Breakdown progress bar illustration */}
+            <div className="flex flex-col gap-4">
+              {/* Paid progress */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-slate-500">Đã nhận (Thực nhận)</span>
+                  <span className="text-emerald-600">{completedEarnings.toLocaleString("vi-VN")} đ</span>
+                </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div
+                    style={{ width: `${totalEarnings > 0 ? (completedEarnings / totalEarnings) * 100 : 0}%` }}
+                    className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                  />
+                </div>
+              </div>
+
+              {/* Waiting progress */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-slate-500">Chờ nhận (Dự kiến)</span>
+                  <span className="text-orange-600">{projectedEarnings.toLocaleString("vi-VN")} đ</span>
+                </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div
+                    style={{ width: `${totalEarnings > 0 ? (projectedEarnings / totalEarnings) * 100 : 0}%` }}
+                    className="bg-orange-500 h-full rounded-full transition-all duration-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Note info banner */}
+            <div className="text-[11px] leading-relaxed text-slate-400 bg-slate-50/50 border border-slate-100 p-3.5 rounded-2xl">
+              💡 **Gợi ý:** Tổng thu nhập tính bằng tổng mức lương các ca đã đi làm hoàn thành và các ca trực sắp làm đã được chủ quán duyệt.
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Cancel Modal popup */}
       {cancelModalOpen && selectedApp && (

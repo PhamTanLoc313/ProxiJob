@@ -27,8 +27,8 @@ namespace ProxiJob.Identity.Infrastructure.Services
                 ValidAudience = audience,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
                 ClockSkew = TimeSpan.Zero,
-                NameClaimType = ClaimTypes.Name,
-                RoleClaimType = ClaimTypes.Role
+                NameClaimType = "name",
+                RoleClaimType = "role"
             };
         }
 

@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { MapPin, ShieldAlert, Award, Camera, CheckCircle2, AlertTriangle, Compass, Play, RefreshCw, XCircle } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
-import { getPublishedJobs } from "../api/jobs"; // To get active shifts
-import { checkInShiftApi, checkOutShiftApi, getQrCode } from "../api/management";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { getPublishedJobs, getMyApplications } from "../api/jobs"; // To get active shifts
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -28,100 +26,111 @@ export default function StudentCheckIn() {
   const [selectedShift, setSelectedShift] = useState(null);
   const [realCoords, setRealCoords] = useState(null);
   const [studentCoords, setStudentCoords] = useState({ latitude: 10.857461, longitude: 106.801522 });
-  const [isSimulated, setIsSimulated] = useState(true);
-  const [simulatedDistance, setSimulatedDistance] = useState(50); // meters
-  const [showScanner, setShowScanner] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [timekeepingId, setTimekeepingId] = useState(null);
   const [checkedInShift, setCheckedInShift] = useState(null);
-  
-  // Modals and Alerts
-  const [showEarlyModal, setShowEarlyModal] = useState(false);
-  const [showSuccessCard, setShowSuccessCard] = useState(false);
-  const [successInfo, setSuccessInfo] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const mapRef = useRef(null);
   const checkinMap = useRef(null);
   const markersGroup = useRef(null);
 
-  // 1. Fetch Location
+  // 1. Fetch Location using laptop's browser GPS
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
           setRealCoords(coords);
-          if (!isSimulated) {
-            setStudentCoords(coords);
-          }
+          setStudentCoords(coords);
         },
         (err) => console.log("Failed to load browser GPS", err)
       );
     }
-  }, [isSimulated]);
+  }, []);
 
-  // 2. Fetch student's active shifts today (Mocked or queried)
-  // Normally we load shifts that student is approved for today
+  // 2. Fetch student's real approved shifts
   useEffect(() => {
     if (!user) return;
-    // Query published jobs just to grab coordinates for the demo
-    getPublishedJobs(null, 1, 30)
-      .then((data) => {
-        // Fallback: create mock active shifts assigned to this student
-        const mockShifts = [
-          {
-            id: 101,
-            title: "Phục vụ ca sáng",
-            shopName: "Phở Hà Nội",
-            address: "84/10 Nam Cao, Quận 9, TP.HCM",
-            latitude: 10.857461,
-            longitude: 106.801522,
-            startTime: "07:00",
-            endTime: "12:00",
-            salary: 25000,
-            status: "approved"
-          },
-          {
-            id: 102,
-            title: "Pha chế trà sữa",
-            shopName: "Trà sữa ToCoToCo",
-            address: "Lê Văn Việt, Quận 9, TP.HCM",
-            latitude: 10.8499,
-            longitude: 106.7720,
-            startTime: "13:00",
-            endTime: "18:00",
-            salary: 28000,
-            status: "approved"
+    Promise.all([
+      getMyApplications(user.id).catch(() => []),
+      getPublishedJobs(null, 1, 100).catch(() => [])
+    ])
+      .then(([appsRes, jobsRes]) => {
+        const rawApps = Array.isArray(appsRes)
+          ? appsRes
+          : (appsRes && Array.isArray(appsRes.items))
+          ? appsRes.items
+          : (appsRes && appsRes.data && Array.isArray(appsRes.data.items))
+          ? appsRes.data.items
+          : (appsRes && appsRes.data && Array.isArray(appsRes.data))
+          ? appsRes.data
+          : [];
+
+        const jobsList = Array.isArray(jobsRes)
+          ? jobsRes
+          : (jobsRes && Array.isArray(jobsRes.items))
+          ? jobsRes.items
+          : (jobsRes && jobsRes.data && Array.isArray(jobsRes.data.items))
+          ? jobsRes.data.items
+          : (jobsRes && jobsRes.data && Array.isArray(jobsRes.data))
+          ? jobsRes.data
+          : [];
+
+        // Filter approved applications
+        const approvedApps = rawApps.filter((app) => (app.status || "").toLowerCase() === "approved");
+
+        // Format dates into simple hours/minutes
+        const formatTime = (dateTimeInput) => {
+          if (!dateTimeInput) return "00:00";
+          try {
+            const d = new Date(dateTimeInput);
+            return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+          } catch (e) {
+            return "00:00";
           }
-        ];
-        setActiveShifts(mockShifts);
-        setSelectedShift(mockShifts[0]);
+        };
+
+        const mappedShifts = approvedApps.map((app) => {
+          const matchingJob = jobsList.find((job) => {
+            return Array.isArray(job.shifts) && job.shifts.some((s) => s.id === app.shiftId);
+          });
+
+          const realLat = matchingJob ? (matchingJob.latitude || (matchingJob.location && matchingJob.location.latitude)) : null;
+          const realLng = matchingJob ? (matchingJob.longitude || (matchingJob.location && matchingJob.location.longitude)) : null;
+          const realAddress = matchingJob ? (matchingJob.address || (matchingJob.location && matchingJob.location.address)) : null;
+          const realShopName = matchingJob ? (matchingJob.companyName || matchingJob.company) : null;
+
+          return {
+            id: app.shiftId,
+            applicationId: app.id,
+            title: app.jobTitle || (matchingJob && matchingJob.title) || "Ca làm việc",
+            shopName: realShopName || app.companyName || app.company || "Cửa hàng tuyển dụng",
+            address: realAddress || app.address || "Quanh vị trí của bạn",
+            latitude: realLat || 10.857461,
+            longitude: realLng || 106.801522,
+            startTime: formatTime(app.shiftStartTime),
+            endTime: formatTime(app.shiftEndTime),
+            salary: app.salary || 0,
+            status: "approved"
+          };
+        });
+
+        setActiveShifts(mappedShifts);
+        if (mappedShifts.length > 0) {
+          setSelectedShift(mappedShifts[0]);
+        } else {
+          setSelectedShift(null);
+        }
       })
-      .catch((err) => console.log(err));
+      .catch((err) => console.log("Failed to fetch active shifts:", err));
   }, [user]);
 
-  // 3. Handle GPS simulation coordinates math
+  // Update studentCoords whenever realCoords change
   useEffect(() => {
-    if (!selectedShift) return;
-
-    if (isSimulated) {
-      // Calculate coordinates at simulatedDistance away from shop coordinates
-      const angle = 45 * (Math.PI / 180); // 45 degrees direction
-      const metersPerDegreeLat = 111000;
-      const metersPerDegreeLng = 111000 * Math.cos(selectedShift.latitude * (Math.PI / 180));
-      
-      const deltaLat = (simulatedDistance * Math.sin(angle)) / metersPerDegreeLat;
-      const deltaLng = (simulatedDistance * Math.cos(angle)) / metersPerDegreeLng;
-
-      setStudentCoords({
-        latitude: selectedShift.latitude + deltaLat,
-        longitude: selectedShift.longitude + deltaLng
-      });
-    } else if (realCoords) {
+    if (realCoords) {
       setStudentCoords(realCoords);
     }
-  }, [selectedShift, isSimulated, simulatedDistance, realCoords]);
+  }, [realCoords]);
 
   // 4. Load Leaflet CheckIn Map
   useEffect(() => {
@@ -179,37 +188,6 @@ export default function StudentCheckIn() {
 
   }, [selectedShift, studentCoords]);
 
-  // 5. HTML5 Camera QR Code Scanner trigger
-  useEffect(() => {
-    if (!showScanner) return;
-    
-    // Slight delay to ensure element exists
-    const timer = setTimeout(() => {
-      const scanner = new Html5QrcodeScanner("reader", {
-        fps: 10,
-        qrbox: 250,
-        rememberLastUsedCamera: true
-      });
-
-      scanner.render(
-        (decodedText) => {
-          scanner.clear();
-          setShowScanner(false);
-          handleQRScanSuccess(decodedText);
-        },
-        (err) => {
-          // Silent errors during frame scans
-        }
-      );
-
-      return () => {
-        scanner.clear().catch((e) => console.log("Failed to clear scanner on unmount:", e));
-      };
-    }, 150);
-
-    return () => clearTimeout(timer);
-  }, [showScanner]);
-
   const currentDist = getDistance(
     studentCoords.latitude,
     studentCoords.longitude,
@@ -219,114 +197,13 @@ export default function StudentCheckIn() {
 
   const isWithinGeofence = currentDist <= 100;
 
-  const handleQRScanSuccess = async (qrToken) => {
-    setErrorMsg("");
-    const lat = studentCoords.latitude;
-    const lng = studentCoords.longitude;
-    const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
-    if (!checkedInShift) {
-      // Check-In
-      try {
-        const payload = {
-          shiftId: selectedShift.id,
-          qrToken: qrToken || "mock-token",
-          latitude: lat,
-          longitude: lng,
-          photoUrl: "",
-          targetLatitude: selectedShift.latitude,
-          targetLongitude: selectedShift.longitude
-        };
-        const res = await checkInShiftApi(payload);
-        const tId = res?.timekeepingId || res?.TimekeepingId || 999;
-        
-        setTimekeepingId(tId);
-        setCheckedInShift(selectedShift);
-        
-        setSuccessInfo({
-          type: "CHECK-IN",
-          title: "CHECK-IN THÀNH CÔNG 🎉",
-          timestamp: timeStr,
-          status: "Đúng Giờ",
-          statusColor: "#10B981",
-          shopName: selectedShift.shopName,
-          shiftTitle: selectedShift.title
-        });
-        setShowSuccessCard(true);
-      } catch (err) {
-        setErrorMsg(err.message || "Check-in thất bại. Sai token QR hoặc lỗi kết nối.");
-      }
-    } else {
-      // Check-Out
-      try {
-        const payload = {
-          timekeepingId: timekeepingId || 999,
-          latitude: lat,
-          longitude: lng,
-          photoUrl: ""
-        };
-        await checkOutShiftApi(payload);
-        
-        setCheckedInShift(null);
-        setTimekeepingId(null);
-
-        setSuccessInfo({
-          type: "CHECK-OUT",
-          title: "CHECK-OUT THÀNH CÔNG 🎉",
-          timestamp: timeStr,
-          status: "Hoàn Thành",
-          statusColor: "#0A58CA",
-          shopName: selectedShift.shopName,
-          shiftTitle: selectedShift.title
-        });
-        setShowSuccessCard(true);
-      } catch (err) {
-        setErrorMsg(err.message || "Check-out thất bại. Vui lòng thử lại.");
-      }
-    }
-  };
-
-  const handleCheckInBtnClick = () => {
-    if (!isWithinGeofence) {
-      setErrorMsg("Bạn đang ở quá xa quán. Vui lòng đứng trong phạm vi 100m để điểm danh.");
-      return;
-    }
-    setErrorMsg("");
-    setShowScanner(true);
-  };
-
-  const handleCheckOutBtnClick = () => {
-    if (!isWithinGeofence) {
-      setErrorMsg("Bạn cần ở gần cửa hàng để check-out.");
-      return;
-    }
-    setErrorMsg("");
-
-    // Simulate early check-out check (Check if current time is early)
-    // For demo purposes, we allow it after confirming modal
-    setShowScanner(true);
-  };
-
   return (
-    <div className="flex flex-col gap-6 p-4 max-w-5xl mx-auto min-h-screen">
+    <div className="flex flex-col gap-6 p-4 max-w-7xl mx-auto min-h-screen">
       {/* 1. Page Title */}
       <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">Trình Điểm Danh Vị Trí & QR</h1>
           <p className="text-slate-400 text-xs mt-0.5">Xác thực Check-in/Check-out bằng camera và GPS siêu cục bộ.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setIsSimulated(!isSimulated)}
-            className={`text-xs font-bold px-4 py-2 rounded-xl transition ${
-              isSimulated
-                ? "bg-amber-100 border border-amber-300 text-amber-800"
-                : "bg-slate-100 border border-slate-200 text-slate-700"
-            }`}
-          >
-            🛰️ GPS Giả lập: {isSimulated ? "BẬT" : "TẮT"}
-          </button>
         </div>
       </div>
 
@@ -344,40 +221,15 @@ export default function StudentCheckIn() {
                 {isWithinGeofence ? "Đang trong vùng" : "Ngoài vùng"}
               </span>
             </div>
-            <div ref={mapRef} style={{ height: "300px" }} className="w-full relative z-0" />
+            <div ref={mapRef} style={{ height: "360px" }} className="w-full relative z-0" />
           </div>
-
-          {/* Simulated distance controllers (ONLY if isSimulated is enabled) */}
-          {isSimulated && selectedShift && (
-            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 space-y-4">
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-amber-800">🎛️ Bảng điều khiển khoảng cách giả lập:</span>
-                <span className="font-black text-amber-900 bg-white border border-amber-200 px-3 py-1 rounded-xl shadow-xs">
-                  {simulatedDistance} mét
-                </span>
-              </div>
-              <input
-                type="range"
-                min="5"
-                max="500"
-                value={simulatedDistance}
-                onChange={(e) => setSimulatedDistance(Number(e.target.value))}
-                className="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
-              />
-              <div className="flex justify-between text-[10px] text-amber-700 font-bold">
-                <span>Trong vùng (5m)</span>
-                <span>Biên vùng (100m)</span>
-                <span>Ngoài vùng (500m)</span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Action Panel (Right side) */}
         <div className="md:col-span-5 flex flex-col gap-6">
           {/* Shift Selector */}
           <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-6 flex flex-col gap-4">
-            <h2 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Chọn ca trực điểm danh</h2>
+            <h2 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Ca trực điểm danh</h2>
             
             {checkedInShift ? (
               <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex flex-col gap-1">
@@ -391,71 +243,134 @@ export default function StudentCheckIn() {
             ) : activeShifts.length === 0 ? (
               <p className="text-slate-400 text-sm">Không có ca trực nào khả dụng hôm nay.</p>
             ) : (
-              <select
-                value={selectedShift?.id || ""}
-                onChange={(e) => {
-                  const id = Number(e.target.value);
-                  setSelectedShift(activeShifts.find((s) => s.id === id));
-                }}
-                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-semibold focus:outline-none focus:border-amber-400 transition cursor-pointer"
-              >
-                {activeShifts.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.title} ({s.shopName})
-                  </option>
-                ))}
-              </select>
+              <div className="relative w-full">
+                {/* Trigger Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full h-12 px-4 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-2xl text-slate-800 font-bold flex items-center justify-between transition cursor-pointer"
+                >
+                  <span className="truncate">
+                    {selectedShift ? `${selectedShift.title} (${selectedShift.shopName})` : "Chọn ca trực"}
+                  </span>
+                  <span className="text-slate-400 transition-transform duration-200 text-[10px]" style={{ transform: isDropdownOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                    ▼
+                  </span>
+                </button>
+
+                {/* Dropdown Options List */}
+                {isDropdownOpen && (
+                  <>
+                    {/* Backdrop to close dropdown */}
+                    <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
+                    
+                    <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 py-2 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-60 overflow-y-auto">
+                      {activeShifts.map((s) => {
+                        const isSelected = selectedShift?.id === s.id;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedShift(s);
+                              setIsDropdownOpen(false);
+                            }}
+                            className={`w-full px-4 py-3 text-left text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                              isSelected
+                                ? "bg-orange-50 text-orange-600 font-black"
+                                : "text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            <span className="truncate">{s.title} ({s.shopName})</span>
+                            {isSelected && <span className="text-orange-600 font-bold">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
 
             {selectedShift && !checkedInShift && (
-              <div className="bg-slate-50 p-4 rounded-2xl space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-400 font-semibold">Tọa độ đích:</span>
-                  <span className="font-bold text-slate-700">{selectedShift.latitude.toFixed(6)}, {selectedShift.longitude.toFixed(6)}</span>
+              <div className="flex flex-col gap-4">
+                {/* Premium Shift Details Card */}
+                <div className="bg-linear-to-br from-slate-50 to-slate-100 border border-slate-200/60 rounded-3xl p-5 shadow-xs relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-xl -mr-6 -mt-6"></div>
+                  
+                  {/* Job/Shift Title */}
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+                      💼
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-800 text-sm leading-snug">{selectedShift.title}</h4>
+                      <p className="text-[11px] text-slate-400 font-semibold mt-0.5">{selectedShift.shopName}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t border-slate-200/50 my-3.5"></div>
+                  
+                  {/* Time & Salary details */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-white rounded-2xl p-3 border border-slate-200/30 flex flex-col gap-0.5 shadow-2xs">
+                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">⏱️ Thời gian ca</span>
+                      <span className="font-extrabold text-slate-800">{selectedShift.startTime} - {selectedShift.endTime}</span>
+                    </div>
+                    <div className="bg-white rounded-2xl p-3 border border-slate-200/30 flex flex-col gap-0.5 shadow-2xs">
+                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">💰 Mức lương</span>
+                      <span className="font-extrabold text-emerald-600">{selectedShift.salary.toLocaleString()}đ/giờ</span>
+                    </div>
+                  </div>
+                  
+                  {/* Address */}
+                  <div className="mt-3.5 flex items-start gap-2 text-xs text-slate-500 bg-white/50 p-3 rounded-2xl border border-slate-200/20 shadow-2xs">
+                    <MapPin size={14} className="text-red-500 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed font-medium">{selectedShift.address}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400 font-semibold">Tọa độ của bạn:</span>
-                  <span className="font-bold text-slate-700">{studentCoords.latitude.toFixed(6)}, {studentCoords.longitude.toFixed(6)}</span>
-                </div>
-                <div className="flex justify-between border-t border-slate-200/50 pt-2 font-bold">
-                  <span className="text-slate-500">Khoảng cách hiện tại:</span>
-                  <span className={isWithinGeofence ? "text-emerald-600" : "text-red-500"}>
-                    {currentDist} mét ({isWithinGeofence ? "Hợp lệ" : "Quá xa"})
-                  </span>
+
+                {/* GPS and Geofence distance status */}
+                <div className="bg-slate-50/80 border border-slate-200/50 p-4 rounded-3xl space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400 font-semibold">Tọa độ quán:</span>
+                    <span className="font-bold text-slate-700 bg-white px-2 py-0.5 border border-slate-200/30 rounded-lg">
+                      {selectedShift.latitude.toFixed(6)}, {selectedShift.longitude.toFixed(6)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400 font-semibold">Tọa độ định vị (Browser):</span>
+                    <span className="font-bold text-slate-700 bg-white px-2 py-0.5 border border-slate-200/30 rounded-lg">
+                      {studentCoords.latitude.toFixed(6)}, {studentCoords.longitude.toFixed(6)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200/50 pt-2 font-bold items-center mt-1">
+                    <span className="text-slate-500">Khoảng cách hiện tại:</span>
+                    <span className={`px-2.5 py-1 rounded-xl text-[10px] uppercase font-black tracking-wider ${
+                      isWithinGeofence 
+                        ? "bg-emerald-50 text-emerald-600 border border-emerald-200" 
+                        : "bg-red-50 text-red-600 border border-red-200"
+                    }`}>
+                      {currentDist} mét ({isWithinGeofence ? "Hợp lệ" : "Quá xa"})
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Action buttons */}
-            <div className="flex flex-col gap-2 mt-2">
-              {!checkedInShift ? (
-                <button
-                  type="button"
-                  onClick={handleCheckInBtnClick}
-                  className={`w-full h-12 rounded-2xl font-black text-sm transition flex items-center justify-center gap-2 shadow-lg ${
-                    isWithinGeofence
-                      ? "bg-linear-to-br from-amber-500 to-orange-600 text-white shadow-orange-500/10"
-                      : "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed shadow-none"
-                  }`}
-                >
-                  <Camera size={18} /> Điểm danh Vào Ca (Check-In)
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleCheckOutBtnClick}
-                  className="w-full h-12 rounded-2xl font-black text-sm bg-linear-to-br from-blue-600 to-indigo-700 text-white hover:brightness-110 shadow-lg shadow-blue-500/10 transition flex items-center justify-center gap-2"
-                >
-                  <Camera size={18} /> Điểm danh Ra Ca (Check-Out)
-                </button>
-              )}
-            </div>
-
-            {errorMsg && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-100 p-3 rounded-2xl">
-                ⚠️ {errorMsg}
+            {/* Action buttons (Disabled on Web) */}
+            <div className="flex flex-col gap-2.5 mt-2">
+              <button
+                type="button"
+                disabled
+                className="w-full h-12 rounded-2xl font-black text-sm bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed shadow-none flex items-center justify-center gap-2"
+              >
+                <Camera size={18} /> Điểm danh Vào Ca (Chỉ dùng trên Mobile)
+              </button>
+              <p className="text-[11px] text-center text-amber-700 font-bold bg-amber-50 border border-amber-200 p-3 rounded-2xl leading-relaxed">
+                ⚠️ Tính năng quét mã QR & xác thực GPS bảo mật chỉ được hỗ trợ duy nhất trên ứng dụng **ProxiJob Mobile** để tránh giả lập vị trí.
               </p>
-            )}
+            </div>
           </div>
 
           {/* Geofence guidelines */}
@@ -467,73 +382,6 @@ export default function StudentCheckIn() {
           </div>
         </div>
       </div>
-
-      {/* Camera QR Scanner modal overlay */}
-      {showScanner && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden p-6 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-black text-lg text-slate-800">Quét mã QR Chấm Công</h3>
-              <button
-                onClick={() => setShowScanner(false)}
-                className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
-              >
-                Đóng
-              </button>
-            </div>
-            
-            <p className="text-xs text-slate-400 font-semibold text-center">Hướng camera vào mã QR hiển thị trên màn hình của chủ quán</p>
-            
-            {/* HTML5 QR Code Scanner element */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-              <div id="reader" className="w-full" />
-            </div>
-
-            <div className="text-center text-[10px] text-slate-400">
-              Trình quét sử dụng API camera bảo mật của trình duyệt web.
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Modal popup */}
-      {showSuccessCard && successInfo && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden p-8 text-center flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
-              <CheckCircle2 size={36} />
-            </div>
-            
-            <h2 className="font-black text-xl text-slate-800">{successInfo.title}</h2>
-            
-            <div className="bg-slate-50 p-5 rounded-2xl w-full text-xs space-y-1.5 text-left border border-slate-100">
-              <p className="flex justify-between">
-                <span className="text-slate-400 font-medium">Ca trực:</span>
-                <span className="font-bold text-slate-800">{successInfo.shiftTitle}</span>
-              </p>
-              <p className="flex justify-between">
-                <span className="text-slate-400 font-medium">Cửa hàng:</span>
-                <span className="font-bold text-slate-800">{successInfo.shopName}</span>
-              </p>
-              <p className="flex justify-between">
-                <span className="text-slate-400 font-medium">Thời gian quét:</span>
-                <span className="font-bold text-slate-800">{successInfo.timestamp}</span>
-              </p>
-              <p className="flex justify-between border-t border-slate-200 pt-2 mt-2">
-                <span className="text-slate-500 font-semibold">Trạng thái chấm công:</span>
-                <span className="font-black" style={{ color: successInfo.statusColor }}>{successInfo.status}</span>
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowSuccessCard(false)}
-              className="w-full h-11 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-bold shadow-lg shadow-orange-600/10 transition mt-2"
-            >
-              Hoàn thành
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

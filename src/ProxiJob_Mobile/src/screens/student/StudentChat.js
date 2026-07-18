@@ -148,7 +148,7 @@ export default function StudentChat() {
         const token = await getStoredToken();
         if (!token) return;
 
-        const hubUrl = IDENTITY_API_BASE_URL.replace('/api', '/hub/chat');
+        const hubUrl = IDENTITY_API_BASE_URL.replace(/\/api$/, '/hub/chat');
         console.log('[StudentChat SignalR] Connecting to:', hubUrl);
 
         const connection = new HubConnectionBuilder()
@@ -275,6 +275,14 @@ export default function StudentChat() {
       time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     };
     setMessages(prev => [...prev, tempMsg]);
+
+    setReadChatStatus(prev => ({
+      ...prev,
+      [activeChat.id]: { lastMessage: textToSend, time: tempMsg.time }
+    }));
+    setConversations(prev =>
+      prev.map(c => (c.id === activeChat.id ? { ...c, lastMessage: textToSend, time: tempMsg.time, unread: 0 } : c))
+    );
 
     try {
       if (connectionRef.current && connectionRef.current.state === 'Connected') {

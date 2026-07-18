@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { User, Mail, School, BookOpen, Star, Award, ShieldCheck, Check, Save, CreditCard, ToggleLeft, ToggleRight } from "lucide-react";
 import { getStudentProfileApi, updateStudentProfileApi, activateStudentProfileApi, deactivateStudentProfileApi } from "../api/studentApi";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../admin/ToastContext";
 
 export default function StudentPortfolio() {
   const { user } = useAuth();
+  const toast = useToast();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
   
   // Fields state
   const [skills, setSkills] = useState("");
@@ -77,8 +78,6 @@ export default function StudentPortfolio() {
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setSuccessMsg("");
-
     try {
       const payload = {
         skills,
@@ -89,10 +88,9 @@ export default function StudentPortfolio() {
         readyForWork
       };
       await updateStudentProfileApi(payload);
-      setSuccessMsg("Cập nhật hồ sơ năng lực thành công! ✨");
-      setTimeout(() => setSuccessMsg(""), 3000);
+      toast.success("Cập nhật hồ sơ năng lực thành công! ✨");
     } catch (err) {
-      alert(err.message || "Không thể cập nhật hồ sơ. Vui lòng kiểm tra lại.");
+      toast.error(err.message || "Không thể cập nhật hồ sơ. Vui lòng kiểm tra lại.");
     } finally {
       setSaving(false);
     }
@@ -108,13 +106,25 @@ export default function StudentPortfolio() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 flex flex-col gap-6 min-h-screen">
+    <div className="flex flex-col gap-6 p-4 max-w-7xl mx-auto min-h-screen">
       {/* 1. Profile Summary Banner */}
       <div className="bg-white border border-slate-100 shadow-lg rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center text-3xl shrink-0 font-bold border-2 border-orange-200">
-            👨‍🎓
-          </div>
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt="Student Avatar"
+              className="w-20 h-20 rounded-full border-2 border-orange-200 object-cover shrink-0"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120";
+              }}
+            />
+          ) : (
+            <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center text-3xl shrink-0 font-bold border-2 border-orange-200">
+              👨‍🎓
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black text-slate-800 tracking-tight">{user?.name || "Sinh viên"}</h1>
@@ -207,15 +217,8 @@ export default function StudentPortfolio() {
             />
           </div>
 
-          {/* Form alerts and submit */}
-          <div className="pt-4 border-t border-slate-50 flex items-center justify-between gap-4">
-            {successMsg ? (
-              <p className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl flex items-center gap-1">
-                <Check size={14} /> {successMsg}
-              </p>
-            ) : (
-              <div />
-            )}
+          {/* Form submit */}
+          <div className="pt-4 border-t border-slate-50 flex items-center justify-end gap-4">
 
             <button
               type="submit"

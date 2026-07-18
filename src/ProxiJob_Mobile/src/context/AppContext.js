@@ -71,7 +71,7 @@ export const AppProvider = ({ children }) => {
         const token = await getStoredToken();
         if (!token) return;
 
-        const hubUrl = IDENTITY_API_BASE_URL.replace('/api', '/hub/chat');
+        const hubUrl = IDENTITY_API_BASE_URL.replace(/\/api$/, '/hub/chat');
         console.log('[Global Notifications SignalR] Connecting to:', hubUrl);
 
         connection = new HubConnectionBuilder()

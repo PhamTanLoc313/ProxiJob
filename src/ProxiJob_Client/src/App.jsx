@@ -51,8 +51,8 @@ function App() {
     <ToastProvider>
       <Routes>
         {/* Auth Routes */}
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
-        <Route path="/register" element={!user ? <Register /> : <Navigate to="/" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Login />} />
 
         {/* Student Routes */}
         <Route
@@ -75,7 +75,7 @@ function App() {
         />
 
         {/* Admin Routes */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="payments" element={<PaymentManagement />} />
@@ -91,6 +91,8 @@ function App() {
             user ? (
               user.role === "student" ? (
                 <Navigate to="/student" replace />
+              ) : user.role === "admin" ? (
+                <Navigate to="/admin" replace />
               ) : (
                 <Navigate to="/employer" replace />
               )

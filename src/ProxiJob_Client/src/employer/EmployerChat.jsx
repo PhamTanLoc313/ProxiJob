@@ -67,7 +67,7 @@ export default function EmployerChat() {
     const token = getStoredToken();
     if (!token) return;
 
-    const hubUrl = IDENTITY_API_BASE_URL.replace("/api", "/hub/chat");
+    const hubUrl = IDENTITY_API_BASE_URL.replace(/\/api$/, "/hub/chat");
     const connection = new HubConnectionBuilder()
       .withUrl(hubUrl, {
         accessTokenFactory: () => token
@@ -141,7 +141,7 @@ export default function EmployerChat() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 min-h-[calc(100vh-140px)] flex flex-col md:flex-row bg-white border border-slate-100 shadow-xl rounded-3xl overflow-hidden">
+    <div className="max-w-6xl mx-auto p-4 h-[calc(100vh-140px)] flex flex-col md:flex-row bg-white border border-slate-100 shadow-xl rounded-3xl overflow-hidden">
       {/* 1. Conversations List Pane */}
       <div className={`w-full md:w-80 border-r border-slate-100 flex flex-col shrink-0 ${activeChat ? "hidden md:flex" : "flex"}`}>
         <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">

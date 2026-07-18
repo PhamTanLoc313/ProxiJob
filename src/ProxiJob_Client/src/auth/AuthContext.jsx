@@ -31,6 +31,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     clearAuthSession();
+    localStorage.removeItem("proxijob_admin_session");
     setUser(null);
   };
 

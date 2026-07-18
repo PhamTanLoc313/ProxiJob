@@ -3,15 +3,16 @@ import { Store, MapPin, Compass, Save, RefreshCw, Check } from "lucide-react";
 import { getBusinessProfileApi, updateBusinessProfileApi } from "../api/businessApi";
 import { updateQrLocation } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../admin/ToastContext";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 export default function EmployerProfile() {
   const { user } = useAuth();
+  const toast = useToast();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
 
   // Form states
   const [businessName, setBusinessName] = useState("");
@@ -113,7 +114,6 @@ export default function EmployerProfile() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setSuccessMsg("");
 
     try {
       const payload = {
@@ -131,11 +131,10 @@ export default function EmployerProfile() {
       // 2. Sync coordinates to QR Code Geofencing Center
       await updateQrLocation(Number(latitude), Number(longitude));
 
-      setSuccessMsg("Cập nhật thông tin cửa hàng thành công! ✨");
-      setTimeout(() => setSuccessMsg(""), 3000);
+      toast.success("Cập nhật thông tin cửa hàng thành công! ✨");
       fetchProfile();
     } catch (err) {
-      alert(err.message || "Cập nhật hồ sơ cửa hàng thất bại.");
+      toast.error(err.message || "Cập nhật hồ sơ cửa hàng thất bại.");
     } finally {
       setSaving(false);
     }

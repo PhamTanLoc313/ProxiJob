@@ -49,7 +49,7 @@ export default function AdminLayout() {
   const pendingPaymentsCount = payments.filter(p => p.status === "Pending").length;
 
   if (!session || session.role !== "Admin") {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   const isActive = (path, end) => {
@@ -103,39 +103,76 @@ export default function AdminLayout() {
       )}
 
       {/* Sidebar */}
-      <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="admin-sidebar-logo">
-          <img src={logoImg} className="admin-sidebar-logo-img" style={{ width: 36, height: 36, borderRadius: 8, marginRight: 8, objectFit: "contain" }} />
-          <div className="admin-sidebar-logo-text">
-            <span className="admin-sidebar-logo-title">ProxiJob</span>
-            <span className="admin-sidebar-logo-sub">Admin Panel</span>
-          </div>
-          <button
-            className="admin-menu-toggle"
-            style={{ marginLeft: "auto" }}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <nav className="admin-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`admin-nav-item ${isActive(item.path, item.end) ? "active" : ""}`}
+      <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`} style={{ height: "100vh", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <div className="admin-sidebar-logo" style={{ flexShrink: 0 }}>
+            <img src={logoImg} className="admin-sidebar-logo-img" style={{ width: 36, height: 36, borderRadius: 8, marginRight: 8, objectFit: "contain" }} />
+            <div className="admin-sidebar-logo-text">
+              <span className="admin-sidebar-logo-title">ProxiJob</span>
+              <span className="admin-sidebar-logo-sub">Admin Panel</span>
+            </div>
+            <button
+              className="admin-menu-toggle"
+              style={{ marginLeft: "auto" }}
               onClick={() => setSidebarOpen(false)}
             >
-              <item.icon size={20} className="admin-nav-icon" />
-              <span>{item.label}</span>
-              {item.badgeKey === "pendingPayments" && pendingPaymentsCount > 0 && (
-                <span className="admin-nav-badge">{pendingPaymentsCount}</span>
-              )}
-            </Link>
-          ))}
-        </nav>
+              <X size={18} />
+            </button>
+          </div>
 
+          <nav className="admin-nav" style={{ flex: 1, overflowY: "auto" }}>
+            {navItems.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`admin-nav-item ${isActive(item.path, item.end) ? "active" : ""}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <item.icon size={20} className="admin-nav-icon" />
+                <span>{item.label}</span>
+                {item.badgeKey === "pendingPayments" && pendingPaymentsCount > 0 && (
+                  <span className="admin-nav-badge">{pendingPaymentsCount}</span>
+                )}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        {/* User profile footer info */}
+        <div style={{ padding: 16, borderTop: "1px solid var(--admin-border)", display: "flex", flexDirection: "column", gap: 12, background: "#ffffff" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--admin-primary-glow)", color: "var(--admin-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "16px" }}>
+              🛠️
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ margin: 0, fontWeight: "bold", fontSize: 13, color: "var(--admin-text)" }}>Admin</p>
+              <p style={{ margin: 0, fontSize: 11, color: "var(--admin-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {session?.email || "admin@proxijob.test"}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowLogoutConfirm(true)}
+            style={{ 
+              width: "100%", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center", 
+              gap: 6, 
+              background: "var(--admin-border)", 
+              border: "1px solid var(--admin-border)", 
+              padding: "9px 16px", 
+              borderRadius: 12, 
+              fontSize: 13, 
+              fontWeight: 700, 
+              color: "var(--admin-text)", 
+              cursor: "pointer"
+            }}
+          >
+            <LogOut size={14} />
+            <span>Đăng xuất</span>
+          </button>
+        </div>
       </aside>
 
       {/* Main */}
@@ -175,18 +212,6 @@ export default function AdminLayout() {
                   })}
                 </span>
               </div>
-
-              {/* User Avatar */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 8px 2px 2px", background: "var(--admin-bg)", borderRadius: 99, border: "1px solid var(--admin-border)" }}>
-                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} alt="Admin Avatar" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text)" }}>Admin</span>
-              </div>
-
-              {/* Logout Button */}
-              <button className="admin-logout-btn" onClick={() => setShowLogoutConfirm(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--admin-border)", border: "1px solid var(--admin-border)", padding: "9px 16px", borderRadius: 12, fontSize: 13, fontWeight: 700, color: "var(--admin-text)", cursor: "pointer" }}>
-                <LogOut size={16} />
-                <span>Đăng xuất</span>
-              </button>
             </div>
           </div>
         </header>
@@ -222,9 +247,10 @@ export default function AdminLayout() {
                 className="admin-btn admin-btn-danger"
                 onClick={() => {
                   setShowLogoutConfirm(false);
-                  sessionStorage.setItem("logoutSuccess", "true");
                   adminLogout();
-                  window.location.href = "/admin/login";
+                  localStorage.removeItem("@proxijob_auth_token");
+                  localStorage.removeItem("@proxijob_auth_user");
+                  window.location.href = "/login";
                 }}
               >
                 Đăng xuất

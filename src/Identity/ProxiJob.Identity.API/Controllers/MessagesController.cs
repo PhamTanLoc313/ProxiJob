@@ -108,8 +108,12 @@ namespace ProxiJob.Identity.API.Controllers
                     .OrderByDescending(m => m.CreatedAt)
                     .FirstOrDefaultAsync(cancellationToken);
 
-                var unreadCount = await _dbContext.Messages
-                    .CountAsync(m => m.SenderId == user.Id && m.ReceiverId == currentUserId && !m.IsRead, cancellationToken);
+                var unreadCount = 0;
+                if (lastMsg != null && lastMsg.SenderId != currentUserId)
+                {
+                    unreadCount = await _dbContext.Messages
+                        .CountAsync(m => m.SenderId == user.Id && m.ReceiverId == currentUserId && !m.IsRead, cancellationToken);
+                }
 
                 list.Add(new
                 {

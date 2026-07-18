@@ -46,7 +46,8 @@
 /* ---------- Sidebar ---------- */
 .admin-sidebar {
   width: 260px;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   background: var(--admin-sidebar);
   border-right: 1px solid var(--admin-border);
   display: flex;
@@ -1028,6 +1029,7 @@ textarea.admin-form-input {
   left: 8%;
   transform: rotate(18deg);
   box-shadow: 0 15px 35px rgba(255, 107, 0, 0.03);
+  animation: float-decor-1 12s ease-in-out infinite;
 }
 
 .admin-decor-2 {
@@ -1037,6 +1039,25 @@ textarea.admin-form-input {
   right: 10%;
   transform: rotate(-22deg);
   box-shadow: 0 15px 35px rgba(255, 107, 0, 0.03);
+  animation: float-decor-2 15s ease-in-out infinite;
+}
+
+@keyframes float-decor-1 {
+  0%, 100% {
+    transform: translateY(0) rotate(18deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(25deg);
+  }
+}
+
+@keyframes float-decor-2 {
+  0%, 100% {
+    transform: translateY(0) rotate(-22deg);
+  }
+  50% {
+    transform: translateY(15px) rotate(-15deg) scale(1.05);
+  }
 }
 
 .admin-login-card-wrapper {
@@ -1253,7 +1274,18 @@ textarea.admin-form-input {
 .admin-login-image-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(255, 107, 0, 0.35) 0%, rgba(98, 0, 238, 0.65) 100%);
+  background: linear-gradient(135deg, rgba(255, 107, 0, 0.4) 0%, rgba(98, 0, 238, 0.75) 50%, rgba(255, 107, 0, 0.4) 100%);
+  background-size: 200% 200%;
+  animation: gradient-shift 12s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 .admin-login-glass-card {
@@ -1269,6 +1301,23 @@ textarea.admin-form-input {
   color: #ffffff;
   box-sizing: border-box;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-login-glass-card:hover {
+  transform: translateY(-8px);
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.hover-underline-link:hover {
+  text-decoration: underline !important;
+  color: #ff8533 !important;
+}
+
+.hover-color-link:hover {
+  color: #ff6b00 !important;
 }
 
 .admin-glass-tag {
@@ -1868,19 +1917,19 @@ textarea.admin-form-input {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-radius: 14px;
-  padding: 12px 18px;
-  min-width: 320px;
-  max-width: 420px;
-  box-shadow: 0 10px 25px -8px rgba(0, 0, 0, 0.05), 0 4px 12px -4px rgba(0, 0, 0, 0.03);
-  animation: adminToastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  border-radius: 100px;
+  padding: 10px 16px 10px 14px;
+  min-width: 280px;
+  max-width: 440px;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02);
+  animation: adminToastSlideIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
   transition: all 0.25s ease;
 }
 
 /* Success Toast */
 .admin-toast-success {
   background: #f0fdf4 !important;
-  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
   color: #15803d !important;
 }
 .admin-toast-success .admin-toast-message {
@@ -1889,6 +1938,7 @@ textarea.admin-form-input {
 .admin-toast-success .admin-toast-close {
   color: #16a34a !important;
   background: transparent;
+  border: 1px solid rgba(22, 163, 74, 0.25) !important;
 }
 .admin-toast-success .admin-toast-close:hover {
   background: rgba(22, 163, 74, 0.08) !important;
@@ -1897,7 +1947,7 @@ textarea.admin-form-input {
 /* Error Toast */
 .admin-toast-error {
   background: #fef2f2 !important;
-  border: 1px solid rgba(239, 68, 68, 0.22) !important;
+  border: 1px solid rgba(239, 68, 68, 0.25) !important;
   color: #b91c1c !important;
 }
 .admin-toast-error .admin-toast-message {
@@ -1906,6 +1956,7 @@ textarea.admin-form-input {
 .admin-toast-error .admin-toast-close {
   color: #dc2626 !important;
   background: transparent;
+  border: 1px solid rgba(220, 38, 38, 0.15) !important;
 }
 .admin-toast-error .admin-toast-close:hover {
   background: rgba(220, 38, 38, 0.08) !important;
@@ -1914,7 +1965,7 @@ textarea.admin-form-input {
 /* Warning Toast */
 .admin-toast-warning {
   background: #fffbeb !important;
-  border: 1px solid rgba(245, 158, 11, 0.22) !important;
+  border: 1px solid rgba(245, 158, 11, 0.25) !important;
   color: #b45309 !important;
 }
 .admin-toast-warning .admin-toast-message {
@@ -1923,6 +1974,7 @@ textarea.admin-form-input {
 .admin-toast-warning .admin-toast-close {
   color: #d97706 !important;
   background: transparent;
+  border: 1px solid rgba(217, 119, 6, 0.15) !important;
 }
 .admin-toast-warning .admin-toast-close:hover {
   background: rgba(217, 119, 6, 0.08) !important;
@@ -1931,7 +1983,7 @@ textarea.admin-form-input {
 /* Info Toast */
 .admin-toast-info {
   background: #eff6ff !important;
-  border: 1px solid rgba(59, 130, 246, 0.22) !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
   color: #1d4ed8 !important;
 }
 .admin-toast-info .admin-toast-message {
@@ -1940,20 +1992,21 @@ textarea.admin-form-input {
 .admin-toast-info .admin-toast-close {
   color: #2563eb !important;
   background: transparent;
+  border: 1px solid rgba(37, 99, 235, 0.15) !important;
 }
 .admin-toast-info .admin-toast-close:hover {
   background: rgba(37, 99, 235, 0.08) !important;
 }
 
 .admin-toast-message {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 500;
   line-height: 1.4;
   flex: 1;
 }
 
 .admin-toast-close {
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   padding: 4px;
   border-radius: 50%;
@@ -1966,11 +2019,11 @@ textarea.admin-form-input {
 @keyframes adminToastSlideIn {
   from {
     opacity: 0;
-    transform: translateX(40px) translateY(-10px);
+    transform: translateX(45px) scale(0.92);
   }
   to {
     opacity: 1;
-    transform: translateX(0) translateY(0);
+    transform: translateX(0) scale(1);
   }
 }
 
@@ -1994,13 +2047,81 @@ textarea.admin-form-input {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.admin-sub-breakdown-card {
-  transition: all var(--admin-transition);
-}
-
 .admin-sub-breakdown-card:hover {
   transform: translateY(-2px);
   border-color: rgba(255, 107, 0, 0.2) !important;
   box-shadow: 0 8px 24px -6px rgba(255, 107, 0, 0.08), var(--admin-shadow-lg) !important;
+}
+
+/* ---------- Sliding Auth Layout ---------- */
+.sliding-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  z-index: 30;
+  overflow: hidden;
+  transition: transform 0.65s cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+.sliding-overlay.state-login {
+  transform: translateX(100%);
+}
+
+.sliding-overlay.state-register {
+  transform: translateX(0);
+}
+
+.auth-form-container {
+  width: 50%;
+  flex: none;
+  box-sizing: border-box;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  max-height: 100%;
+}
+
+.role-toggle-btn {
+  flex: 1;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.25s ease;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.role-toggle-btn:hover {
+  border-color: #ff6b00;
+  color: #ff6b00;
+  background: rgba(255, 107, 0, 0.02);
+}
+
+.role-toggle-btn.active {
+  background: linear-gradient(135deg, #ff6b00 0%, #ff8533 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(255, 107, 0, 0.25);
+}
+
+@media (max-width: 880px) {
+  .sliding-overlay {
+    display: none;
+  }
+  
+  .auth-form-container {
+    width: 100% !important;
+  }
+  
+  .auth-form-container.hidden-mobile {
+    display: none !important;
+  }
 }
 
