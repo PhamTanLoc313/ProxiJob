@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, DollarSign, MapPin, AlertCircle, RefreshCw, XCircle, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
-import { getMyApplications, cancelApplicationApi } from "../api/jobs";
+import { getMyApplications, cancelApplicationApi, getPublishedJobs } from "../api/jobs";
 import { getStudentPayrolls } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
 
@@ -49,11 +50,9 @@ const isSameDate = (shiftDateInput, apiDateStr) => {
   }
 };
 
-export default function StudentCalendar() {
+export default function StudentCalendar({ onSelectJob }) {
   const { user } = useAuth();
-  const [applications, setApplications] = useState([]);
-  const [payrolls, setPayrolls] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
@@ -64,42 +63,63 @@ export default function StudentCalendar() {
   const [activeTab, setActiveTab] = useState("upcoming"); // upcoming | completed
   const [referenceDate, setReferenceDate] = useState(new Date());
 
-  const loadData = () => {
-    if (!user) return;
-    setLoading(true);
-    Promise.all([
-      getMyApplications(user.id).catch(() => []),
-      getStudentPayrolls().catch(() => [])
-    ])
-      .then(([appsRes, payrollsRes]) => {
-        const rawApps = Array.isArray(appsRes)
-          ? appsRes
-          : (appsRes && Array.isArray(appsRes.items))
-          ? appsRes.items
-          : (appsRes && appsRes.data && Array.isArray(appsRes.data.items))
-          ? appsRes.data.items
-          : (appsRes && appsRes.data && Array.isArray(appsRes.data))
-          ? appsRes.data
-          : [];
-        setApplications(rawApps);
+  // 1. Fetch applications and resolve job IDs via TanStack useQuery
+  const { data: applications = [], isLoading: loading } = useQuery({
+    queryKey: ["myApplications", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const [appsRes, jobsRes] = await Promise.all([
+        getMyApplications(user.id).catch(() => []),
+        getPublishedJobs(null, 1, 200).catch(() => [])
+      ]);
 
-        const rawPayrolls = Array.isArray(payrollsRes)
-          ? payrollsRes
-          : (payrollsRes && Array.isArray(payrollsRes.data))
-          ? payrollsRes.data
-          : [];
-        setPayrolls(rawPayrolls);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.log("Failed to load data:", err);
-        setLoading(false);
+      const rawApps = Array.isArray(appsRes)
+        ? appsRes
+        : (appsRes && Array.isArray(appsRes.items))
+        ? appsRes.items
+        : (appsRes && appsRes.data && Array.isArray(appsRes.data.items))
+        ? appsRes.data.items
+        : (appsRes && appsRes.data && Array.isArray(appsRes.data))
+        ? appsRes.data
+        : [];
+
+      const jobsList = Array.isArray(jobsRes)
+        ? jobsRes
+        : (jobsRes && Array.isArray(jobsRes.items))
+        ? jobsRes.items
+        : (jobsRes && jobsRes.data && Array.isArray(jobsRes.data.items))
+        ? jobsRes.data.items
+        : [];
+
+      const firstJobId = jobsList[0] ? jobsList[0].id : 1;
+
+      return rawApps.map(app => {
+        const matchingJob = jobsList.find(j => 
+          Array.isArray(j.shifts) && j.shifts.some(s => s.id === app.shiftId)
+        );
+        return {
+          ...app,
+          jobId: matchingJob ? matchingJob.id : firstJobId
+        };
       });
-  };
+    }
+  });
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
+  // 2. Fetch payrolls via TanStack useQuery
+  const { data: payrolls = [] } = useQuery({
+    queryKey: ["studentPayrolls", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const payrollsRes = await getStudentPayrolls().catch(() => []);
+      return Array.isArray(payrollsRes)
+        ? payrollsRes
+        : (payrollsRes && Array.isArray(payrollsRes.data))
+        ? payrollsRes.data
+        : [];
+    }
+  });
 
   useEffect(() => {
     const days = getWeekDaysForDate(referenceDate);
@@ -140,7 +160,7 @@ export default function StudentCalendar() {
       setCancelModalOpen(false);
       setSelectedApp(null);
       setCancelReason("");
-      loadData();
+      queryClient.invalidateQueries({ queryKey: ["myApplications", user?.id] });
     } catch (err) {
       alert(err.message || "Không thể hủy lịch làm việc. Vui lòng liên hệ chủ quán.");
     } finally {
@@ -170,7 +190,7 @@ export default function StudentCalendar() {
   const selectedDay = weekDays[selectedDayIndex];
 
   // Filter application items
-  const filteredApps = applications.filter((app) => {
+  const filteredApps = (applications || []).filter((app) => {
     if (!selectedDay) return false;
     const matchDate = isSameDate(app.shiftDate, selectedDay.apiDateStr);
     if (!matchDate) return false;
@@ -189,7 +209,7 @@ export default function StudentCalendar() {
   };
 
   const hasAppOnDay = (apiDateStr) => {
-    return applications.some(app => isSameDate(app.shiftDate, apiDateStr));
+    return (applications || []).some(app => isSameDate(app.shiftDate, apiDateStr));
   };
 
   // Helper to calculate shift hours
@@ -221,7 +241,7 @@ export default function StudentCalendar() {
     .filter(p => p.status === 'Paid' || p.Status === 'Paid' || p.status === 2 || p.Status === 2)
     .reduce((sum, p) => sum + (p.finalAmount || p.FinalAmount || 0), 0);
 
-  const completedShiftsValue = applications
+  const completedShiftsValue = (applications || [])
     .filter(app => {
       if ((app.status || "").toLowerCase() !== "completed") return false;
       const d = new Date(app.shiftDate);
@@ -229,7 +249,7 @@ export default function StudentCalendar() {
     })
     .reduce((sum, app) => sum + Math.round((app.shiftSalary || 0) * getShiftHours(app)), 0);
 
-  const upcomingShiftsValue = applications
+  const upcomingShiftsValue = (applications || [])
     .filter(app => {
       const status = (app.status || "").toLowerCase();
       if (status !== "approved") return false;
@@ -262,7 +282,10 @@ export default function StudentCalendar() {
         </div>
         
         <button
-          onClick={loadData}
+          onClick={() => {
+            queryClient.invalidateQueries({ queryKey: ["myApplications", user?.id] });
+            queryClient.invalidateQueries({ queryKey: ["studentPayrolls", user?.id] });
+          }}
           className="relative z-10 p-3.5 bg-white/10 hover:bg-white/20 border border-white/15 hover:border-white/30 text-white rounded-2xl shadow-md backdrop-blur-xs transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer shrink-0"
         >
           <RefreshCw size={18} className="animate-spin-slow text-amber-200" />
@@ -391,17 +414,20 @@ export default function StudentCalendar() {
                     key={app.id}
                     className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 hover:border-orange-100 hover:shadow-lg transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4 duration-200"
                   >
-                    {/* Left Side: Date Calendar Icon and Info */}
-                    <div className="flex items-center gap-4 w-full md:w-auto">
+                    {/* Left Side: Date Calendar Icon and Info (Clickable for detail) */}
+                    <div 
+                      onClick={() => onSelectJob && onSelectJob(app.jobId || 1, app.shiftId || 1)}
+                      className="flex items-center gap-4 w-full md:w-auto cursor-pointer group flex-1"
+                    >
                       {/* Calendar Sheet Visual */}
-                      <div className="w-14 h-14 bg-orange-50 border border-orange-100 rounded-2xl flex flex-col items-center justify-center shrink-0">
-                        <span className="text-[10px] font-black uppercase text-orange-600">{weekday.split(' ')[1] || weekday}</span>
+                      <div className="w-14 h-14 bg-orange-50 border border-orange-100 rounded-2xl flex flex-col items-center justify-center shrink-0 group-hover:bg-orange-100 transition-colors">
+                        <span className="text-[10px] font-black uppercase text-orange-650">{weekday.split(' ')[1] || weekday}</span>
                         <span className="text-lg font-black text-slate-800 -mt-0.5">{dayStr}</span>
                       </div>
 
                       {/* Core details */}
                       <div className="flex flex-col gap-0.5">
-                        <h3 className="font-extrabold text-slate-800 text-base">{app.jobTitle || "Ca làm việc"}</h3>
+                        <h3 className="font-extrabold text-slate-800 text-base group-hover:text-orange-600 transition-colors">{app.jobTitle || "Ca làm việc"}</h3>
                         <p className="text-xs text-slate-400 font-semibold">{companyName}</p>
 
                         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-slate-500 text-xs">
@@ -409,7 +435,7 @@ export default function StudentCalendar() {
                             <Clock size={13} className="text-slate-400" />
                             <span>{app.shiftStartTime?.slice(0, 5)} - {app.shiftEndTime?.slice(0, 5)}</span>
                           </span>
-                          <span className="flex items-center gap-1 font-bold text-slate-600">
+                          <span className="flex items-center gap-1 font-bold text-slate-650">
                             <DollarSign size={13} className="text-emerald-500" />
                             <span>{app.shiftSalary?.toLocaleString()} đ/giờ</span>
                           </span>
@@ -418,20 +444,24 @@ export default function StudentCalendar() {
                     </div>
 
                     {/* Right Side: Badges & Actions */}
-                    <div className="flex sm:flex-row items-start sm:items-center justify-between md:justify-end gap-4 w-full md:w-auto border-t md:border-0 pt-3 md:pt-0">
-                      <div className="flex flex-col items-start sm:items-end gap-1.5">
+                    <div className="flex flex-row items-center gap-4 shrink-0 w-full md:w-auto justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0">
+                      <div className="flex flex-col items-end gap-1.5 justify-center">
                         {getStatusBadge(app.status)}
                         {app.appliedDate && (
-                          <span className="text-[10px] text-slate-400">Ứng tuyển: {new Date(app.appliedDate).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">Đăng ký: {new Date(app.appliedDate).toLocaleDateString()}</span>
                         )}
                       </div>
 
                       {isApproved && (
                         <button
-                          onClick={() => handleCancelClick(app)}
-                          className="px-4 h-9 bg-slate-50 border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 rounded-xl font-bold text-xs transition shrink-0 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCancelClick(app);
+                          }}
+                          className="px-4.5 h-9 bg-rose-50 border border-rose-205 text-rose-600 hover:bg-rose-100 hover:border-rose-350 hover:shadow-sm rounded-2xl font-black text-xs transition flex items-center gap-1.5 shrink-0 cursor-pointer"
                         >
-                          Xin Nghỉ Ca 🚫
+                          <XCircle size={14} className="stroke-[2.5]" />
+                          <span>Xin Nghỉ Ca</span>
                         </button>
                       )}
                     </div>

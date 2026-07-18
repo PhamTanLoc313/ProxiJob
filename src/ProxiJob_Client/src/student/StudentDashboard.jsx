@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Search, SlidersHorizontal, MapPin, Briefcase, DollarSign, Calendar, Clock, Star, Compass, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { getPublishedJobs, getCategoriesApi, getJobPostShifts } from "../api/jobs";
 import { useAuth } from "../auth/AuthContext";
@@ -180,12 +181,9 @@ const formatDateVN = (dateInput) => {
 
 export default function StudentDashboard({ onSelectJob }) {
   const { user } = useAuth();
-  const [jobs, setJobs] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [minSalary, setMinSalary] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
-  const [loading, setLoading] = useState(true);
   const [coords, setCoords] = useState({ latitude: 10.857461, longitude: 106.801522 }); // Default: FPT University HCMC
   const [mapExpanded, setMapExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -213,82 +211,79 @@ export default function StudentDashboard({ onSelectJob }) {
     }
   }, []);
 
-  // 2. Fetch categories
-  useEffect(() => {
-    getCategoriesApi()
-      .then((data) => setCategories(Array.isArray(data) ? data : []))
-      .catch((err) => console.log("Failed to load categories:", err));
-  }, []);
+  // 2. Fetch categories via TanStack useQuery
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const data = await getCategoriesApi();
+      return Array.isArray(data) ? data : [];
+    }
+  });
 
-  // 3. Fetch jobs and their shifts, and calculate distances on frontend
-  useEffect(() => {
-    setLoading(true);
-    getPublishedJobs(selectedCategory || null, 1, 100)
-      .then(async (data) => {
-        const rawJobs = Array.isArray(data)
-          ? data
-          : (data && Array.isArray(data.items))
-            ? data.items
-            : (data && data.data && Array.isArray(data.data.items))
-              ? data.data.items
-              : (data && data.data && Array.isArray(data.data))
-                ? data.data
-                : [];
+  // 3. Fetch jobs and shifts via TanStack useQuery
+  const { data: jobs = [], isLoading: loading } = useQuery({
+    queryKey: ["publishedJobs", selectedCategory, coords.latitude, coords.longitude],
+    queryFn: async () => {
+      const data = await getPublishedJobs(selectedCategory || null, 1, 100);
+      const rawJobs = Array.isArray(data)
+        ? data
+        : (data && Array.isArray(data.items))
+          ? data.items
+          : (data && data.data && Array.isArray(data.data.items))
+            ? data.data.items
+            : (data && data.data && Array.isArray(data.data))
+              ? data.data
+              : [];
 
-        // Fetch shifts for all job posts in parallel
-        const shiftResults = await Promise.all(
-          rawJobs.map(async (job) => {
-            try {
-              const jobShiftsRes = await getJobPostShifts(job.id);
-              const jobShifts = Array.isArray(jobShiftsRes)
-                ? jobShiftsRes
-                : (jobShiftsRes && Array.isArray(jobShiftsRes.data))
-                  ? jobShiftsRes.data
-                  : (jobShiftsRes?.items || jobShiftsRes?.Items || []);
+      // Fetch shifts for all job posts in parallel
+      const shiftResults = await Promise.all(
+        rawJobs.map(async (job) => {
+          try {
+            const jobShiftsRes = await getJobPostShifts(job.id);
+            const jobShifts = Array.isArray(jobShiftsRes)
+              ? jobShiftsRes
+              : (jobShiftsRes && Array.isArray(jobShiftsRes.data))
+                ? jobShiftsRes.data
+                : (jobShiftsRes?.items || jobShiftsRes?.Items || []);
 
-              return jobShifts.map((s) => {
-                const shiftSalary = s.salary !== undefined ? s.salary : (s.Salary !== undefined ? s.Salary : 0);
-                const shiftSlots = s.slots !== undefined ? s.slots : (s.Slots !== undefined ? s.Slots : 0);
-                const shiftRemainingSlots = s.remainingSlots !== undefined ? s.remainingSlots : (s.RemainingSlots !== undefined ? s.RemainingSlots : 0);
+            return jobShifts.map((s) => {
+              const shiftSalary = s.salary !== undefined ? s.salary : (s.Salary !== undefined ? s.Salary : 0);
+              const shiftSlots = s.slots !== undefined ? s.slots : (s.Slots !== undefined ? s.Slots : 0);
+              const shiftRemainingSlots = s.remainingSlots !== undefined ? s.remainingSlots : (s.RemainingSlots !== undefined ? s.RemainingSlots : 0);
 
-                return {
-                  ...job,
-                  shiftId: s.id, // Target shift ID
-                  startTime: s.startTime || s.StartTime,
-                  endTime: s.endTime || s.EndTime,
-                  shiftSalary,
-                  slots: shiftSlots,
-                  remainingSlots: shiftRemainingSlots,
-                };
-              });
-            } catch (err) {
-              console.log(`Failed to fetch shifts for job ${job.id}:`, err);
-              return [];
-            }
-          })
-        );
-
-        const allShifts = shiftResults.flat();
-
-        // Process distance for each shift
-        const processedShifts = allShifts.map((shift) => {
-          if (shift.latitude && shift.longitude) {
-            const dist = getDistance(coords.latitude, coords.longitude, shift.latitude, shift.longitude);
-            return { ...shift, distance: dist };
+              return {
+                ...job,
+                shiftId: s.id, // Target shift ID
+                startTime: s.startTime || s.StartTime,
+                endTime: s.endTime || s.EndTime,
+                shiftSalary,
+                slots: shiftSlots,
+                remainingSlots: shiftRemainingSlots,
+              };
+            });
+          } catch (err) {
+            console.log(`Failed to fetch shifts for job ${job.id}:`, err);
+            return [];
           }
-          return { ...shift, distance: 999999 };
-        });
+        })
+      );
 
-        // Sort closest first
-        processedShifts.sort((a, b) => a.distance - b.distance);
-        setJobs(processedShifts);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.log("Failed to fetch jobs and shifts:", err);
-        setLoading(false);
+      const allShifts = shiftResults.flat();
+
+      // Process distance for each shift
+      const processedShifts = allShifts.map((shift) => {
+        if (shift.latitude && shift.longitude) {
+          const dist = getDistance(coords.latitude, coords.longitude, shift.latitude, shift.longitude);
+          return { ...shift, distance: dist };
+        }
+        return { ...shift, distance: 999999 };
       });
-  }, [selectedCategory, coords]);
+
+      // Sort closest first
+      processedShifts.sort((a, b) => a.distance - b.distance);
+      return processedShifts;
+    }
+  });
 
   // Reset page when filters change
   useEffect(() => {

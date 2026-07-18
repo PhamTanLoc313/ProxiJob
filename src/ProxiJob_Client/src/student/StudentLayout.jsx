@@ -18,6 +18,7 @@ export default function StudentLayout() {
   const [activeTab, setActiveTab] = useState("dashboard"); // dashboard | calendar | checkin | chat | portfolio | upgrade | job-detail
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [selectedShiftId, setSelectedShiftId] = useState(null);
+  const [jobDetailBackTab, setJobDetailBackTab] = useState("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [profileData, setProfileData] = useState(null);
@@ -51,6 +52,7 @@ export default function StudentLayout() {
             onSelectJob={(jobId, shiftId) => {
               setSelectedJobId(jobId);
               setSelectedShiftId(shiftId);
+              setJobDetailBackTab("dashboard");
               setActiveTab("job-detail");
             }}
           />
@@ -63,7 +65,7 @@ export default function StudentLayout() {
             onBack={() => {
               setSelectedJobId(null);
               setSelectedShiftId(null);
-              setActiveTab("dashboard");
+              setActiveTab(jobDetailBackTab);
             }}
             onNavigateToCalendar={() => {
               setActiveTab("calendar");
@@ -71,7 +73,16 @@ export default function StudentLayout() {
           />
         );
       case "calendar":
-        return <StudentCalendar />;
+        return (
+          <StudentCalendar
+            onSelectJob={(jobId, shiftId) => {
+              setSelectedJobId(jobId);
+              setSelectedShiftId(shiftId);
+              setJobDetailBackTab("calendar");
+              setActiveTab("job-detail");
+            }}
+          />
+        );
       case "checkin":
         return <StudentCheckIn />;
       case "chat":
