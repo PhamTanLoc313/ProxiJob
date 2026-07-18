@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { Briefcase, Calendar, MapPin, MessageCircle, User, Zap, LogOut, Menu, X } from "lucide-react";
+import { Briefcase, Calendar, MapPin, MessageCircle, User, Zap, LogOut, Menu, X, Sparkles } from "lucide-react";
+import { getStudentProfileApi } from "../api/studentApi";
+import logoImg from "../assets/logoproxijobcamden.png";
 import StudentDashboard from "./StudentDashboard";
 import JobDetail from "./JobDetail";
 import StudentCalendar from "./StudentCalendar";
@@ -18,6 +20,18 @@ export default function StudentLayout() {
   const [selectedShiftId, setSelectedShiftId] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    getStudentProfileApi()
+      .then((data) => {
+        setProfileData(data);
+      })
+      .catch((err) => {
+        console.log("Failed to load student profile for sidebar:", err);
+      });
+  }, [user, activeTab]);
 
   const handleLogout = () => {
     setShowLogoutConfirm(true);
@@ -72,12 +86,12 @@ export default function StudentLayout() {
   };
 
   const navItems = [
-    { id: "dashboard", label: "Tìm Việc", icon: <Briefcase size={18} /> },
-    { id: "calendar", label: "Lịch Roster", icon: <Calendar size={18} /> },
-    { id: "checkin", label: "Điểm Danh", icon: <MapPin size={18} /> },
-    { id: "chat", label: "Trò Chuyện", icon: <MessageCircle size={18} /> },
-    { id: "portfolio", label: "Hồ Sơ", icon: <User size={18} /> },
-    { id: "upgrade", label: "Nâng Cấp", icon: <Zap size={18} /> }
+    { id: "dashboard", label: "Tìm Việc", icon: <Briefcase size={20} /> },
+    { id: "calendar", label: "Lịch Roster", icon: <Calendar size={20} /> },
+    { id: "checkin", label: "Điểm Danh", icon: <MapPin size={20} /> },
+    { id: "chat", label: "Trò Chuyện", icon: <MessageCircle size={20} /> },
+    { id: "portfolio", label: "Hồ Sơ", icon: <User size={20} /> },
+    { id: "upgrade", label: "Nâng Cấp", icon: <Zap size={20} /> }
   ];
 
   return (
@@ -86,13 +100,16 @@ export default function StudentLayout() {
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-100 flex-col justify-between shrink-0 shadow-xs h-screen sticky top-0">
         <div className="flex flex-col flex-1 min-h-0">
           {/* Logo */}
-          <div className="h-16 px-6 border-b border-slate-50 flex items-center gap-2 shrink-0">
-            <span className="h-8 w-8 bg-orange-600 rounded-xl flex items-center justify-center text-white text-lg font-black">P</span>
-            <span className="font-black text-lg tracking-tight text-slate-800">ProxiJob <span className="text-xs text-orange-600 font-bold uppercase bg-orange-50 px-2 py-0.5 rounded-md">GenZ</span></span>
+          <div className="h-20 px-6 border-b border-slate-100 flex items-center gap-3 shrink-0 bg-gradient-to-r from-orange-50/20 to-amber-50/10">
+            <img src={logoImg} alt="ProxiJob Logo" className="h-10 w-10 object-contain shadow-xs shrink-0" />
+            <div>
+              <span className="font-black text-base tracking-tight text-slate-950 block">ProxiJob</span>
+              <span className="text-[9px] font-black uppercase text-orange-600 tracking-wider bg-orange-50 px-1.5 py-0.5 rounded-md">Cổng Sinh Viên</span>
+            </div>
           </div>
 
           {/* Nav Items */}
-          <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
+          <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
             {navItems.map((item) => {
               const active = activeTab === item.id || (item.id === "dashboard" && activeTab === "job-detail");
               return (
@@ -102,12 +119,15 @@ export default function StudentLayout() {
                     setActiveTab(item.id);
                     setSelectedJobId(null);
                   }}
-                  className={`w-full flex items-center gap-3 px-4 h-11 rounded-2xl font-bold text-xs transition duration-200 ${
+                  className={`w-full relative flex items-center gap-3.5 px-4.5 h-12 rounded-2xl font-extrabold text-sm transition-all duration-300 ${
                     active
-                      ? "bg-orange-600 text-white shadow-md shadow-orange-600/10"
-                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                      ? "bg-gradient-to-r from-orange-600 to-amber-500 text-white shadow-lg shadow-orange-500/20 translate-x-1"
+                      : "text-slate-500 hover:text-orange-600 hover:bg-orange-50/50 hover:translate-x-1"
                   }`}
                 >
+                  {active && (
+                    <span className="absolute left-0 top-3 bottom-3 w-1.5 bg-amber-300 rounded-r-full" />
+                  )}
                   {item.icon}
                   <span>{item.label}</span>
                 </button>
@@ -117,31 +137,78 @@ export default function StudentLayout() {
         </div>
 
         {/* User profile footer info */}
-        <div className="p-4 border-t border-slate-50 flex flex-col gap-3 shrink-0 bg-white">
-          <div className="flex items-center gap-3 px-2">
-            {user?.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt="Student Avatar"
-                className="w-10 h-10 rounded-full border-2 border-orange-200 object-cover shrink-0"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120";
-                }}
-              />
-            ) : (
-              <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center font-bold text-sm border-2 border-orange-200 text-orange-700 shrink-0">
-                🎓
+        <div className="p-4.5 border-t border-slate-100/80 flex flex-col gap-3.5 shrink-0 bg-gradient-to-b from-transparent to-slate-50/50">
+          <div className="bg-gradient-to-b from-white to-slate-50/80 border border-slate-200/60 rounded-3xl p-3.5 flex flex-col gap-4 shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-all duration-300">
+            {/* Profile Info Row */}
+            <div className="flex items-center gap-3 px-0.5">
+              <div className="relative">
+                {/* Glow ring around avatar */}
+                <div className="absolute -inset-0.5 bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-500 rounded-full blur-xs opacity-75 animate-pulse" />
+                {user?.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt="Student Avatar"
+                    className="relative w-10 h-10 rounded-full border border-white object-cover shrink-0"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120";
+                    }}
+                  />
+                ) : (
+                  <div className="relative w-10 h-10 bg-gradient-to-br from-orange-400 to-amber-500 rounded-full flex items-center justify-center font-bold text-sm border border-white text-white shrink-0">
+                    🎓
+                  </div>
+                )}
+                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white shadow-xs z-10" />
               </div>
-            )}
-            <div className="min-w-0">
-              <p className="font-bold text-xs text-slate-800 truncate">{user?.name || "Sinh viên"}</p>
-              <p className="text-[10px] text-slate-400 font-semibold truncate">{user?.email}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="font-black text-xs text-slate-800 truncate max-w-[90px]">{user?.name || "Sinh viên"}</p>
+                  <span className="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-wider shadow-xs scale-90 shrink-0">GENZ</span>
+                </div>
+                <p className="text-[10px] text-slate-400 font-bold truncate mt-0.5">{user?.email}</p>
+              </div>
+            </div>
+
+            {/* Separator line */}
+            <hr className="border-slate-100" />
+
+            {/* Subscription package details card */}
+            <div className="bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent border border-orange-500/10 p-3 rounded-2xl relative overflow-hidden flex flex-col gap-2.5">
+              {/* Blur blob decoration */}
+              <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-orange-450/15 rounded-full blur-xl pointer-events-none" />
+              
+              <div className="flex items-center gap-1.5 text-orange-950 relative z-10">
+                <Sparkles size={12} className="text-orange-600 fill-orange-200 animate-pulse shrink-0" />
+                <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-500">Gói ứng tuyển</span>
+              </div>
+              
+              <div className="flex justify-between items-center text-[10px] relative z-10">
+                <div className="space-y-0.5">
+                  <p className="text-[9px] text-slate-400 font-semibold">Tên gói:</p>
+                  <p className="font-extrabold text-slate-700">Sinh viên</p>
+                </div>
+                <div className="bg-orange-600 border border-orange-500 text-white font-black px-2 py-1 rounded-xl text-xs shadow-sm shadow-orange-600/20 text-center shrink-0">
+                  {Math.max(0, (profileData?.appliesLimit ?? 3) - (profileData?.appliesUsed ?? 0))} lượt
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("upgrade");
+                  setSelectedJobId(null);
+                }}
+                className="w-full py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[9.5px] font-black rounded-xl shadow-md shadow-orange-500/15 hover:shadow-lg transition-all duration-300 cursor-pointer flex items-center justify-center gap-1 hover:scale-[1.02] transform active:scale-95 relative z-10"
+              >
+                🚀 Nâng cấp gói ngay
+              </button>
             </div>
           </div>
+
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 h-10 border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-xl font-bold text-xs transition cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 px-4 h-10 border border-red-200/60 hover:border-red-600 text-red-500 hover:text-white bg-red-50/50 hover:bg-red-600 rounded-xl font-black text-xs transition-all duration-300 cursor-pointer shadow-xs hover:shadow-md hover:shadow-red-600/10 hover:scale-[1.01] transform active:scale-95"
           >
             <LogOut size={14} />
             <span>Đăng xuất</span>
@@ -153,7 +220,7 @@ export default function StudentLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="md:hidden h-16 bg-white border-b border-slate-100 px-4 flex justify-between items-center z-20 shadow-xs">
           <div className="flex items-center gap-2">
-            <span className="h-8 w-8 bg-orange-600 rounded-xl flex items-center justify-center text-white text-lg font-black">P</span>
+            <img src={logoImg} alt="ProxiJob Logo" className="h-8 w-8 object-contain shrink-0" />
             <span className="font-black text-sm tracking-tight text-slate-800">ProxiJob</span>
           </div>
           <button

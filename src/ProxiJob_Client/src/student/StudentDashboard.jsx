@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, SlidersHorizontal, MapPin, Briefcase, DollarSign, Calendar, Clock, Star, Compass, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, SlidersHorizontal, MapPin, Briefcase, DollarSign, Calendar, Clock, Star, Compass, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { getPublishedJobs, getCategoriesApi, getJobPostShifts } from "../api/jobs";
 import { useAuth } from "../auth/AuthContext";
 import L from "leaflet";
@@ -189,6 +189,8 @@ export default function StudentDashboard({ onSelectJob }) {
   const [coords, setCoords] = useState({ latitude: 10.857461, longitude: 106.801522 }); // Default: FPT University HCMC
   const [mapExpanded, setMapExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  const [salaryDropdownOpen, setSalaryDropdownOpen] = useState(false);
 
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
@@ -418,26 +420,28 @@ export default function StudentDashboard({ onSelectJob }) {
       `}</style>
 
       {/* 1. Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-amber-500 to-orange-600 p-6 text-white shadow-xl shadow-orange-500/10">
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <span className="text-xs uppercase font-extrabold tracking-wider bg-white/20 px-3 py-1 rounded-full backdrop-blur">
-              👋 Chào mừng, {user?.name || "Sinh viên"}
-            </span>
-            <h1 className="text-3xl font-black mt-2 tracking-tight">Tìm ca trực quanh bạn ngay lập tức!</h1>
-            <p className="mt-1 text-white/80 text-sm max-w-xl">
-              Ghép ca làm việc trong bán kính 100m. Nhận lương quyết toán nhanh chóng, an toàn.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-2xl backdrop-blur">
-            <Compass className="animate-spin text-amber-200" size={24} />
-            <div className="text-xs">
-              <p className="font-bold text-amber-100">Bán kính quét</p>
-              <p className="text-white">Dưới 10km quanh vị trí hiện tại</p>
-            </div>
+      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 p-6 md:p-8 text-white rounded-3xl shadow-xl shadow-slate-950/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        {/* Glow circles decoration */}
+        <div className="absolute right-0 top-0 -mt-10 -mr-10 w-44 h-44 bg-orange-500/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute left-1/3 bottom-0 -mb-14 w-52 h-52 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10">
+          <span className="text-[10px] uppercase font-extrabold tracking-widest bg-orange-500/20 border border-orange-500/30 text-orange-400 px-3 py-1 rounded-full backdrop-blur-xs">
+            👋 Chào mừng, {user?.name || "Sinh viên"}
+          </span>
+          <h1 className="text-3xl font-black text-white mt-3.5 tracking-tight">Tìm ca làm quanh bạn ngay lập tức!</h1>
+          <p className="text-slate-300 text-xs mt-1 max-w-xl">
+            Ghép ca làm việc trong bán kính 100m. Nhận lương quyết toán nhanh chóng, an toàn và uy tín.
+          </p>
+        </div>
+
+        <div className="relative z-10 flex items-center gap-2.5 bg-white/10 px-4.5 py-2.5 rounded-2xl backdrop-blur-xs border border-white/15 shadow-sm">
+          <Compass className="animate-spin text-amber-250" size={22} />
+          <div className="text-xs">
+            <p className="font-extrabold text-amber-100 uppercase tracking-widest text-[9px]">Bán kính quét</p>
+            <p className="text-white/90 mt-0.5 font-bold">Dưới 10km quanh bạn</p>
           </div>
         </div>
-        <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 w-64 h-64 rounded-full bg-white/5 pointer-events-none" />
       </div>
 
       {/* 2. Search and Filter Bar */}
@@ -457,33 +461,96 @@ export default function StudentDashboard({ onSelectJob }) {
 
           {/* Category drop down */}
           <div className="relative md:col-span-3">
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-sm focus:outline-none focus:border-amber-400 focus:bg-white transition appearance-none cursor-pointer"
+            <button
+              type="button"
+              onClick={() => setCatDropdownOpen(!catDropdownOpen)}
+              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-sm font-semibold flex items-center justify-between hover:bg-white hover:border-amber-400 transition cursor-pointer"
             >
-              <option value="">Tất cả ngành nghề</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              <span>{categories.find(c => c.id.toString() === selectedCategory)?.name || "Tất cả ngành nghề"}</span>
+              <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${catDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            
+            {catDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setCatDropdownOpen(false)} />
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200/80 rounded-2xl shadow-xl p-1.5 space-y-0.5 max-h-60 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory("");
+                      setCatDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      selectedCategory === ""
+                        ? "bg-orange-600 text-white"
+                        : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                    }`}
+                  >
+                    Tất cả ngành nghề
+                  </button>
+                  {categories.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(c.id.toString());
+                        setCatDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        selectedCategory === c.id.toString()
+                          ? "bg-orange-600 text-white"
+                          : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                      }`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Salary filter */}
           <div className="relative md:col-span-3">
-            <select
-              value={minSalary}
-              onChange={(e) => setMinSalary(Number(e.target.value))}
-              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-sm focus:outline-none focus:border-amber-400 focus:bg-white transition appearance-none cursor-pointer"
+            <button
+              type="button"
+              onClick={() => setSalaryDropdownOpen(!salaryDropdownOpen)}
+              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-sm font-semibold flex items-center justify-between hover:bg-white hover:border-amber-400 transition cursor-pointer"
             >
-              <option value="0">Tất cả mức lương</option>
-              <option value="20000">Từ 20.000đ/h</option>
-              <option value="25000">Từ 25.000đ/h</option>
-              <option value="30000">Từ 30.000đ/h</option>
-              <option value="35000">Từ 35.000đ/h</option>
-            </select>
+              <span>{minSalary === 0 ? "Tất cả mức lương" : `Từ ${minSalary.toLocaleString("vi-VN")}đ/h`}</span>
+              <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${salaryDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            
+            {salaryDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setSalaryDropdownOpen(false)} />
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200/80 rounded-2xl shadow-xl p-1.5 space-y-0.5">
+                  {[
+                    { val: 0, lbl: "Tất cả mức lương" },
+                    { val: 20000, lbl: "Từ 20.000đ/h" },
+                    { val: 25000, lbl: "Từ 25.000đ/h" },
+                    { val: 30000, lbl: "Từ 30.000đ/h" },
+                    { val: 35000, lbl: "Từ 35.000đ/h" }
+                  ].map((opt) => (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={() => {
+                        setMinSalary(opt.val);
+                        setSalaryDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        minSalary === opt.val
+                          ? "bg-orange-600 text-white"
+                          : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                      }`}
+                    >
+                      {opt.lbl}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -493,8 +560,8 @@ export default function StudentDashboard({ onSelectJob }) {
             type="button"
             onClick={() => setSelectedCategory("")}
             className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border cursor-pointer ${selectedCategory === ""
-                ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/15"
-                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/15"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
               }`}
           >
             💼 Tất cả
@@ -516,8 +583,8 @@ export default function StudentDashboard({ onSelectJob }) {
                 type="button"
                 onClick={() => setSelectedCategory(cat.id.toString())}
                 className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border cursor-pointer ${isSelected
-                    ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/15"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/15"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                   }`}
               >
                 {icon} {cat.name}
@@ -539,12 +606,12 @@ export default function StudentDashboard({ onSelectJob }) {
           {loading ? (
             <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md">
               <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-500 border-t-transparent mb-4" />
-              <p className="text-slate-500 text-sm font-semibold">Đang quét ca trực xung quanh bạn...</p>
+              <p className="text-slate-500 text-sm font-semibold">Đang quét ca làm xung quanh bạn...</p>
             </div>
           ) : filteredJobs.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md text-center">
               <span className="text-4xl mb-4">🔍</span>
-              <p className="text-slate-800 font-bold">Không tìm thấy ca trực nào phù hợp</p>
+              <p className="text-slate-800 font-bold">Không tìm thấy ca làm nào phù hợp</p>
               <p className="text-slate-400 text-xs mt-1">Hãy thay đổi bộ lọc hoặc vị trí của bạn để quét rộng hơn nhé.</p>
             </div>
           ) : (
@@ -553,7 +620,7 @@ export default function StudentDashboard({ onSelectJob }) {
                 const isUrgent = checkIsEmergency(job.title, job.description);
                 const companyName = job.companyName || job.company || "Cửa hàng tuyển dụng";
                 const theme = getCategoryTheme(job.categoryName);
-                
+
                 const initials = getCategoryInitials(job.categoryName);
                 const avatarBg = getShopBgColor(companyName);
                 const avatarText = getShopTextColor(companyName);
@@ -573,7 +640,7 @@ export default function StudentDashboard({ onSelectJob }) {
                   >
                     <div className="flex items-start gap-4 flex-1 min-w-0">
                       {/* Company Avatar */}
-                      <div 
+                      <div
                         style={{ backgroundColor: avatarBg, color: avatarText }}
                         className="font-extrabold flex items-center justify-center rounded-xl w-12 h-12 shrink-0 border border-slate-200/50"
                       >
@@ -590,11 +657,10 @@ export default function StudentDashboard({ onSelectJob }) {
                             Part-time
                           </span>
                           {job.remainingSlots !== undefined && (
-                            <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
-                              job.remainingSlots <= 0 
-                                ? "bg-red-50 text-red-700 border-red-200" 
+                            <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${job.remainingSlots <= 0
+                                ? "bg-red-50 text-red-700 border-red-200"
                                 : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            }`}>
+                              }`}>
                               {job.remainingSlots <= 0 ? "Hết Slot" : `Còn ${job.remainingSlots}/${job.slots} Slot`}
                             </span>
                           )}
@@ -633,8 +699,8 @@ export default function StudentDashboard({ onSelectJob }) {
                           <div className="flex items-center gap-1.5 shrink-0">
                             <DollarSign size={14} className="text-emerald-500 shrink-0" />
                             <span className="font-bold text-emerald-600">
-                              {salaryVal && salaryVal > 0 
-                                ? `${salaryVal.toLocaleString('vi-VN')} đ/giờ` 
+                              {salaryVal && salaryVal > 0
+                                ? `${salaryVal.toLocaleString('vi-VN')} đ/giờ`
                                 : "Lương thỏa thuận"
                               }
                             </span>
@@ -684,8 +750,8 @@ export default function StudentDashboard({ onSelectJob }) {
                         type="button"
                         onClick={() => setCurrentPage(pageNum)}
                         className={`h-9 w-9 text-xs font-bold rounded-xl border transition-all cursor-pointer ${isCurrent
-                            ? "bg-orange-600 text-white border-orange-600 shadow-md shadow-orange-600/15"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          ? "bg-orange-600 text-white border-orange-600 shadow-md shadow-orange-600/15"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                           }`}
                       >
                         {pageNum}

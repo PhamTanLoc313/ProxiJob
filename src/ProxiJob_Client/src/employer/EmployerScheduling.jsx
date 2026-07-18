@@ -38,7 +38,7 @@ export default function EmployerScheduling() {
         { id: 2, name: "Trần Thị B", role: "Phục vụ" }
       ]);
       setSchedules([
-        { id: 10, employeeId: 1, employeeName: "Nguyễn Văn A", startTime: "08:00", endTime: "12:00", note: "Ca trực chính" }
+        { id: 10, employeeId: 1, employeeName: "Nguyễn Văn A", startTime: "08:00", endTime: "12:00", note: "Ca làm chính" }
       ]);
     } finally {
       setLoading(false);
@@ -64,7 +64,7 @@ export default function EmployerScheduling() {
         date: selectedDate,
         startTime: `${startTime}:00`,
         endTime: `${endTime}:00`,
-        note: note || "Phân công ca trực",
+        note: note || "Phân công ca làm",
         jobShiftSalary: 25000 // default or lookup from employee
       };
 
@@ -74,7 +74,7 @@ export default function EmployerScheduling() {
       loadInitialData(); // reload
     } catch (err) {
       // Backend overlap validator throws errors which are displayed here
-      setErrorMsg(err.message || "Lỗi xếp lịch. Trùng lặp ca trực phát hiện!");
+      setErrorMsg(err.message || "Lỗi xếp lịch. Trùng lặp ca làm phát hiện!");
     } finally {
       setSubmitting(false);
     }
@@ -116,7 +116,7 @@ export default function EmployerScheduling() {
         {/* Form: Add Schedule (Left side) */}
         <div className="md:col-span-5 bg-white border border-slate-100 shadow-md rounded-3xl p-6 flex flex-col gap-4">
           <h2 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider border-b border-slate-50 pb-3 flex justify-between items-center">
-            <span>➕ Phân ca trực cho nhân viên</span>
+            <span>➕ Phân ca làm cho nhân viên</span>
             <button
               onClick={loadInitialData}
               className="p-1 text-slate-400 hover:text-slate-800 rounded-lg transition"
@@ -186,7 +186,7 @@ export default function EmployerScheduling() {
               <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex gap-2 items-start text-xs text-red-600 leading-relaxed">
                 <ShieldAlert className="shrink-0 text-red-500" size={15} />
                 <div>
-                  <p className="font-bold">Xung đột ca trực:</p>
+                  <p className="font-bold">Xung đột ca làm:</p>
                   <p>{errorMsg}</p>
                 </div>
               </div>

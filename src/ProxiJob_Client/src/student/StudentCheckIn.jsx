@@ -200,10 +200,19 @@ export default function StudentCheckIn() {
   return (
     <div className="flex flex-col gap-6 p-4 max-w-7xl mx-auto min-h-screen">
       {/* 1. Page Title */}
-      <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Trình Điểm Danh Vị Trí & QR</h1>
-          <p className="text-slate-400 text-xs mt-0.5">Xác thực Check-in/Check-out bằng camera và GPS siêu cục bộ.</p>
+      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 text-white rounded-3xl p-6 md:p-8 shadow-xl shadow-slate-950/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        {/* Glow circles decoration */}
+        <div className="absolute right-0 top-0 -mt-10 -mr-10 w-44 h-44 bg-orange-500/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute left-1/3 bottom-0 -mb-14 w-52 h-52 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10">
+          <span className="text-[10px] uppercase font-extrabold tracking-widest bg-orange-500/20 border border-orange-500/30 text-orange-400 px-3 py-1 rounded-full backdrop-blur-xs">
+            📍 GEOFENCE CHECK-IN
+          </span>
+          <h1 className="text-3xl font-black text-white mt-3.5 tracking-tight">Trình Điểm Danh Vị Trí & QR</h1>
+          <p className="text-slate-350 text-xs mt-1 max-w-xl">
+            Xác thực điểm danh vào ca làm (Check-in/Check-out) an toàn bằng Camera quét QR Code và hệ thống xác thực GPS bán kính an toàn.
+          </p>
         </div>
       </div>
 
@@ -229,7 +238,7 @@ export default function StudentCheckIn() {
         <div className="md:col-span-5 flex flex-col gap-6">
           {/* Shift Selector */}
           <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-6 flex flex-col gap-4">
-            <h2 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Ca trực điểm danh</h2>
+            <h2 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Ca làm điểm danh</h2>
             
             {checkedInShift ? (
               <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex flex-col gap-1">
@@ -237,11 +246,11 @@ export default function StudentCheckIn() {
                 <p className="font-bold text-slate-800 text-base">{checkedInShift.title}</p>
                 <p className="text-xs text-slate-500">{checkedInShift.shopName}</p>
                 <p className="text-xs text-slate-500 mt-2">
-                  ⏰ Ca trực: {checkedInShift.startTime} - {checkedInShift.endTime}
+                  ⏰ Ca làm: {checkedInShift.startTime} - {checkedInShift.endTime}
                 </p>
               </div>
             ) : activeShifts.length === 0 ? (
-              <p className="text-slate-400 text-sm">Không có ca trực nào khả dụng hôm nay.</p>
+              <p className="text-slate-400 text-sm">Không có ca làm nào khả dụng hôm nay.</p>
             ) : (
               <div className="relative w-full">
                 {/* Trigger Button */}
@@ -251,7 +260,7 @@ export default function StudentCheckIn() {
                   className="w-full h-12 px-4 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-2xl text-slate-800 font-bold flex items-center justify-between transition cursor-pointer"
                 >
                   <span className="truncate">
-                    {selectedShift ? `${selectedShift.title} (${selectedShift.shopName})` : "Chọn ca trực"}
+                    {selectedShift ? `${selectedShift.title} (${selectedShift.shopName})` : "Chọn ca làm"}
                   </span>
                   <span className="text-slate-400 transition-transform duration-200 text-[10px]" style={{ transform: isDropdownOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
                     ▼

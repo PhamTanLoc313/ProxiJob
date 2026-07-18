@@ -146,7 +146,7 @@ export default function EmployerDashboard({ onNavigateToSection }) {
         {[
           { label: "Tin tuyển dụng", val: "06", icon: <Briefcase size={20} className="text-blue-500" />, action: "employer_approvals" },
           { label: "Nhân sự quản lý", val: "12", icon: <Users size={20} className="text-emerald-500" />, action: "employer_hrm" },
-          { label: "Ca trực trong tuần", val: "28", icon: <Calendar size={20} className="text-purple-500" />, action: "employer_scheduling" },
+          { label: "Ca làm trong tuần", val: "28", icon: <Calendar size={20} className="text-purple-500" />, action: "employer_scheduling" },
           { label: "Quyết toán lương", val: "9.2M đ", icon: <Wallet size={20} className="text-orange-500" />, action: "payroll_settlement" }
         ].map((item, idx) => (
           <article

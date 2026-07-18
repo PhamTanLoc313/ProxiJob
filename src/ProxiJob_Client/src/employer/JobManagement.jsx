@@ -76,7 +76,7 @@ export default function JobManagement() {
         });
       }
 
-      alert("Đăng tin tuyển dụng thành công! ca trực đã được đưa lên radar.");
+      alert("Đăng tin tuyển dụng thành công! ca làm đã được đưa lên radar.");
       setShowWizard(false);
       // Reset inputs
       setTitle("");
@@ -85,12 +85,12 @@ export default function JobManagement() {
       setShiftsInput([{ date: "", startTime: "08:00", endTime: "12:00", slotsRequired: 1 }]);
       fetchJobs();
     } catch (err) {
-      alert("Đăng ca trực thất bại: " + err.message);
+      alert("Đăng ca làm thất bại: " + err.message);
     }
   };
 
   const handleDeleteJob = async (jobId) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa tin tuyển dụng này? Ca trực liên kết cũng sẽ bị hủy.")) return;
+    if (!window.confirm("Bạn có chắc chắn muốn xóa tin tuyển dụng này? Ca làm liên kết cũng sẽ bị hủy.")) return;
     try {
       await deleteJobPostApi(jobId, user.id);
       fetchJobs();
@@ -155,7 +155,7 @@ export default function JobManagement() {
       <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">Quản lý Đăng Ca & Duyệt Tin</h1>
-          <p className="text-slate-400 text-xs mt-0.5">Trình tạo ca trực tuyển dụng và phê duyệt ứng viên.</p>
+          <p className="text-slate-400 text-xs mt-0.5">Trình tạo ca làm tuyển dụng và phê duyệt ứng viên.</p>
         </div>
 
         {/* Tab Switcher */}
@@ -190,7 +190,7 @@ export default function JobManagement() {
                 onClick={() => setShowWizard(true)}
                 className="flex items-center gap-1 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow-md transition"
               >
-                <Plus size={14} /> Đăng ca trực mới ⚡
+                <Plus size={14} /> Đăng ca làm mới ⚡
               </button>
             </div>
 
@@ -318,7 +318,7 @@ export default function JobManagement() {
         <div className="grid gap-6 md:grid-cols-12">
           {/* List of Shifts waiting for approvals (Left side) */}
           <div className="md:col-span-5 flex flex-col gap-4">
-            <h2 className="font-extrabold text-slate-800 text-base">Chọn ca trực đối soát đơn</h2>
+            <h2 className="font-extrabold text-slate-800 text-base">Chọn ca làm đối soát đơn</h2>
             {jobs.length === 0 ? (
               <p className="text-slate-400 text-xs">Chưa có tin tuyển dụng.</p>
             ) : (
@@ -340,7 +340,7 @@ export default function JobManagement() {
                         }}
                         className="w-full text-left p-2.5 bg-slate-50 hover:bg-blue-50/50 rounded-xl text-xs font-bold text-slate-600 transition"
                       >
-                        📂 Xem ca trực tuyển dụng
+                        📂 Xem ca làm tuyển dụng
                       </button>
                     </div>
                   </div>
@@ -354,8 +354,8 @@ export default function JobManagement() {
             {!selectedShiftForApprovals ? (
               <div className="flex-1 flex flex-col justify-center items-center text-center p-12 text-slate-400 min-h-[300px]">
                 <UserCheck size={48} className="text-slate-300 mb-3" />
-                <h3 className="font-extrabold text-slate-700 text-sm">Chưa chọn ca trực duyệt đơn</h3>
-                <p className="text-xs text-slate-400 max-w-xs mt-1">Vui lòng chọn ca trực bên trái để hiển thị danh sách hồ sơ xin việc của các bạn sinh viên.</p>
+                <h3 className="font-extrabold text-slate-700 text-sm">Chưa chọn ca làm duyệt đơn</h3>
+                <p className="text-xs text-slate-400 max-w-xs mt-1">Vui lòng chọn ca làm bên trái để hiển thị danh sách hồ sơ xin việc của các bạn sinh viên.</p>
               </div>
             ) : (
               <>
@@ -453,7 +453,7 @@ export default function JobManagement() {
             <form onSubmit={handleCreateJob} className="p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
-                  <Briefcase size={20} className="text-blue-600" /> Tạo tin tuyển ca trực mới
+                  <Briefcase size={20} className="text-blue-600" /> Tạo tin tuyển ca làm mới
                 </h3>
                 <button
                   type="button"
@@ -505,7 +505,7 @@ export default function JobManagement() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-700">Địa chỉ ca trực</label>
+                  <label className="text-xs font-bold text-slate-700">Địa chỉ ca làm</label>
                   <input
                     type="text"
                     value={address}
@@ -546,14 +546,14 @@ export default function JobManagement() {
               <div className="border-t border-slate-100 pt-4">
                 <div className="flex justify-between items-center mb-3">
                   <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1">
-                    <Calendar size={14} className="text-blue-500" /> Thiết lập ca trực:
+                    <Calendar size={14} className="text-blue-500" /> Thiết lập ca làm:
                   </label>
                   <button
                     type="button"
                     onClick={() => setShiftsInput([...shiftsInput, { date: "", startTime: "08:00", endTime: "12:00", slotsRequired: 1 }])}
                     className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-xl hover:bg-blue-100 transition"
                   >
-                    + Thêm ca trực
+                    + Thêm ca làm
                   </button>
                 </div>
 
@@ -632,7 +632,7 @@ export default function JobManagement() {
 
               {/* Secure notification */}
               <p className="text-[10px] text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200 leading-relaxed">
-                ⚠️ **Chú ý:** Hệ thống tự động trừ hạn ngạch đăng ca trực dựa trên gói Subscription (Trial: 3 ca, Recruit: 30 ca, HRM Basic: 60 ca, Enterprise: Vô hạn).
+                ⚠️ **Chú ý:** Hệ thống tự động trừ hạn ngạch đăng ca làm dựa trên gói Subscription (Trial: 3 ca, Recruit: 30 ca, HRM Basic: 60 ca, Enterprise: Vô hạn).
               </p>
 
               <button

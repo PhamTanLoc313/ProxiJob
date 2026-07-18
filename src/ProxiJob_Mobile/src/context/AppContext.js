@@ -56,6 +56,7 @@ export const AppProvider = ({ children }) => {
   // Static review state for backward compatibility
   const [reviews, setReviews] = useState([]);
   const [isChatRoomActive, setIsChatRoomActive] = useState(false);
+  const [readChatStatus, setReadChatStatus] = useState({});
 
   // Global SignalR connection for Notifications
   useEffect(() => {
@@ -193,6 +194,10 @@ export const AppProvider = ({ children }) => {
         // Reviews (backward-compatible mock state)
         reviews,
         setReviews,
+
+        // Read chat status state
+        readChatStatus,
+        setReadChatStatus,
       }}
     >
       {children}

@@ -246,16 +246,26 @@ export default function StudentCalendar() {
   return (
     <div className="flex flex-col gap-6 p-4 max-w-7xl mx-auto min-h-screen">
       {/* 1. Header Row */}
-      <div className="flex justify-between items-center bg-white border border-slate-100 shadow-md rounded-3xl p-5">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Lịch Roster & Nhật Ký Ca Trực</h1>
-          <p className="text-slate-400 text-xs mt-0.5">Theo dõi lịch làm việc đã duyệt và lịch sử ca trực của bạn.</p>
+      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 text-white rounded-3xl p-6 md:p-8 shadow-xl shadow-slate-950/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        {/* Glow circles decoration */}
+        <div className="absolute right-0 top-0 -mt-10 -mr-10 w-44 h-44 bg-orange-500/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute left-1/3 bottom-0 -mb-14 w-52 h-52 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10">
+          <span className="text-[10px] uppercase font-extrabold tracking-widest bg-orange-500/20 border border-orange-500/30 text-orange-400 px-3 py-1 rounded-full backdrop-blur-xs">
+            📅 Roster Calendar
+          </span>
+          <h1 className="text-3xl font-black text-white mt-3.5 tracking-tight">Lịch Roster & Nhật Ký Ca Làm</h1>
+          <p className="text-slate-350 text-xs mt-1 max-w-xl">
+            Theo dõi lịch làm việc đã duyệt, quản lý ca làm của bạn và cập nhật chi tiết lịch hoạt động hàng ngày.
+          </p>
         </div>
+        
         <button
           onClick={loadData}
-          className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-2xl transition cursor-pointer"
+          className="relative z-10 p-3.5 bg-white/10 hover:bg-white/20 border border-white/15 hover:border-white/30 text-white rounded-2xl shadow-md backdrop-blur-xs transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer shrink-0"
         >
-          <RefreshCw size={18} className="text-slate-600" />
+          <RefreshCw size={18} className="animate-spin-slow text-amber-200" />
         </button>
       </div>
 
@@ -346,7 +356,7 @@ export default function StudentCalendar() {
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              Lịch sử ca trực
+              Lịch sử ca làm
             </button>
           </div>
 
@@ -354,7 +364,7 @@ export default function StudentCalendar() {
           {loading ? (
             <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md">
               <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-500 border-t-transparent mb-4" />
-              <p className="text-slate-500 text-sm font-semibold">Đang tải lịch trình ca trực của bạn...</p>
+              <p className="text-slate-500 text-sm font-semibold">Đang tải lịch trình ca làm của bạn...</p>
             </div>
           ) : filteredApps.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-16 bg-white rounded-3xl border border-slate-100 shadow-md text-center">
@@ -362,8 +372,8 @@ export default function StudentCalendar() {
               <p className="text-slate-800 font-bold">Lịch trình hôm nay trống</p>
               <p className="text-slate-400 text-xs mt-1">
                 {activeTab === "upcoming"
-                  ? "Bạn không có ca trực nào sắp diễn ra vào ngày này."
-                  : "Bạn không có lịch sử ca trực nào được ghi nhận vào ngày này."}
+                  ? "Bạn không có ca làm nào sắp diễn ra vào ngày này."
+                  : "Bạn không có lịch sử ca làm nào được ghi nhận vào ngày này."}
               </p>
             </div>
           ) : (
@@ -487,7 +497,7 @@ export default function StudentCalendar() {
 
             {/* Quick Note info banner */}
             <div className="text-[11px] leading-relaxed text-slate-400 bg-slate-50/50 border border-slate-100 p-3.5 rounded-2xl">
-              💡 **Gợi ý:** Tổng thu nhập tính bằng tổng mức lương các ca đã đi làm hoàn thành và các ca trực sắp làm đã được chủ quán duyệt.
+              💡 **Gợi ý:** Tổng thu nhập tính bằng tổng mức lương các ca đã đi làm hoàn thành và các ca làm sắp làm đã được chủ quán duyệt.
             </div>
           </div>
         </div>
@@ -512,7 +522,7 @@ export default function StudentCalendar() {
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl text-xs space-y-1">
-                <p className="text-slate-400 font-semibold">CA TRỰC XIN NGHỈ:</p>
+                <p className="text-slate-400 font-semibold">CA LÀM XIN NGHỈ:</p>
                 <p className="font-bold text-slate-800 text-sm">{selectedApp.jobTitle}</p>
                 <p className="text-slate-600 font-semibold">{selectedApp.companyName || selectedApp.company}</p>
                 <p className="text-red-500 font-bold">
@@ -544,7 +554,7 @@ export default function StudentCalendar() {
                 {submittingCancel ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
                 ) : (
-                  <>Xác nhận hủy ca trực</>
+                  <>Xác nhận hủy ca làm</>
                 )}
               </button>
             </form>

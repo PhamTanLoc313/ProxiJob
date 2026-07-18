@@ -25,9 +25,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const EMPTY_ARRAY = [];
 
 export default function EmployerChat() {
-  const { user, navigationParams, setNavigationParams, setIsChatRoomActive, navigateTo, goBack } = useContext(AppContext);
+  const { user, navigationParams, setNavigationParams, setIsChatRoomActive, navigateTo, goBack, currentScreen, readChatStatus, setReadChatStatus } = useContext(AppContext);
   const insets = useSafeAreaInsets();
   const { data: dbConversationsData, refetch: refetchConversations } = useConversationsQuery(user);
+
+  useEffect(() => {
+    if (currentScreen === 'employer_chat') {
+      refetchConversations();
+    }
+  }, [currentScreen]);
   const dbConversations = dbConversationsData || EMPTY_ARRAY;
   const [searchQuery, setSearchQuery] = useState('');
   const [activeChat, setActiveChat] = useState(null);
@@ -37,7 +43,6 @@ export default function EmployerChat() {
   const connectionRef = useRef(null);
   const activeChatRef = useRef(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [readChatStatus, setReadChatStatus] = useState({});
 
   // Keep ref in sync with activeChat state so SignalR handler always has latest value
   useEffect(() => {
@@ -141,7 +146,7 @@ export default function EmployerChat() {
         // Map dbConversations to override unread count if matching readChatStatus
         const mappedDbConversations = dbConversations.map(item => {
           const status = readChatStatus[item.id];
-          if (status && status.lastMessage === item.lastMessage && status.time === item.time) {
+          if (status && status.lastMessage === item.lastMessage) {
             return { ...item, unread: 0 };
           }
           return item;
@@ -199,6 +204,13 @@ export default function EmployerChat() {
           time: new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
         }));
         setMessages(mappedMsgs);
+        if (mappedMsgs.length > 0) {
+          const lastMsg = mappedMsgs[mappedMsgs.length - 1];
+          setReadChatStatus(prev => ({
+            ...prev,
+            [partnerId]: { lastMessage: lastMsg.text }
+          }));
+        }
       }
     } catch (err) {
       console.log('[EmployerChat API] Error loading messages:', err);

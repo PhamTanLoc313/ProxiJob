@@ -110,7 +110,7 @@ export default function PayrollSettlement() {
       {/* 1. Header Row */}
       <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Quyết Toán Lương Ca Trực</h1>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Quyết Toán Lương Ca Làm</h1>
           <p className="text-slate-400 text-xs mt-0.5">Xác nhận chi trả, cộng thưởng/phạt và chấm điểm xếp hạng sinh viên.</p>
         </div>
         <button
@@ -127,7 +127,7 @@ export default function PayrollSettlement() {
         {loading ? (
           <div className="text-center p-8 text-xs text-slate-400">Đang tìm hóa đơn quyết toán...</div>
         ) : payrolls.length === 0 ? (
-          <p className="text-slate-400 text-xs text-center p-6">Không có ca trực nào đang chờ chốt lương.</p>
+          <p className="text-slate-400 text-xs text-center p-6">Không có ca làm nào đang chờ chốt lương.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left border-collapse">
@@ -184,7 +184,7 @@ export default function PayrollSettlement() {
             <form onSubmit={handleSettlementSubmit} className="p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
-                  <Wallet size={20} className="text-blue-600" /> Bảng chi trả lương ca trực
+                  <Wallet size={20} className="text-blue-600" /> Bảng chi trả lương ca làm
                 </h3>
                 <button
                   type="button"

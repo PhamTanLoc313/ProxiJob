@@ -245,26 +245,29 @@ export default function StudentChat() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 h-[calc(100vh-140px)] flex flex-col md:flex-row bg-white border border-slate-100 shadow-xl rounded-3xl overflow-hidden">
+    <div className="max-w-6xl mx-auto p-4 h-[calc(100vh-140px)] flex flex-col md:flex-row bg-white border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden">
       {/* 1. Conversations List Pane */}
       <div className={`w-full md:w-80 border-r border-slate-100 flex flex-col shrink-0 ${activeChat ? "hidden md:flex" : "flex"}`}>
-        <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-4.5 bg-gradient-to-r from-slate-50 to-orange-50/10 border-b border-slate-100 flex justify-between items-center">
           <h2 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
-            <MessageCircle size={16} /> Tin nhắn trò chuyện
+            <MessageCircle size={16} className="text-orange-600" /> Tin nhắn trò chuyện
           </h2>
           <button
             onClick={loadConversations}
-            className="p-1.5 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition"
+            className="p-2 bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-800 rounded-xl border border-slate-200 shadow-xs transition duration-200 cursor-pointer"
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={13} className="hover:rotate-180 transition-transform duration-300" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {loadingConvos ? (
-            <div className="text-center p-6 text-xs text-slate-400">Đang tải cuộc hội thoại...</div>
+            <div className="flex flex-col items-center justify-center p-12 text-slate-400 gap-2">
+              <div className="animate-spin rounded-full h-6 w-6 border-2 border-orange-500 border-t-transparent" />
+              <p className="text-[11px] font-semibold">Đang tải cuộc hội thoại...</p>
+            </div>
           ) : conversations.length === 0 ? (
-            <div className="text-center p-8 text-xs text-slate-400">Chưa có cuộc trò chuyện nào.</div>
+            <div className="text-center p-8 text-xs text-slate-450 font-semibold bg-slate-50/30 rounded-2xl border border-dashed border-slate-100">Chưa có cuộc trò chuyện nào.</div>
           ) : (
             conversations.map((c) => {
               const isActive = activeChat?.id === c.id;
@@ -272,36 +275,41 @@ export default function StudentChat() {
                 <div
                   key={c.id}
                   onClick={() => handleSelectChat(c)}
-                  className={`p-3 rounded-2xl cursor-pointer transition flex items-center gap-3 border ${
+                  className={`p-3.5 rounded-2xl cursor-pointer transition flex items-center gap-3 border ${
                     isActive
-                      ? "bg-orange-50 border-orange-200"
-                      : "border-transparent hover:bg-slate-50"
+                      ? "bg-orange-500/10 border-orange-200/80 shadow-xs"
+                      : "border-transparent hover:bg-slate-50/80"
                   }`}
                 >
-                  {c.avatar ? (
-                    <img
-                      src={c.avatar}
-                      alt={c.name}
-                      className="w-10 h-10 rounded-full object-cover shrink-0 border border-slate-200"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=120";
-                      }}
-                    />
-                  ) : (
-                    <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-sm shrink-0 border border-slate-200">
-                      🏪
-                    </div>
-                  )}
+                  <div className="relative">
+                    {c.avatar ? (
+                      <img
+                        src={c.avatar}
+                        alt={c.name}
+                        className="w-11 h-11 rounded-full object-cover shrink-0 border border-slate-200"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=120";
+                        }}
+                      />
+                    ) : (
+                      <div className="w-11 h-11 bg-orange-50 rounded-full flex items-center justify-center text-sm shrink-0 border border-orange-200 text-orange-700">
+                        🏪
+                      </div>
+                    )}
+                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-white shadow-xs" />
+                  </div>
+                  
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline">
-                      <h4 className="font-bold text-slate-800 text-xs truncate">{c.name || "Chủ cửa hàng"}</h4>
-                      <span className="text-[9px] text-slate-400 shrink-0">{c.time}</span>
+                      <h4 className="font-extrabold text-slate-800 text-xs truncate">{c.name || "Chủ cửa hàng"}</h4>
+                      <span className="text-[9px] text-slate-400 font-semibold shrink-0">{c.time}</span>
                     </div>
-                    <p className="text-[10px] text-slate-400 truncate mt-0.5">{c.lastMessage}</p>
+                    <p className="text-[10px] text-slate-400 font-medium truncate mt-1">{c.lastMessage}</p>
                   </div>
+                  
                   {c.unread > 0 && (
-                    <span className="h-4 w-4 bg-orange-600 rounded-full text-[9px] font-bold text-white flex items-center justify-center shrink-0">
+                    <span className="h-4.5 min-w-4.5 px-1 bg-orange-600 border border-orange-500 rounded-full text-[9px] font-black text-white flex items-center justify-center shrink-0 shadow-md shadow-orange-600/10">
                       {c.unread}
                     </span>
                   )}
@@ -313,49 +321,59 @@ export default function StudentChat() {
       </div>
 
       {/* 2. Message Detail Pane */}
-      <div className={`flex-1 flex flex-col bg-slate-50/50 ${!activeChat ? "hidden md:flex justify-center items-center p-12 text-slate-400 text-center" : "flex"}`}>
+      <div className={`flex-1 flex flex-col bg-slate-50/40 ${!activeChat ? "hidden md:flex justify-center items-center p-12 text-slate-400 text-center" : "flex"}`}>
         {!activeChat ? (
-          <div className="flex flex-col items-center gap-2">
-            <MessageCircle size={48} className="text-slate-300" />
-            <h3 className="font-extrabold text-slate-700 text-sm">Chưa chọn cuộc trò chuyện</h3>
-            <p className="text-xs text-slate-400 max-w-xs">Chọn một người tuyển dụng từ danh mục bên trái để bắt đầu trao đổi chi tiết ca trực.</p>
+          <div className="flex flex-col items-center gap-3 max-w-sm mx-auto">
+            <div className="h-20 w-20 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-orange-500/15 rotate-[-4deg]">
+              <MessageCircle size={36} />
+            </div>
+            <h3 className="font-black text-slate-800 text-base mt-4 tracking-tight">Chưa chọn cuộc trò chuyện</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-semibold">Chọn một Nhà tuyển dụng bên trái để xem nội dung trao đổi và phản hồi chi tiết về ca làm.</p>
           </div>
         ) : (
           <>
             {/* Active Header */}
-            <div className="p-4 bg-white border-b border-slate-100 flex justify-between items-center">
+            <div className="p-4 bg-white border-b border-slate-100 flex justify-between items-center shadow-sm shadow-slate-900/2">
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setActiveChat(null)}
-                  className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-500 md:hidden"
+                  className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-500 md:hidden transition cursor-pointer"
                 >
                   <ChevronLeft size={16} />
                 </button>
-                {activeChat.avatar ? (
-                  <img
-                    src={activeChat.avatar}
-                    alt={activeChat.name}
-                    className="w-10 h-10 rounded-full object-cover shrink-0 border border-slate-200"
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=120";
-                    }}
-                  />
-                ) : (
-                  <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center text-lg border border-orange-200">
-                    🏪
-                  </div>
-                )}
+                
+                <div className="relative">
+                  {activeChat.avatar ? (
+                    <img
+                      src={activeChat.avatar}
+                      alt={activeChat.name}
+                      className="w-11 h-11 rounded-full object-cover shrink-0 border border-slate-200"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=120";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-11 h-11 bg-orange-50 rounded-full flex items-center justify-center text-lg border border-orange-200 text-orange-700">
+                      🏪
+                    </div>
+                  )}
+                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white shadow-xs" />
+                </div>
+
                 <div>
-                  <h3 className="font-bold text-slate-800 text-sm">{activeChat.name}</h3>
-                  <p className="text-[10px] text-slate-400">Trực tuyến</p>
+                  <h3 className="font-black text-slate-800 text-xs tracking-tight">{activeChat.name}</h3>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Đang hoạt động</p>
+                  </div>
                 </div>
               </div>
               
               {activeChat.phone && activeChat.phone !== "Không có" && (
                 <a
                   href={`tel:${activeChat.phone}`}
-                  className="p-2.5 bg-slate-50 hover:bg-orange-50 hover:text-orange-600 rounded-xl border border-slate-200 transition"
+                  className="p-2.5 bg-slate-50 hover:bg-orange-600 hover:text-white rounded-xl border border-slate-200/80 shadow-xs transition duration-200"
                 >
                   <Phone size={14} />
                 </a>
@@ -363,26 +381,29 @@ export default function StudentChat() {
             </div>
 
             {/* Messages body */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {loadingMsgs ? (
-                <div className="text-center p-4 text-xs text-slate-400">Đang tải lịch sử tin nhắn...</div>
+                <div className="flex flex-col items-center justify-center p-8 gap-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-400 border-t-transparent" />
+                  <p className="text-[10px] text-slate-400 font-semibold">Đang tải lịch sử hội thoại...</p>
+                </div>
               ) : (
                 messages.map((m) => {
                   const isStudent = m.sender === "student";
                   return (
                     <div
                       key={m.id}
-                      className={`flex ${isStudent ? "justify-end" : "justify-start"}`}
+                      className={`flex ${isStudent ? "justify-end" : "justify-start"} items-end gap-2`}
                     >
                       <div
-                        className={`max-w-xs p-3 rounded-2xl text-xs relative ${
+                        className={`max-w-xs p-3.5 rounded-2xl text-xs relative ${
                           isStudent
-                            ? "bg-orange-600 text-white rounded-tr-none shadow-md shadow-orange-600/5"
-                            : "bg-white text-slate-800 border border-slate-100 rounded-tl-none"
+                            ? "bg-gradient-to-br from-orange-600 to-amber-500 text-white rounded-tr-none shadow-md shadow-orange-600/10"
+                            : "bg-white text-slate-800 border border-slate-200/50 rounded-tl-none shadow-xs"
                         }`}
                       >
-                        <p>{m.text}</p>
-                        <span className={`text-[8px] mt-1 block text-right ${isStudent ? "text-orange-200" : "text-slate-400"}`}>
+                        <p className="leading-relaxed font-semibold whitespace-pre-wrap">{m.text}</p>
+                        <span className={`text-[8px] mt-1.5 block text-right font-semibold ${isStudent ? "text-orange-200" : "text-slate-400"}`}>
                           {m.time}
                         </span>
                       </div>
@@ -399,14 +420,14 @@ export default function StudentChat() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="Nhập nội dung tin nhắn để phản hồi..."
-                className="flex-1 h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-amber-400 focus:bg-white transition"
+                placeholder="Nhập phản hồi hoặc thảo luận ca làm..."
+                className="flex-1 h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-500 focus:bg-white transition duration-200 font-semibold"
               />
               <button
                 type="submit"
-                className="h-11 w-11 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-orange-600/10 transition shrink-0"
+                className="h-12 w-12 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-orange-600/10 hover:shadow-orange-600/25 transition duration-300 hover:scale-[1.04] active:scale-95 cursor-pointer shrink-0"
               >
-                <Send size={16} />
+                <Send size={15} />
               </button>
             </form>
           </>

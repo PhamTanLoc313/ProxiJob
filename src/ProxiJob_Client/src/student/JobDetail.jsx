@@ -500,7 +500,7 @@ export default function JobDetail({ jobId, shiftId, onBack, onNavigateToCalendar
                 </div>
 
                 <div className="bg-slate-50 p-4 rounded-2xl text-xs space-y-1">
-                  <p className="text-slate-400 font-semibold">CA TRỰC ĐÃ CHỌN:</p>
+                  <p className="text-slate-400 font-semibold">CA LÀM ĐÃ CHỌN:</p>
                   <p className="font-bold text-slate-800 text-sm">{job.title}</p>
                   <p className="text-slate-600 font-medium">Lương: {(getSalary(job) || 0).toLocaleString('vi-VN')} đ/giờ</p>
                   <p className="text-orange-600 font-bold">
@@ -536,7 +536,7 @@ export default function JobDetail({ jobId, shiftId, onBack, onNavigateToCalendar
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
                   ) : (
                     <>
-                      <Send size={16} /> Xác nhận ứng tuyển ca trực
+                      <Send size={16} /> Xác nhận ứng tuyển ca làm
                     </>
                   )}
                 </button>
