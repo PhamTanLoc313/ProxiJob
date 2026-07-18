@@ -66,6 +66,20 @@ namespace ProxiJob.Identity.Infrastructure
                     NameClaimType = "name",
                     RoleClaimType = "role"
                 };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.Request.Path;
+                        if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hub/chat"))
+                        {
+                            context.Token = accessToken;
+                        }
+                        return Task.CompletedTask;
+                    }
+                };
             });
 
             services.AddSingleton<IAuthorizationHandler, FeatureAuthorizationHandler>();

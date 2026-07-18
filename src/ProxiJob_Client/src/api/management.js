@@ -15,7 +15,25 @@ export async function getEmployees(status = '') {
       throw new Error(`Failed to fetch employees: ${response.status}`);
     }
     const resData = await response.json();
-    return resData.data !== undefined ? resData.data : resData;
+    const rawData = resData.data !== undefined ? resData.data : resData;
+    const items = rawData?.items || (Array.isArray(rawData) ? rawData : []);
+    
+    const mapped = items.map(emp => ({
+      id: emp.id,
+      name: emp.fullName || emp.name || "Nhân viên",
+      phone: emp.phoneNumber || emp.phone || "Không có số",
+      role: emp.position || emp.role || "Nhân viên",
+      employeeType: emp.isExternal === true ? "External" : "Internal",
+      salaryPerHour: emp.hourlyRate !== undefined ? emp.hourlyRate : (emp.salaryPerHour || 0),
+      status: emp.status || "Active"
+    }));
+
+    return {
+      items: mapped,
+      totalCount: rawData?.totalCount || mapped.length,
+      pageNumber: rawData?.pageNumber || 1,
+      pageSize: rawData?.pageSize || mapped.length
+    };
   } catch (error) {
     console.log('[ProxiJob Management API] getEmployees error:', error);
     throw error;
@@ -28,10 +46,20 @@ export async function getEmployees(status = '') {
 export async function createEmployee(payload) {
   try {
     const headers = getAuthHeader();
+    const backendPayload = {
+      fullName: payload.name,
+      phoneNumber: payload.phone,
+      position: payload.role,
+      paymentType: payload.employeeType === "Monthly" ? 1 : 0,
+      hourlyRate: payload.salaryPerHour || 0,
+      monthlySalary: null,
+      userId: null
+    };
+
     const response = await fetch(`${MANAGEMENT_API_BASE_URL}/employees`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify(backendPayload)
     });
     if (!response.ok) {
       throw new Error(`Failed to add employee: ${response.status}`);
@@ -50,10 +78,20 @@ export async function createEmployee(payload) {
 export async function updateEmployee(id, payload) {
   try {
     const headers = getAuthHeader();
+    const backendPayload = {
+      fullName: payload.name,
+      phoneNumber: payload.phone,
+      position: payload.role,
+      paymentType: payload.employeeType === "Monthly" ? 1 : 0,
+      hourlyRate: payload.salaryPerHour || 0,
+      monthlySalary: null,
+      userId: null
+    };
+
     const response = await fetch(`${MANAGEMENT_API_BASE_URL}/employees/${id}`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify(backendPayload)
     });
     if (!response.ok) {
       throw new Error(`Failed to update employee: ${response.status}`);

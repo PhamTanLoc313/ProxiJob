@@ -27,19 +27,13 @@ export default function EmployerHRM() {
     setLoading(true);
     getEmployees()
       .then((data) => {
-        setStaff(Array.isArray(data) ? data : []);
+        const list = data?.items || (Array.isArray(data) ? data : []);
+        setStaff(list);
         setLoading(false);
       })
       .catch((err) => {
         console.log("Failed to load staff:", err);
-        // Fallback mock roster
-        const mockStaff = [
-          { id: 1, name: "Nguyễn Văn A", phone: "0901234567", role: "Pha chế", employeeType: "Internal", salaryPerHour: 28000, status: "Active" },
-          { id: 2, name: "Trần Thị B", phone: "0912345678", role: "Phục vụ", employeeType: "Internal", salaryPerHour: 25000, status: "Active" },
-          { id: 3, name: "Lê Văn C", phone: "0987654321", role: "Thu ngân", employeeType: "External", salaryPerHour: 25000, status: "Active" },
-          { id: 4, name: "Phạm Minh D", phone: "0976543210", role: "Phục vụ ca tối", employeeType: "External", salaryPerHour: 30000, status: "Active" }
-        ];
-        setStaff(mockStaff);
+        setStaff([]);
         setLoading(false);
       });
   };
@@ -142,7 +136,7 @@ export default function EmployerHRM() {
                 filterRole === "internal" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              Cố định (Internal)
+              Nhân sự nội bộ
             </button>
             <button
               onClick={() => setFilterRole("student")}
@@ -150,7 +144,7 @@ export default function EmployerHRM() {
                 filterRole === "student" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              Ca lẻ (External)
+              Nhân sự vãng lai
             </button>
           </div>
 
@@ -159,7 +153,7 @@ export default function EmployerHRM() {
               resetForm();
               setModalOpen(true);
             }}
-            className="flex items-center gap-1 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-2xl shadow-md transition"
+             className="flex items-center gap-1 text-xs font-black bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white px-4 py-2 rounded-2xl shadow-md transition"
           >
             <Plus size={14} /> Thêm nhân viên 👤
           </button>
@@ -169,7 +163,7 @@ export default function EmployerHRM() {
       {/* 2. Staff grid list */}
       {loading ? (
         <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100">
-          <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent mb-4" />
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-orange-600 border-t-transparent mb-4" />
           <p className="text-slate-400 text-xs font-semibold">Đang tải danh sách hồ sơ nhân sự...</p>
         </div>
       ) : filteredStaff.length === 0 ? (
@@ -185,7 +179,7 @@ export default function EmployerHRM() {
             return (
               <article
                 key={emp.id}
-                className="bg-white border border-slate-100 hover:border-blue-200 rounded-3xl p-5 shadow-md hover:shadow-lg transition flex flex-col justify-between"
+                className="bg-white border border-slate-100 hover:border-orange-200 rounded-3xl p-5 shadow-md hover:shadow-lg transition flex flex-col justify-between"
               >
                 <div>
                   <div className="flex justify-between items-start">
@@ -202,7 +196,7 @@ export default function EmployerHRM() {
                     <span className={`text-[9px] uppercase font-black px-2 py-0.5 rounded-full border ${
                       isInternal ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"
                     }`}>
-                      {isInternal ? "Cố định" : "Ca lẻ"}
+                      {isInternal ? "Nội bộ" : "Vãng lai"}
                     </span>
                   </div>
 
@@ -225,7 +219,7 @@ export default function EmployerHRM() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleEditClick(emp)}
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
                       >
                         <Edit2 size={13} />
                       </button>
@@ -273,7 +267,7 @@ export default function EmployerHRM() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Nhập họ tên đầy đủ..."
-                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                 />
               </div>
 
@@ -285,7 +279,7 @@ export default function EmployerHRM() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="Nhập số điện thoại..."
-                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                 />
               </div>
 
@@ -299,7 +293,7 @@ export default function EmployerHRM() {
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
                     placeholder="Phục vụ, pha chế..."
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                   />
                 </div>
 
@@ -310,7 +304,7 @@ export default function EmployerHRM() {
                     required
                     value={salaryPerHour}
                     onChange={(e) => setSalaryPerHour(Number(e.target.value))}
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                   />
                 </div>
               </div>
@@ -322,7 +316,7 @@ export default function EmployerHRM() {
                   <select
                     value={employeeType}
                     onChange={(e) => setEmployeeType(e.target.value)}
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 transition cursor-pointer"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 transition cursor-pointer"
                   >
                     <option value="Internal">Cố định (Internal)</option>
                     <option value="External">Ca lẻ (External)</option>
@@ -334,7 +328,7 @@ export default function EmployerHRM() {
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 transition cursor-pointer"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 transition cursor-pointer"
                   >
                     <option value="Active">Đang làm</option>
                     <option value="Inactive">Thôi việc</option>
@@ -344,7 +338,7 @@ export default function EmployerHRM() {
 
               <button
                 type="submit"
-                className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-600/10 transition mt-2"
+                className="w-full h-11 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-orange-600/10 transition mt-2"
               >
                 {isEditing ? "Cập nhật hồ sơ" : "Xác nhận thêm nhân viên"}
               </button>

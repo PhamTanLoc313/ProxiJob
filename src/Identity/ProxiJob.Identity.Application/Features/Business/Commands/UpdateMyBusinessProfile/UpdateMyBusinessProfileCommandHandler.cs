@@ -34,9 +34,6 @@ namespace ProxiJob.Identity.Application.Features.Business.Commands.UpdateMyBusin
             var profile = await _profileRepository.GetByUserIdWithUserAsync(userId, cancellationToken)
                 ?? throw new InvalidOperationException(BusinessMessages.BusinessProfileNotFound);
 
-            if (!BusinessProfileMapper.IsRegistered(profile))
-                throw new InvalidOperationException(BusinessMessages.BusinessProfileNotRegistered);
-
             if (request.PhoneNumber != null)
                 profile.User.PhoneNumber = request.PhoneNumber.Trim();
             if (request.AvatarUrl != null)

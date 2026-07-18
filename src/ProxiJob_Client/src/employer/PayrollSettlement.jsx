@@ -4,7 +4,7 @@ import { getPayrolls, approveInterimPayroll } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
 
 export default function PayrollSettlement() {
-  const { user } = user || useAuth();
+  const { user } = useAuth();
   const [payrolls, setPayrolls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPayroll, setSelectedPayroll] = useState(null);
@@ -27,12 +27,7 @@ export default function PayrollSettlement() {
       })
       .catch((err) => {
         console.log("Failed to fetch payrolls:", err);
-        // Fallback mock payrolls
-        setPayrolls([
-          { id: 201, employeeId: 3, employeeName: "Lê Văn C", shiftTitle: "Thu ngân ca tối", hourlyWage: 25000, hoursWorked: 5, totalAmount: 125000, status: "PendingApproval", date: "2026-07-16" },
-          { id: 202, employeeId: 4, employeeName: "Phạm Minh D", shiftTitle: "Phục vụ ca tối", hourlyWage: 30000, hoursWorked: 4, totalAmount: 120000, status: "PendingApproval", date: "2026-07-16" },
-          { id: 203, employeeId: 1, employeeName: "Nguyễn Văn A", shiftTitle: "Pha chế ca sáng", hourlyWage: 28000, hoursWorked: 4.5, totalAmount: 126000, status: "Paid", date: "2026-07-15" }
-        ]);
+        setPayrolls([]);
         setLoading(false);
       });
   };
@@ -70,14 +65,14 @@ export default function PayrollSettlement() {
       };
 
       await approveInterimPayroll(selectedPayroll.id, payload);
-      alert("Quyết toán lương và gửi đánh giá thành công! ⚡");
+      alert("Chốt chi phí và gửi đánh giá thành công! ⚡");
       setSelectedPayroll(null);
       resetForm();
       fetchPayrolls(); // reload
     } catch (err) {
       console.log(err);
       // Fallback update locally for demo
-      alert("Đã quyết toán lương thành công (Demo Mode).");
+      alert("Đã chốt chi phí thành công (Demo Mode).");
       setSelectedPayroll(null);
       resetForm();
       fetchPayrolls();
@@ -97,7 +92,7 @@ export default function PayrollSettlement() {
 
   const getStatusText = (status) => {
     const s = (status || "").toLowerCase();
-    if (s === "paid") return <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200">Đã chi trả</span>;
+    if (s === "paid") return <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200">Đã chốt chi phí</span>;
     return <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 font-bold">Chờ duyệt</span>;
   };
 
@@ -110,7 +105,7 @@ export default function PayrollSettlement() {
       {/* 1. Header Row */}
       <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Quyết Toán Lương Ca Làm</h1>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Chi Phí Ca Làm Việc</h1>
           <p className="text-slate-400 text-xs mt-0.5">Xác nhận chi trả, cộng thưởng/phạt và chấm điểm xếp hạng sinh viên.</p>
         </div>
         <button
@@ -123,11 +118,11 @@ export default function PayrollSettlement() {
 
       {/* 2. List of Payrolls table */}
       <div className="bg-white border border-slate-100 shadow-xl rounded-3xl p-6">
-        <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider mb-4">Các ca làm việc cần chi trả</h3>
+        <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider mb-4">Các ca làm việc cần chốt chi phí</h3>
         {loading ? (
-          <div className="text-center p-8 text-xs text-slate-400">Đang tìm hóa đơn quyết toán...</div>
+          <div className="text-center p-8 text-xs text-slate-400">Đang tìm dữ liệu chi phí...</div>
         ) : payrolls.length === 0 ? (
-          <p className="text-slate-400 text-xs text-center p-6">Không có ca làm nào đang chờ chốt lương.</p>
+          <p className="text-slate-400 text-xs text-center p-6">Không có ca làm nào đang chờ chốt chi phí.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left border-collapse">
@@ -160,9 +155,9 @@ export default function PayrollSettlement() {
                               resetForm();
                               setSelectedPayroll(p);
                             }}
-                            className="px-3.5 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase shadow-md shadow-blue-600/10 transition"
+                            className="px-3.5 h-8 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-xl font-bold text-[10px] uppercase shadow-md shadow-orange-500/10 transition"
                           >
-                            Quyết Toán ⚡
+                            Chốt Chi Phí ⚡
                           </button>
                         ) : (
                           <span className="text-[10px] text-slate-400">Hoàn thành</span>
@@ -184,7 +179,7 @@ export default function PayrollSettlement() {
             <form onSubmit={handleSettlementSubmit} className="p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
-                  <Wallet size={20} className="text-blue-600" /> Bảng chi trả lương ca làm
+                  <Wallet size={20} className="text-orange-600" /> Bảng chốt chi phí ca làm
                 </h3>
                 <button
                   type="button"
@@ -217,7 +212,7 @@ export default function PayrollSettlement() {
                     type="number"
                     value={bonus}
                     onChange={(e) => setBonus(Number(e.target.value))}
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -226,7 +221,7 @@ export default function PayrollSettlement() {
                     type="number"
                     value={penalty}
                     onChange={(e) => setPenalty(Number(e.target.value))}
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                   />
                 </div>
               </div>
@@ -238,7 +233,7 @@ export default function PayrollSettlement() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Ví dụ: Đi làm đúng giờ, thưởng hiệu suất / Đi muộn 15 phút..."
-                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                 />
               </div>
 
@@ -266,7 +261,7 @@ export default function PayrollSettlement() {
                   value={comments}
                   onChange={(e) => setComments(e.target.value)}
                   placeholder="Nhận xét về thái độ làm việc của sinh viên ca này..."
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                 />
               </div>
 
@@ -274,7 +269,7 @@ export default function PayrollSettlement() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-700">Ảnh chụp giao dịch chuyển khoản (Xác thực thanh toán)</label>
                 <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 border-2 border-dashed border-slate-300 hover:border-blue-500 hover:bg-slate-50/50 p-4 rounded-2xl cursor-pointer transition text-slate-500 font-semibold text-xs shrink-0">
+                  <label className="flex items-center gap-2 border-2 border-dashed border-slate-300 hover:border-orange-500 hover:bg-slate-50/50 p-4 rounded-2xl cursor-pointer transition text-slate-500 font-semibold text-xs shrink-0">
                     <Upload size={16} /> Tải biên lai lên
                     <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                   </label>
@@ -297,12 +292,12 @@ export default function PayrollSettlement() {
               </div>
 
               {/* Total display */}
-              <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex justify-between items-center text-xs">
+              <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex justify-between items-center text-xs">
                 <div>
-                  <p className="text-slate-400 font-semibold">TỔNG CHI TRẢ THỰC TẾ:</p>
-                  <p className="text-[10px] text-blue-600 font-bold mt-0.5">Đã tính thưởng/phạt điều chỉnh</p>
+                  <p className="text-slate-400 font-semibold">TỔNG CHI PHÍ THỰC TẾ:</p>
+                  <p className="text-[10px] text-orange-600 font-bold mt-0.5">Đã tính thưởng/phạt điều chỉnh</p>
                 </div>
-                <p className="font-black text-xl text-blue-700">{calculatedTotal?.toLocaleString()} đ</p>
+                <p className="font-black text-xl text-orange-700">{calculatedTotal?.toLocaleString()} đ</p>
               </div>
 
               {/* Action buttons */}
@@ -318,12 +313,12 @@ export default function PayrollSettlement() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs shadow-lg shadow-blue-600/10 transition flex items-center justify-center"
+                  className="h-11 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-orange-600/10 transition flex items-center justify-center"
                 >
                   {submitting ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
                   ) : (
-                    "Duyệt & Chốt Lương ca"
+                    "Duyệt & Chốt Chi Phí"
                   )}
                 </button>
               </div>

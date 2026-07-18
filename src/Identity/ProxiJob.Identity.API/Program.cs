@@ -39,6 +39,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddGrpc();
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 
 builder.Services.AddMassTransit(x =>
 {
@@ -95,9 +96,10 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.SetIsOriginAllowed(origin => true)
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 

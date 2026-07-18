@@ -12,7 +12,7 @@ import {
   Keyboard
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr/dist/browser/signalr.js';
+import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
 import { theme } from '../../styles/theme';
 import { AppContext } from '../../context/AppContext';
 import { IDENTITY_API_BASE_URL, MANAGEMENT_API_BASE_URL } from '../../api/apiConfig';

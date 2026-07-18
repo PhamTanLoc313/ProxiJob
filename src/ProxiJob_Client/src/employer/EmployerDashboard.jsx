@@ -103,7 +103,7 @@ export default function EmployerDashboard({ onNavigateToSection }) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md max-w-2xl mx-auto mt-10">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mb-4" />
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-600 border-t-transparent mb-4" />
         <p className="text-slate-500 text-sm font-semibold">Đang tải bảng điều khiển quản trị...</p>
       </div>
     );
@@ -119,7 +119,7 @@ export default function EmployerDashboard({ onNavigateToSection }) {
           </h1>
           <p className="text-slate-400 text-xs mt-1">Địa chỉ: {profile?.address || "Chưa cập nhật"}</p>
           <div className="mt-3 flex gap-2">
-            <span className="text-xs font-black px-3 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+            <span className="text-xs font-black px-3 py-1 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
               Gói hiện tại: {currentTier}
             </span>
           </div>
@@ -133,8 +133,8 @@ export default function EmployerDashboard({ onNavigateToSection }) {
             </p>
           </div>
           <button
-            onClick={() => onNavigateToSection && onNavigateToSection("employer_profile")}
-            className="text-xs font-bold text-blue-600 hover:underline shrink-0 ml-4"
+            onClick={() => onNavigateToSection && onNavigateToSection("profile")}
+            className="text-xs font-bold text-orange-600 hover:underline shrink-0 ml-4"
           >
             Sửa tọa độ ⚙️
           </button>
@@ -144,15 +144,15 @@ export default function EmployerDashboard({ onNavigateToSection }) {
       {/* 2. Key business metrics cards */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Tin tuyển dụng", val: "06", icon: <Briefcase size={20} className="text-blue-500" />, action: "employer_approvals" },
-          { label: "Nhân sự quản lý", val: "12", icon: <Users size={20} className="text-emerald-500" />, action: "employer_hrm" },
-          { label: "Ca làm trong tuần", val: "28", icon: <Calendar size={20} className="text-purple-500" />, action: "employer_scheduling" },
-          { label: "Quyết toán lương", val: "9.2M đ", icon: <Wallet size={20} className="text-orange-500" />, action: "payroll_settlement" }
+          { label: "Tin tuyển dụng", val: "06", icon: <Briefcase size={20} className="text-orange-500" />, action: "jobs" },
+          { label: "Nhân sự quản lý", val: "12", icon: <Users size={20} className="text-emerald-500" />, action: "hrm" },
+          { label: "Ca làm trong tuần", val: "28", icon: <Calendar size={20} className="text-purple-500" />, action: "scheduling" },
+          { label: "Chi phí ca làm", val: "9.2M đ", icon: <Wallet size={20} className="text-orange-500" />, action: "payroll" }
         ].map((item, idx) => (
           <article
             key={idx}
             onClick={() => onNavigateToSection && onNavigateToSection(item.action)}
-            className="bg-white border border-slate-100 hover:border-blue-200 rounded-3xl p-6 shadow-md hover:shadow-lg transition cursor-pointer flex items-center justify-between"
+            className="bg-white border border-slate-100 hover:border-orange-200 rounded-3xl p-6 shadow-md hover:shadow-lg transition cursor-pointer flex items-center justify-between"
           >
             <div>
               <p className="text-xs font-medium text-slate-400">{item.label}</p>
@@ -189,8 +189,8 @@ export default function EmployerDashboard({ onNavigateToSection }) {
                   key={p.id}
                   className={`border rounded-3xl p-5 flex flex-col justify-between transition ${
                     isCurrent
-                      ? "border-blue-400 bg-blue-50/20 shadow-md"
-                      : "border-slate-100 hover:border-blue-200 bg-white"
+                      ? "border-orange-400 bg-orange-50/20 shadow-md"
+                      : "border-slate-100 hover:border-orange-200 bg-white"
                   }`}
                 >
                   <div>
@@ -199,7 +199,7 @@ export default function EmployerDashboard({ onNavigateToSection }) {
                         {p.durationDays >= 365 ? "Vô hạn" : `${p.durationDays} Ngày`}
                       </span>
                       {isCurrent && (
-                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 border border-blue-200">
+                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 border border-orange-200">
                           Đang Dùng
                         </span>
                       )}
@@ -220,7 +220,7 @@ export default function EmployerDashboard({ onNavigateToSection }) {
                       className={`w-full h-10 rounded-xl font-bold text-xs transition duration-200 flex items-center justify-center gap-1.5 ${
                         isCurrent
                           ? "bg-slate-100 text-slate-400 cursor-not-allowed border"
-                          : "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/10 cursor-pointer"
+                          : "bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white shadow-md shadow-orange-600/10 cursor-pointer"
                       }`}
                     >
                       <Zap size={12} /> {isCurrent ? "Đang sử dụng" : "Nâng cấp ngay"}
@@ -234,7 +234,7 @@ export default function EmployerDashboard({ onNavigateToSection }) {
       ) : (
         <div className="bg-white border border-slate-100 shadow-2xl rounded-3xl p-6 max-w-lg mx-auto flex flex-col gap-6 items-center">
           <div className="text-center w-full">
-            <span className="text-xs uppercase font-extrabold tracking-wider bg-blue-50 border border-blue-200 text-blue-600 px-3 py-1 rounded-full">
+            <span className="text-xs uppercase font-extrabold tracking-wider bg-orange-50 border border-orange-200 text-orange-600 px-3 py-1 rounded-full">
               Thanh Toán Nâng Cấp B2B
             </span>
             <h2 className="text-xl font-black text-slate-800 tracking-tight mt-3">Gói nâng cấp: {orderInfo.planName}</h2>
@@ -288,7 +288,7 @@ export default function EmployerDashboard({ onNavigateToSection }) {
                   type="button"
                   disabled={verifyingPayment}
                   onClick={handleVerifyPayment}
-                  className="flex-1 h-11 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white rounded-2xl font-bold shadow-lg shadow-blue-600/10 transition flex items-center justify-center gap-2 text-xs"
+                  className="flex-1 h-11 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 disabled:bg-slate-200 text-white rounded-2xl font-bold shadow-lg shadow-orange-600/10 transition flex items-center justify-center gap-2 text-xs"
                 >
                   {verifyingPayment ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />

@@ -34,9 +34,6 @@ namespace ProxiJob.Identity.Application.Features.Students.Commands.UpdateMyStude
             var profile = await _profileRepository.GetByUserIdWithUserAsync(userId, cancellationToken)
                 ?? throw new InvalidOperationException(BusinessMessages.StudentProfileNotFound);
 
-            if (!StudentProfileMapper.IsRegistered(profile))
-                throw new InvalidOperationException(BusinessMessages.ProfileNotRegistered);
-
             ApplyUpdates(profile.User, profile, request);
             profile.UpdatedAt = DateTime.UtcNow;
             profile.UpdatedBy = profile.User.Email;

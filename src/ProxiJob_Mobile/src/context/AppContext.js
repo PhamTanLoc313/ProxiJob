@@ -5,7 +5,7 @@ import { useAuth } from "./useAuth";
 import { useNavigation } from "./useNavigation";
 import { useShifts } from "./useShifts";
 import { getStoredToken } from "../api/auth";
-import { HubConnectionBuilder } from '@microsoft/signalr/dist/browser/signalr.js';
+import { HubConnectionBuilder } from '@microsoft/signalr';
 import { IDENTITY_API_BASE_URL } from '../api/apiConfig';
 
 export const AppContext = createContext();

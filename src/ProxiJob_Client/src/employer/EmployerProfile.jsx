@@ -41,22 +41,7 @@ export default function EmployerProfile() {
       }
     } catch (err) {
       console.log("Failed to load business profile:", err);
-      // Fallback mock
-      const mock = {
-        businessName: "Cửa hàng Coffee & Tea",
-        address: "84/10 Nam Cao, Quận 9",
-        city: "TP. Hồ Chí Minh",
-        latitude: 10.857461,
-        longitude: 106.801522,
-        description: "Quán cà phê phục vụ sinh viên Gen Z."
-      };
-      setProfile(mock);
-      setBusinessName(mock.businessName);
-      setAddress(mock.address);
-      setCity(mock.city);
-      setLatitude(mock.latitude);
-      setLongitude(mock.longitude);
-      setDescription(mock.description);
+      setProfile(null);
     } finally {
       setLoading(false);
     }
@@ -143,7 +128,7 @@ export default function EmployerProfile() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md max-w-2xl mx-auto mt-10">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mb-4" />
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-600 border-t-transparent mb-4" />
         <p className="text-slate-500 text-sm font-semibold">Đang tải hồ sơ cửa hàng của bạn...</p>
       </div>
     );
@@ -163,7 +148,7 @@ export default function EmployerProfile() {
         {/* Profile general form (Left side) */}
         <div className="md:col-span-7 bg-white border border-slate-100 shadow-md rounded-3xl p-6 space-y-5">
           <h2 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2 border-b border-slate-50 pb-3">
-            <Store size={16} className="text-blue-600" /> Hồ sơ cửa hàng
+            <Store size={16} className="text-orange-600" /> Hồ sơ cửa hàng
           </h2>
 
           <div className="flex flex-col gap-1.5">
@@ -174,7 +159,7 @@ export default function EmployerProfile() {
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               placeholder="Ví dụ: Phở Hà Nội, Trà sữa ToCoToCo..."
-              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
             />
           </div>
 
@@ -187,7 +172,7 @@ export default function EmployerProfile() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Số nhà, Tên đường..."
-                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -197,7 +182,7 @@ export default function EmployerProfile() {
                 required
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
               />
             </div>
           </div>
@@ -211,7 +196,7 @@ export default function EmployerProfile() {
                 required
                 value={latitude}
                 onChange={(e) => setLatitude(Number(e.target.value))}
-                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition font-mono"
+                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition font-mono"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -222,7 +207,7 @@ export default function EmployerProfile() {
                 required
                 value={longitude}
                 onChange={(e) => setLongitude(Number(e.target.value))}
-                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition font-mono"
+                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition font-mono"
               />
             </div>
           </div>
@@ -234,24 +219,16 @@ export default function EmployerProfile() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Giới thiệu nhanh về quán..."
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
             />
           </div>
 
           {/* Form Actions */}
-          <div className="pt-4 border-t border-slate-50 flex items-center justify-between gap-4">
-            {successMsg ? (
-              <p className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl flex items-center gap-1">
-                <Check size={14} /> {successMsg}
-              </p>
-            ) : (
-              <div />
-            )}
-
+          <div className="pt-4 border-t border-slate-50 flex items-center justify-end gap-4">
             <button
               type="submit"
               disabled={saving}
-              className="px-6 h-11 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white rounded-2xl font-black text-xs shadow-lg shadow-blue-600/10 transition flex items-center gap-2 cursor-pointer"
+              className="px-6 h-11 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 disabled:bg-slate-200 text-white rounded-2xl font-black text-xs shadow-lg shadow-orange-600/10 transition flex items-center gap-2 cursor-pointer"
             >
               {saving ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
@@ -267,7 +244,7 @@ export default function EmployerProfile() {
         {/* Leaflet GPS map selector (Right side) */}
         <div className="md:col-span-5 bg-white border border-slate-100 shadow-md rounded-3xl p-6 flex flex-col gap-4">
           <h2 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-2 border-b border-slate-50 pb-3">
-            <MapPin size={16} className="text-blue-600" /> Ghim vị trí định vị chấm công
+            <MapPin size={16} className="text-orange-600" /> Ghim vị trí định vị chấm công
           </h2>
           
           <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">

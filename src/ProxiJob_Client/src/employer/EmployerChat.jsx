@@ -30,7 +30,19 @@ export default function EmployerChat() {
       const response = await fetch(`${IDENTITY_API_BASE_URL}/messages/conversations`, { headers });
       if (response.ok) {
         const data = await response.json();
-        setConversations(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        const mapped = list.map(c => ({
+          id: c.userId || c.id,
+          name: c.name,
+          email: c.email,
+          avatar: c.avatar,
+          phone: c.phone,
+          lastMessage: c.lastMessage,
+          time: c.time,
+          unread: c.unread,
+          gender: c.gender || "Male"
+        }));
+        setConversations(mapped);
       }
     } catch (err) {
       console.log("Failed to load conversations:", err);
@@ -162,15 +174,15 @@ export default function EmployerChat() {
           ) : conversations.length === 0 ? (
             <div className="text-center p-8 text-xs text-slate-400">Chưa có ứng viên liên hệ.</div>
           ) : (
-            conversations.map((c) => {
+            conversations.map((c, idx) => {
               const isActive = activeChat?.id === c.id;
               return (
                 <div
-                  key={c.id}
+                  key={c.id || idx}
                   onClick={() => handleSelectChat(c)}
                   className={`p-3 rounded-2xl cursor-pointer transition flex items-center gap-3 border ${
                     isActive
-                      ? "bg-blue-50 border-blue-200"
+                      ? "bg-orange-50 border-orange-200"
                       : "border-transparent hover:bg-slate-50"
                   }`}
                 >
@@ -185,7 +197,7 @@ export default function EmployerChat() {
                     <p className="text-[10px] text-slate-400 truncate mt-0.5">{c.lastMessage}</p>
                   </div>
                   {c.unread > 0 && (
-                    <span className="h-4 w-4 bg-blue-600 rounded-full text-[9px] font-bold text-white flex items-center justify-center shrink-0">
+                    <span className="h-4 w-4 bg-orange-600 rounded-full text-[9px] font-bold text-white flex items-center justify-center shrink-0">
                       {c.unread}
                     </span>
                   )}
@@ -215,7 +227,7 @@ export default function EmployerChat() {
                 >
                   <ChevronLeft size={16} />
                 </button>
-                <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-lg border">
+                <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center text-lg border">
                   👤
                 </div>
                 <div>
@@ -227,7 +239,7 @@ export default function EmployerChat() {
               {activeChat.phone && activeChat.phone !== "Không có" && (
                 <a
                   href={`tel:${activeChat.phone}`}
-                  className="p-2.5 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 rounded-xl border border-slate-200 transition"
+                  className="p-2.5 bg-slate-50 hover:bg-orange-50 hover:text-orange-600 rounded-xl border border-slate-200 transition"
                 >
                   <Phone size={14} />
                 </a>
@@ -239,22 +251,22 @@ export default function EmployerChat() {
               {loadingMsgs ? (
                 <div className="text-center p-4 text-xs text-slate-400">Đang tải lịch sử tin nhắn...</div>
               ) : (
-                messages.map((m) => {
+                messages.map((m, index) => {
                   const isEmployer = m.sender === "employer";
                   return (
                     <div
-                      key={m.id}
+                      key={m.id || index}
                       className={`flex ${isEmployer ? "justify-end" : "justify-start"}`}
                     >
                       <div
                         className={`max-w-xs p-3 rounded-2xl text-xs relative ${
                           isEmployer
-                            ? "bg-blue-600 text-white rounded-tr-none shadow-md shadow-blue-600/5"
+                            ? "bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-tr-none shadow-md shadow-orange-600/5"
                             : "bg-white text-slate-800 border border-slate-100 rounded-tl-none"
                         }`}
                       >
                         <p>{m.text}</p>
-                        <span className={`text-[8px] mt-1 block text-right ${isEmployer ? "text-blue-200" : "text-slate-400"}`}>
+                        <span className={`text-[8px] mt-1 block text-right ${isEmployer ? "text-orange-100" : "text-slate-400"}`}>
                           {m.time}
                         </span>
                       </div>
@@ -272,11 +284,11 @@ export default function EmployerChat() {
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="Nhập tin nhắn chỉ đạo..."
-                className="flex-1 h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                className="flex-1 h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
               />
               <button
                 type="submit"
-                className="h-11 w-11 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/10 transition shrink-0"
+                className="h-11 w-11 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-orange-600/10 transition shrink-0"
               >
                 <Send size={16} />
               </button>

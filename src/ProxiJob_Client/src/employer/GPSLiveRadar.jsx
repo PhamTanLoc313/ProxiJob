@@ -34,12 +34,7 @@ export default function GPSLiveRadar() {
       })
       .catch((err) => {
         console.log("Failed to load timekeeping logs:", err);
-        // Fallback mock logs
-        setLogs([
-          { id: 1, name: "Nguyễn Văn A", role: "Pha chế", checkInTime: "08:02", checkOutTime: null, latitude: 10.857490, longitude: 106.801550, gpsStatus: "Ok", distance: 10 },
-          { id: 2, name: "Trần Thị B", phone: "090", role: "Phục vụ", checkInTime: "08:15", checkOutTime: "12:05", latitude: 10.857461, longitude: 106.801522, gpsStatus: "Ok", distance: 0 },
-          { id: 3, name: "Lê Văn C", role: "Phục vụ ca tối", checkInTime: "13:05", checkOutTime: null, latitude: 10.859000, longitude: 106.805000, gpsStatus: "Suspicious", distance: 350 }
-        ]);
+        setLogs([]);
         setLoadingLogs(false);
       });
   };
@@ -183,7 +178,7 @@ export default function GPSLiveRadar() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md max-w-2xl mx-auto mt-10">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mb-4" />
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-600 border-t-transparent mb-4" />
         <p className="text-slate-500 text-sm font-semibold">Đang tải bản đồ giám sát GPS Live...</p>
       </div>
     );
@@ -295,7 +290,7 @@ export default function GPSLiveRadar() {
               type="button"
               disabled={generatingQr}
               onClick={handleGenerateNewQr}
-              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs shadow-lg shadow-blue-600/10 transition flex items-center justify-center gap-1.5"
+              className="w-full h-11 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-orange-600/10 transition flex items-center justify-center gap-1.5"
             >
               {generatingQr ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
@@ -308,7 +303,7 @@ export default function GPSLiveRadar() {
           {/* Geofence radius slider controls */}
           <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-6 space-y-4">
             <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-2">
-              <Compass size={14} className="text-blue-500" /> Cấu hình bán kính Geofence
+              <Compass size={14} className="text-orange-500" /> Cấu hình bán kính Geofence
             </h3>
             
             <div className="flex gap-2">
@@ -321,7 +316,7 @@ export default function GPSLiveRadar() {
                     onClick={() => handleUpdateRadius(radius)}
                     className={`flex-1 h-9 rounded-xl font-bold text-xs transition ${
                       active
-                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                        ? "bg-gradient-to-r from-orange-600 to-amber-500 text-white shadow-md shadow-orange-500/20"
                         : "border border-slate-200 text-slate-600 bg-white hover:bg-slate-50"
                     }`}
                   >
@@ -331,8 +326,8 @@ export default function GPSLiveRadar() {
               })}
             </div>
             
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-[10px] text-blue-800 leading-relaxed flex gap-1.5">
-              <Info size={14} className="shrink-0 text-blue-600 mt-0.5" />
+            <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 text-[10px] text-orange-900 leading-relaxed flex gap-1.5">
+              <Info size={14} className="shrink-0 text-orange-600 mt-0.5" />
               <p>Mặc định 100m được khuyến nghị. Bán kính nhỏ hơn (50m) yêu cầu toạ độ thiết bị của sinh viên phải cực kỳ chuẩn xác.</p>
             </div>
           </div>

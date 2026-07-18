@@ -3,6 +3,37 @@ import { Plus, Trash2, Calendar, Clock, Check, X, FileText, Briefcase, RefreshCw
 import { getJobPostsByBusiness, createJobPost, createJobShift, getJobPostShifts, deleteJobPostApi, getApplicationsByShift, approveApplication, rejectApplication } from "../api/jobs";
 import { useAuth } from "../auth/AuthContext";
 
+const checkIsEmergency = (title, desc) => {
+  const t = (title || "").toLowerCase();
+  const d = (desc || "").toLowerCase();
+  return (
+    t.includes("tuyển gấp") ||
+    t.includes("gấp") ||
+    d.includes("tuyển gấp") ||
+    d.includes("gấp")
+  );
+};
+
+const getCategoryTheme = (categoryName) => {
+  const cat = (categoryName || "").toLowerCase();
+  if (cat.includes("phục vụ") || cat.includes("bồi bàn")) {
+    return { bg: "bg-orange-50", text: "text-orange-600", border: "border-orange-200", accent: "#ea580c" };
+  }
+  if (cat.includes("pha chế") || cat.includes("bar")) {
+    return { bg: "bg-amber-50", text: "text-amber-600", border: "border-amber-200", accent: "#d97706" };
+  }
+  if (cat.includes("thu ngân") || cat.includes("tiền")) {
+    return { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-200", accent: "#059669" };
+  }
+  if (cat.includes("giao hàng") || cat.includes("shipper")) {
+    return { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-200", accent: "#2563eb" };
+  }
+  if (cat.includes("bếp") || cat.includes("nấu")) {
+    return { bg: "bg-rose-50", text: "text-rose-600", border: "border-rose-200", accent: "#e11d48" };
+  }
+  return { bg: "bg-purple-50", text: "text-purple-600", border: "border-purple-200", accent: "#7c3aea" };
+};
+
 export default function JobManagement() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("posts"); // posts | approvals
@@ -26,19 +57,38 @@ export default function JobManagement() {
   const [applicants, setApplicants] = useState([]);
   const [loadingApplicants, setLoadingApplicants] = useState(false);
 
-  const fetchJobs = () => {
+  const fetchJobs = async () => {
     if (!user) return;
     setLoadingJobs(true);
-    // employer businessId is parsed or default to user.id
-    getJobPostsByBusiness(user.id)
-      .then((data) => {
-        setJobs(Array.isArray(data) ? data : []);
-        setLoadingJobs(false);
-      })
-      .catch((err) => {
-        console.log("Failed to load business jobs:", err);
-        setLoadingJobs(false);
-      });
+    try {
+      const data = await getJobPostsByBusiness(user.id);
+      const list = data?.items || (Array.isArray(data) ? data : []);
+      
+      const enrichedJobs = await Promise.all(
+        list.map(async (job) => {
+          try {
+            const shiftsRes = await getJobPostShifts(job.id);
+            const shifts = Array.isArray(shiftsRes)
+              ? shiftsRes
+              : (shiftsRes && Array.isArray(shiftsRes.data))
+                ? shiftsRes.data
+                : (shiftsRes?.items || shiftsRes?.Items || []);
+            
+            const salary = shifts.length > 0 ? (shifts[0].salary !== undefined ? shifts[0].salary : (shifts[0].Salary || 0)) : 0;
+            return { ...job, salary, shifts };
+          } catch (e) {
+            console.log(`Failed to fetch shifts for job ${job.id}:`, e);
+            return { ...job, salary: 0, shifts: [] };
+          }
+        })
+      );
+      
+      setJobs(enrichedJobs);
+      setLoadingJobs(false);
+    } catch (err) {
+      console.log("Failed to load business jobs:", err);
+      setLoadingJobs(false);
+    }
   };
 
   useEffect(() => {
@@ -116,7 +166,8 @@ export default function JobManagement() {
     setLoadingApplicants(true);
     try {
       const data = await getApplicationsByShift(shift.id, user.id);
-      setApplicants(Array.isArray(data) ? data : []);
+      const list = data?.items || (Array.isArray(data) ? data : []);
+      setApplicants(list);
     } catch (err) {
       console.log("Failed to load applicants:", err);
       setApplicants([]);
@@ -188,7 +239,7 @@ export default function JobManagement() {
               <h2 className="font-extrabold text-slate-800 text-base">Tin tuyển dụng đang chạy</h2>
               <button
                 onClick={() => setShowWizard(true)}
-                className="flex items-center gap-1 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow-md transition"
+                className="flex items-center gap-1 text-xs font-black bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white px-4 py-2 rounded-xl shadow-md transition"
               >
                 <Plus size={14} /> Đăng ca làm mới ⚡
               </button>
@@ -196,7 +247,7 @@ export default function JobManagement() {
 
             {loadingJobs ? (
               <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl border border-slate-100">
-                <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent mb-4" />
+                <div className="animate-spin rounded-full h-8 w-8 border-4 border-orange-600 border-t-transparent mb-4" />
                 <p className="text-slate-400 text-xs font-semibold">Đang tải danh sách ca tuyển dụng...</p>
               </div>
             ) : jobs.length === 0 ? (
@@ -209,32 +260,66 @@ export default function JobManagement() {
               <div className="flex flex-col gap-3">
                 {jobs.map((job) => {
                   const isSelected = selectedJob?.id === job.id;
+                  const theme = getCategoryTheme(job.categoryName);
+                  const isUrgent = checkIsEmergency(job.title, job.description);
                   return (
                     <article
                       key={job.id}
                       onClick={() => handleSelectJob(job)}
-                      className={`p-5 bg-white border rounded-3xl cursor-pointer hover:border-blue-200 transition ${
-                        isSelected ? "border-blue-500 shadow-md bg-blue-50/5" : "border-slate-100"
+                      style={{
+                        borderLeft: `5px solid ${theme.accent}`
+                      }}
+                      className={`p-4 bg-white border rounded-2xl cursor-pointer hover:border-orange-200 shadow-xs hover:shadow-md transition relative flex flex-col gap-2 ${
+                        isSelected ? "border-orange-500 shadow-md bg-orange-50/5" : "border-slate-100"
                       }`}
                     >
                       <div className="flex justify-between items-start gap-4">
-                        <div>
-                          <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
-                            {job.categoryName || "Đăng tin"}
-                          </span>
-                          <h4 className="font-extrabold text-slate-800 text-sm mt-2 line-clamp-1">{job.title}</h4>
-                          <p className="text-xs text-slate-400 font-semibold">{job.address || "Tại cửa hàng"}</p>
-                          <p className="text-xs text-emerald-600 font-bold mt-2">Lương: {job.salary?.toLocaleString()}đ/giờ</p>
+                        <div className="flex-1 min-w-0">
+                          {/* Badges */}
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${theme.bg} ${theme.text} border ${theme.border}`}>
+                              {job.categoryName || "Đăng tin"}
+                            </span>
+                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${
+                              job.status === "Published"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : job.status === "Draft"
+                                  ? "bg-slate-50 text-slate-500 border-slate-200"
+                                  : "bg-red-50 text-red-700 border-red-200"
+                            }`}>
+                              {job.status === "Published" ? "Công khai" : job.status === "Draft" ? "Bản nháp" : "Đã đóng"}
+                            </span>
+                            {isUrgent && (
+                              <span className="text-[9px] font-black uppercase text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
+                                🔥 Gấp
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="font-extrabold text-slate-800 text-sm line-clamp-1 group-hover:text-orange-600 transition">
+                            {job.title}
+                          </h4>
+                          <p className="text-[11px] text-slate-400 font-semibold line-clamp-1 mt-0.5">{job.address || "Tại cửa hàng"}</p>
+                          
+                          <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500 font-semibold">
+                            <span className="flex items-center gap-1">
+                              📅 Ca làm: <strong>{job.shiftCount || 0} ca</strong>
+                            </span>
+                            <span className="flex items-center gap-1 text-emerald-600 font-bold">
+                              💰 Lương: {job.salary && job.salary > 0 ? `${job.salary.toLocaleString()}đ/h` : "Lương ca"}
+                            </span>
+                          </div>
                         </div>
+
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteJob(job.id);
                           }}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shrink-0 self-start"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </article>
@@ -281,11 +366,11 @@ export default function JobManagement() {
                         return (
                           <div
                             key={shift.id}
-                            className="border border-slate-100 p-4 rounded-2xl flex justify-between items-center hover:border-blue-200 transition"
+                            className="border border-slate-100 p-4 rounded-2xl flex justify-between items-center hover:border-orange-200 transition"
                           >
                             <div className="flex flex-col gap-1">
                               <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                <Calendar size={13} className="text-blue-500" /> {dateStr}
+                                <Calendar size={13} className="text-orange-500" /> {dateStr}
                               </span>
                               <span className="text-xs text-slate-500 flex items-center gap-1 font-medium">
                                 <Clock size={13} className="text-slate-400" /> {shift.startTime?.slice(0, 5)} - {shift.endTime?.slice(0, 5)}
@@ -299,7 +384,7 @@ export default function JobManagement() {
                                 handleSelectShiftForApprovals(shift);
                                 setActiveTab("approvals");
                               }}
-                              className="px-3.5 h-8 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded-xl font-bold text-[10px] uppercase transition shrink-0"
+                              className="px-3.5 h-8 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-600 rounded-xl font-bold text-[10px] uppercase transition shrink-0"
                             >
                               Xem Đơn Ứng Tuyển
                             </button>
@@ -338,7 +423,7 @@ export default function JobManagement() {
                             alert("Tin tuyển dụng chưa có ca làm!");
                           }
                         }}
-                        className="w-full text-left p-2.5 bg-slate-50 hover:bg-blue-50/50 rounded-xl text-xs font-bold text-slate-600 transition"
+                        className="w-full text-left p-2.5 bg-slate-50 hover:bg-orange-50/50 rounded-xl text-xs font-bold text-slate-600 transition"
                       >
                         📂 Xem ca làm tuyển dụng
                       </button>
@@ -383,7 +468,7 @@ export default function JobManagement() {
                       return (
                         <div
                           key={app.id}
-                          className="border border-slate-100 hover:border-blue-200 p-5 rounded-2xl flex flex-col gap-3 transition"
+                          className="border border-slate-100 hover:border-orange-200 p-5 rounded-2xl flex flex-col gap-3 transition"
                         >
                           <div className="flex justify-between items-start gap-4">
                             <div className="flex items-center gap-3">
@@ -428,7 +513,7 @@ export default function JobManagement() {
                                 </button>
                                 <button
                                   onClick={() => handleApprove(app.id)}
-                                  className="px-3.5 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[10px] uppercase shadow-md shadow-blue-600/10 flex items-center gap-1 transition"
+                                  className="px-3.5 h-8 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-lg font-bold text-[10px] uppercase shadow-md shadow-orange-500/10 flex items-center gap-1 transition"
                                 >
                                   <Check size={12} /> Duyệt ứng viên
                                 </button>
@@ -453,7 +538,7 @@ export default function JobManagement() {
             <form onSubmit={handleCreateJob} className="p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
-                  <Briefcase size={20} className="text-blue-600" /> Tạo tin tuyển ca làm mới
+                  <Briefcase size={20} className="text-orange-600" /> Tạo tin tuyển ca làm mới
                 </h3>
                 <button
                   type="button"
@@ -474,7 +559,7 @@ export default function JobManagement() {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Ví dụ: Phục vụ bàn ca sáng..."
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -482,7 +567,7 @@ export default function JobManagement() {
                   <select
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition appearance-none cursor-pointer"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition appearance-none cursor-pointer"
                   >
                     <option value="1">Phục vụ ăn uống</option>
                     <option value="2">Pha chế</option>
@@ -501,7 +586,7 @@ export default function JobManagement() {
                     required
                     value={salary}
                     onChange={(e) => setSalary(Number(e.target.value))}
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -511,7 +596,7 @@ export default function JobManagement() {
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="Bỏ trống nếu lấy theo địa chỉ cửa hàng..."
-                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                    className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                   />
                 </div>
               </div>
@@ -526,7 +611,7 @@ export default function JobManagement() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Mô tả công việc chi tiết..."
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -537,7 +622,7 @@ export default function JobManagement() {
                     value={requirements}
                     onChange={(e) => setRequirements(e.target.value)}
                     placeholder="Các yêu cầu kỹ năng, thái độ..."
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-blue-400 focus:bg-white transition"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
                   />
                 </div>
               </div>
@@ -546,12 +631,12 @@ export default function JobManagement() {
               <div className="border-t border-slate-100 pt-4">
                 <div className="flex justify-between items-center mb-3">
                   <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1">
-                    <Calendar size={14} className="text-blue-500" /> Thiết lập ca làm:
+                    <Calendar size={14} className="text-orange-500" /> Thiết lập ca làm:
                   </label>
                   <button
                     type="button"
                     onClick={() => setShiftsInput([...shiftsInput, { date: "", startTime: "08:00", endTime: "12:00", slotsRequired: 1 }])}
-                    className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-xl hover:bg-blue-100 transition"
+                    className="text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1.5 rounded-xl hover:bg-orange-100 transition"
                   >
                     + Thêm ca làm
                   </button>
@@ -571,7 +656,7 @@ export default function JobManagement() {
                             newShifts[idx].date = e.target.value;
                             setShiftsInput(newShifts);
                           }}
-                          className="w-full h-9 border border-slate-200 rounded-lg text-xs px-2 focus:outline-none focus:border-blue-400 mt-1"
+                          className="w-full h-9 border border-slate-200 rounded-lg text-xs px-2 focus:outline-none focus:border-orange-400 mt-1"
                         />
                       </div>
                       <div className="w-20">
@@ -585,7 +670,7 @@ export default function JobManagement() {
                             newShifts[idx].startTime = e.target.value;
                             setShiftsInput(newShifts);
                           }}
-                          className="w-full h-9 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:border-blue-400 mt-1"
+                          className="w-full h-9 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:border-orange-400 mt-1"
                         />
                       </div>
                       <div className="w-20">
@@ -599,7 +684,7 @@ export default function JobManagement() {
                             newShifts[idx].endTime = e.target.value;
                             setShiftsInput(newShifts);
                           }}
-                          className="w-full h-9 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:border-blue-400 mt-1"
+                          className="w-full h-9 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:border-orange-400 mt-1"
                         />
                       </div>
                       <div className="w-16">
@@ -613,7 +698,7 @@ export default function JobManagement() {
                             newShifts[idx].slotsRequired = Number(e.target.value);
                             setShiftsInput(newShifts);
                           }}
-                          className="w-full h-9 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:border-blue-400 mt-1"
+                          className="w-full h-9 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:border-orange-400 mt-1"
                         />
                       </div>
                       {shiftsInput.length > 1 && (
@@ -637,7 +722,7 @@ export default function JobManagement() {
 
               <button
                 type="submit"
-                className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-600/10 transition"
+                className="w-full h-11 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-orange-600/10 transition"
               >
                 Xác nhận Đăng ca tuyển dụng
               </button>
