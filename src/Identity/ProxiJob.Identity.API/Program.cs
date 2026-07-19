@@ -7,6 +7,7 @@ using ProxiJob.Identity.Infrastructure.Data;
 using ProxiJob.Identity.Infrastructure.Services;
 using ProxiJob.Identity.API.Hubs;
 using MassTransit;
+using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 

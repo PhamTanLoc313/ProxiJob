@@ -160,6 +160,15 @@ export default function EmployerScheduling() {
   }, [loadData]);
 
   /* ─── assign/unassign staff ─── */
+  const parseDateTimeToUTC = (dateStr, timeStr) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const dateObj = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
+    // Subtract 7 hours to convert from ICT (GMT+7) to UTC
+    dateObj.setUTCHours(dateObj.getUTCHours() - 7);
+    return dateObj.toISOString();
+  };
+
   const handleAssignStaff = async (staffId) => {
     if (!assignModal.slotId || !activeDateStr) return;
     const targetSlot = shiftSlots.find((s) => s.id === assignModal.slotId);
@@ -179,18 +188,18 @@ export default function EmployerScheduling() {
     }
 
     // Assign (toggle on)
-    let startTime = "08:00:00";
-    let endTime = "12:00:00";
+    let startTime = "08:00";
+    let endTime = "12:00";
     try {
       const timeParts = targetSlot.time.split(" - ");
       if (timeParts.length === 2) {
-        startTime = `${timeParts[0]}:00`;
-        endTime = `${timeParts[1]}:00`;
+        startTime = timeParts[0];
+        endTime = timeParts[1];
       }
     } catch {}
 
-    const startDateTime = `${activeDateStr}T${startTime}`;
-    const endDateTime = `${activeDateStr}T${endTime}`;
+    const startDateTime = parseDateTimeToUTC(activeDateStr, startTime);
+    const endDateTime = parseDateTimeToUTC(activeDateStr, endTime);
 
     try {
       await createSchedule(staffId, {
@@ -320,14 +329,14 @@ export default function EmployerScheduling() {
         </div>
 
         {/* Day selector pills */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
+        <div className="grid grid-cols-7 gap-3 w-full">
           {weekDays.map((day, idx) => {
             const isSelected = selectedDayIndex === idx;
             return (
               <button
                 key={idx}
                 onClick={() => setSelectedDayIndex(idx)}
-                className={`flex flex-col items-center min-w-[52px] px-2.5 py-2.5 rounded-2xl transition-all font-bold text-xs border
+                className={`flex flex-col items-center w-full px-2.5 py-2.5 rounded-2xl transition-all font-bold text-xs border
                   ${isSelected
                     ? "text-white shadow-lg border-orange-400"
                     : day.isToday
@@ -388,115 +397,125 @@ export default function EmployerScheduling() {
             <h3 className="text-sm font-black text-slate-700">Lịch trình chi tiết (Nội Bộ)</h3>
           </div>
 
-          {shiftSlots.map((slot) => {
-            const slotSchedules = schedules.filter((s) => s.note === slot.id && !s.jobShiftId);
-            const isAssigned = slotSchedules.length > 0;
-            const colors = ICON_COLORS[slot.icon] || ICON_COLORS["☀️"];
+          {shiftSlots.length === 0 ? (
+            <div className="text-center p-12 border border-slate-100 rounded-3xl bg-slate-50/30">
+              <span className="text-3xl block mb-2">📅</span>
+              <p className="text-xs font-bold text-slate-500 mb-1">Chưa có ca làm nào</p>
+              <p className="text-[10px] text-slate-400">Nhấn "Thêm Ca Mới" ở góc trên để bắt đầu lập lịch trực.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {shiftSlots.map((slot) => {
+                const slotSchedules = schedules.filter((s) => s.note === slot.id && !s.jobShiftId);
+                const isAssigned = slotSchedules.length > 0;
+                const colors = ICON_COLORS[slot.icon] || ICON_COLORS["☀️"];
 
-            return (
-              <div
-                key={slot.id}
-                className={`border rounded-2xl p-4 transition-all ${
-                  isAssigned ? "bg-white border-slate-150 shadow-sm" : "bg-slate-50/50 border-dashed border-slate-200"
-                }`}
-              >
-                {/* Slot Header */}
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
-                      style={{ backgroundColor: colors.bg }}
-                    >
-                      {slot.icon}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-black text-slate-800">{slot.name}</h4>
+                return (
+                  <div
+                    key={slot.id}
+                    className={`border rounded-2xl p-4 transition-all flex flex-col min-h-[180px] ${
+                      isAssigned ? "bg-white border-slate-150 shadow-sm" : "bg-slate-50/50 border-dashed border-slate-200"
+                    }`}
+                  >
+                    {/* Slot Header */}
+                    <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 font-semibold"
+                          style={{ backgroundColor: colors.bg }}
+                        >
+                          {slot.icon}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                            {slot.name}
+                          </h4>
+                          <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-0.5">
+                            <Clock size={9} /> {slot.time}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-1.5 items-center">
                         <button
                           onClick={() => openEditShiftModal(slot)}
-                          className="w-6 h-6 flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 transition"
-                          title="Chỉnh sửa"
+                          className="w-5 h-5 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition"
+                          title="Sửa ca"
                         >
-                          <Pencil size={11} className="text-blue-600" />
+                          <Pencil size={9} className="text-slate-500" />
                         </button>
                         <button
                           onClick={() => setDeleteConfirm({ open: true, slot })}
-                          className="w-6 h-6 flex items-center justify-center rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition"
+                          className="w-5 h-5 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition"
                           title="Xóa ca"
                         >
-                          <Trash2 size={11} className="text-red-500" />
+                          <Trash2 size={9} className="text-slate-500" />
+                        </button>
+                        <button
+                          onClick={() => { setAssignModal({ open: true, slotId: slot.id }); setSearchQuery(""); }}
+                          className="w-5 h-5 flex items-center justify-center rounded-md bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white transition shadow-sm"
+                          title="Gán nhân sự"
+                        >
+                          <UserPlus size={9} />
                         </button>
                       </div>
-                      <p className="text-[11px] text-slate-400 font-semibold flex items-center gap-1 mt-0.5">
-                        <Clock size={10} /> {slot.time}
-                      </p>
+                    </div>
+
+                    {/* Assigned Staff */}
+                    <div className="flex-1 flex flex-col gap-2">
+                      {isAssigned ? (
+                        slotSchedules.map((schedule) => {
+                          const staff = employees.find((e) => e.id === schedule.employeeId);
+                          const staffName = staff ? staff.name : `Nhân viên #${schedule.employeeId}`;
+                          const role = staff?.role || "Nhân viên";
+                          let rate = "28.000 đ/h";
+                          if (staff?.salaryPerHour) {
+                            rate = `${Number(staff.salaryPerHour).toLocaleString("vi-VN")} đ/h`;
+                          }
+
+                          return (
+                            <div
+                              key={schedule.id}
+                              className="flex items-center gap-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-100 hover:border-orange-200 transition"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-yellow-400 flex items-center justify-center text-white font-black text-xs shrink-0">
+                                {(staffName || "?")[0]}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 justify-between">
+                                  <span className="text-[11px] font-bold text-slate-800 truncate">{staffName}</span>
+                                  <span className="px-1.5 py-0.2 text-[8px] font-extrabold rounded-sm bg-orange-100 text-orange-600 shrink-0">
+                                    Nội bộ
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between mt-0.5 text-[9px] text-slate-400 font-semibold">
+                                  <span>{role}</span>
+                                  <span className="text-orange-600 font-bold">{rate}</span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleDeleteScheduleEntry(schedule.id)}
+                                className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <button
+                          onClick={() => { setAssignModal({ open: true, slotId: slot.id }); setSearchQuery(""); }}
+                          className="w-full h-full py-8 border-2 border-dashed border-slate-200 rounded-xl text-[10px] font-bold text-slate-400 hover:border-orange-300 hover:text-orange-500 hover:bg-orange-50/30 transition-all flex flex-col items-center justify-center gap-1.5"
+                        >
+                          <UserPlus size={14} className="text-slate-300" />
+                          <span>Gán nhân sự</span>
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => { setAssignModal({ open: true, slotId: slot.id }); setSearchQuery(""); }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold rounded-xl transition-all"
-                    style={{ background: "linear-gradient(135deg, #FF6B00, #F59E0B)", color: "#fff" }}
-                  >
-                    <UserPlus size={12} /> Thêm nhân sự
-                  </button>
-                </div>
-
-                {/* Assigned Staff */}
-                {isAssigned ? (
-                  <div className="flex flex-col gap-2">
-                    {slotSchedules.map((schedule) => {
-                      const staff = employees.find((e) => e.id === schedule.employeeId);
-                      const staffName = staff ? staff.name : `Nhân viên #${schedule.employeeId}`;
-                      const role = staff?.role || "Nhân viên";
-                      let rate = "28.000 đ/h";
-                      if (staff?.salaryPerHour) {
-                        rate = `${Number(staff.salaryPerHour).toLocaleString("vi-VN")} đ/h`;
-                      }
-
-                      return (
-                        <div
-                          key={schedule.id}
-                          className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-orange-200 transition"
-                        >
-                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-400 to-yellow-400 flex items-center justify-center text-white font-black text-sm shrink-0">
-                            {(staffName || "?")[0]}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-800 truncate">{staffName}</span>
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-md"
-                                style={{ backgroundColor: "rgba(255,107,0,0.1)", color: "#FF6B00" }}
-                              >
-                                Nội bộ
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 font-semibold">Vị trí: {role}</p>
-                            <p className="text-[10px] text-orange-600 font-bold">Lương ca: {rate}</p>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteScheduleEntry(schedule.id)}
-                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setAssignModal({ open: true, slotId: slot.id }); setSearchQuery(""); }}
-                    className="w-full py-5 border-2 border-dashed border-slate-200 rounded-xl text-xs font-bold text-slate-400 hover:border-orange-300 hover:text-orange-500 hover:bg-orange-50/30 transition-all"
-                  >
-                    + Gán Nhân Sự Đầu Tiên 👤
-                  </button>
-                )}
-              </div>
-            );
-          })}
-
-          {shiftSlots.length === 0 && (
-            <div className="text-center p-8 text-slate-400 text-xs">Chưa có ca làm nào. Nhấn "Thêm Ca Mới" để bắt đầu.</div>
+                );
+              })}
+            </div>
           )}
         </div>
       ) : (
@@ -508,7 +527,7 @@ export default function EmployerScheduling() {
           </div>
 
           {externalSchedules.length > 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {externalSchedules.map((schedule) => {
                 const staff = employees.find((e) => e.id === schedule.employeeId);
                 const staffName = staff ? staff.name : "Sinh viên vãng lai";
@@ -523,29 +542,27 @@ export default function EmployerScheduling() {
                 return (
                   <div
                     key={schedule.id}
-                    className="flex items-center gap-3 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-purple-200 transition"
+                    className="flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-purple-200 transition"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-sm shrink-0">
                       {(staffName || "?")[0]}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 justify-between">
                         <span className="text-xs font-bold text-slate-800 truncate">{staffName}</span>
-                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-md"
-                          style={{ backgroundColor: "rgba(91,0,223,0.1)", color: "#5B00DF" }}
-                        >
+                        <span className="px-1.5 py-0.2 text-[8px] font-bold rounded-sm bg-purple-100 text-purple-700 shrink-0">
                           Vãng lai
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 font-semibold">Công việc: {role}</p>
-                      <p className="text-[10px] text-indigo-600 font-bold flex items-center gap-1">
+                      <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Công việc: {role}</p>
+                      <p className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 mt-0.5">
                         <Clock size={10} /> Giờ làm: {formatTime(schedule.startTime)} - {formatTime(schedule.endTime)}
                       </p>
-                      <p className="text-[10px] text-orange-600 font-bold">Lương ca: {rate}</p>
+                      <p className="text-[10px] text-orange-600 font-bold mt-0.5">Lương ca: {rate}</p>
                     </div>
                     <button
                       onClick={() => handleDeleteScheduleEntry(schedule.id)}
-                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition"
+                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -665,10 +682,10 @@ export default function EmployerScheduling() {
          ═══════════════════════════════════════════════════ */}
       {shiftModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-black text-slate-800">
-                {shiftModal.editId ? "Chỉnh sửa ca làm" : "Thêm ca làm việc mới"}
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-7 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                📅 {shiftModal.editId ? "Chỉnh sửa Ca làm việc" : "Thêm Ca làm việc mới"}
               </h3>
               <button
                 onClick={() => setShiftModal({ open: false, editId: null })}
@@ -678,63 +695,71 @@ export default function EmployerScheduling() {
               </button>
             </div>
 
-            {/* Name */}
-            <label className="text-[11px] font-bold text-slate-600 block mb-1.5">Tên ca làm việc</label>
-            <input
-              type="text"
-              placeholder="Ví dụ: Ca Giữa Trưa..."
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-orange-400 transition mb-1"
-              value={shiftForm.name}
-              onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
-            />
-            {shiftErrors.name && <p className="text-[10px] text-red-500 mb-2">{shiftErrors.name}</p>}
-
-            {/* Time inputs */}
-            <div className="flex gap-3 mt-3">
-              <div className="flex-1">
-                <label className="text-[11px] font-bold text-slate-600 block mb-1.5">Giờ bắt đầu</label>
+            <div className="flex flex-col gap-4">
+              {/* Name */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1.5 uppercase tracking-wider">Tên ca làm việc</label>
                 <input
-                  type="time"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-orange-400 transition"
-                  value={shiftForm.start}
-                  onChange={(e) => setShiftForm({ ...shiftForm, start: e.target.value })}
+                  type="text"
+                  placeholder="Ví dụ: Ca Giữa Trưa, Ca Gãy..."
+                  className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50/30 rounded-xl text-xs outline-none focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition"
+                  value={shiftForm.name}
+                  onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
                 />
-                {shiftErrors.start && <p className="text-[10px] text-red-500 mt-1">{shiftErrors.start}</p>}
+                {shiftErrors.name && <p className="text-[10px] text-red-500 mt-1 font-semibold">{shiftErrors.name}</p>}
               </div>
-              <div className="flex-1">
-                <label className="text-[11px] font-bold text-slate-600 block mb-1.5">Giờ kết thúc</label>
-                <input
-                  type="time"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-orange-400 transition"
-                  value={shiftForm.end}
-                  onChange={(e) => setShiftForm({ ...shiftForm, end: e.target.value })}
-                />
-                {shiftErrors.end && <p className="text-[10px] text-red-500 mt-1">{shiftErrors.end}</p>}
-              </div>
-            </div>
 
-            {/* Icon selector */}
-            <label className="text-[11px] font-bold text-slate-600 block mt-4 mb-2">Biểu tượng ca làm</label>
-            <div className="flex gap-2">
-              {SHIFT_ICONS.map((icon) => (
-                <button
-                  key={icon}
-                  onClick={() => setShiftForm({ ...shiftForm, icon })}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg border-2 transition
-                    ${shiftForm.icon === icon ? "border-orange-400 bg-orange-50 shadow-sm" : "border-slate-200 bg-slate-50 hover:border-slate-300"}`}
-                >
-                  {icon}
-                </button>
-              ))}
+              {/* Time inputs */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1.5 uppercase tracking-wider">Giờ bắt đầu</label>
+                  <input
+                    type="time"
+                    className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50/30 rounded-xl text-xs outline-none focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition"
+                    value={shiftForm.start}
+                    onChange={(e) => setShiftForm({ ...shiftForm, start: e.target.value })}
+                  />
+                  {shiftErrors.start && <p className="text-[10px] text-red-500 mt-1 font-semibold">{shiftErrors.start}</p>}
+                </div>
+                <div className="flex-1">
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1.5 uppercase tracking-wider">Giờ kết thúc</label>
+                  <input
+                    type="time"
+                    className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50/30 rounded-xl text-xs outline-none focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition"
+                    value={shiftForm.end}
+                    onChange={(e) => setShiftForm({ ...shiftForm, end: e.target.value })}
+                  />
+                  {shiftErrors.end && <p className="text-[10px] text-red-500 mt-1 font-semibold">{shiftErrors.end}</p>}
+                </div>
+              </div>
+
+              {/* Icon selector */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-2 uppercase tracking-wider">Biểu tượng ca làm</label>
+                <div className="flex gap-3">
+                  {SHIFT_ICONS.map((icon) => (
+                    <button
+                      key={icon}
+                      type="button"
+                      onClick={() => setShiftForm({ ...shiftForm, icon })}
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl border-2 transition-all duration-200
+                        ${shiftForm.icon === icon 
+                          ? "border-orange-500 bg-orange-50 shadow-md shadow-orange-500/10 scale-105" 
+                          : "border-slate-100 bg-slate-50/50 hover:border-slate-200 hover:bg-slate-50"}`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Submit */}
             <button
               onClick={handleShiftFormSubmit}
-              className="w-full mt-5 py-3 rounded-xl text-xs font-bold text-white transition hover:shadow-lg"
-              style={{ background: "linear-gradient(135deg, #FF6B00, #F59E0B)" }}
+              className="w-full mt-6 py-3 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-600/10 hover:shadow-lg hover:shadow-orange-600/20 active:scale-98"
             >
-              {shiftModal.editId ? "Cập nhật Ca Làm" : "Thêm Ca Làm Việc"}
+              {shiftModal.editId ? "Cập nhật Ca làm việc" : "Tạo Ca làm việc"}
             </button>
           </div>
         </div>

@@ -26,8 +26,8 @@ export default function EmployerProfile() {
   const profileMap = useRef(null);
   const markerRef = useRef(null);
 
-  const fetchProfile = async () => {
-    setLoading(true);
+  const fetchProfile = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const data = await getBusinessProfileApi();
       setProfile(data);
@@ -35,21 +35,88 @@ export default function EmployerProfile() {
         setBusinessName(data.businessName || "");
         setAddress(data.address || "");
         setCity(data.city || "TP. Hồ Chí Minh");
-        setLatitude(data.latitude || 10.857461);
-        setLongitude(data.longitude || 106.801522);
         setDescription(data.description || "");
+
+        if (showLoading) {
+          if (data.address) {
+            try {
+              const queryStr = `${data.address} ${data.city || "TP. Hồ Chí Minh"}`;
+              const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}&limit=1`,
+                { headers: { "User-Agent": "ProxiJob-Web" } }
+              );
+              if (response.ok) {
+                const geoData = await response.json();
+                if (geoData && geoData.length > 0) {
+                  const lat = parseFloat(geoData[0].lat);
+                  const lon = parseFloat(geoData[0].lon);
+                  setLatitude(lat);
+                  setLongitude(lon);
+                } else {
+                  setLatitude(10.857461);
+                  setLongitude(106.801522);
+                }
+              } else {
+                setLatitude(10.857461);
+                setLongitude(106.801522);
+              }
+            } catch (err) {
+              console.log("Error geocoding address:", err);
+              setLatitude(10.857461);
+              setLongitude(106.801522);
+            }
+          } else {
+            setLatitude(10.857461);
+            setLongitude(106.801522);
+          }
+        }
       }
     } catch (err) {
       console.log("Failed to load business profile:", err);
       setProfile(null);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchProfile();
+    fetchProfile(true);
+    return () => {
+      if (profileMap.current) {
+        profileMap.current.remove();
+        profileMap.current = null;
+        markerRef.current = null;
+      }
+    };
   }, [user]);
+
+  // Reverse geocode coordinates to address text (matches mobile logic)
+  const reverseGeocodeCoords = async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { "User-Agent": "ProxiJob-Web" } }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.display_name) {
+          let addr = data.display_name;
+          // Clean: remove country and postal code
+          addr = addr.replace(/,\s*(Việt Nam|Vietnam)\s*$/i, "");
+          addr = addr.replace(/,\s*\d{5,6}\b/g, "");
+          const cityVal = data.address?.city || data.address?.town || data.address?.state || "TP. Hồ Chí Minh";
+          // Remove trailing city name from address to avoid duplication
+          const escapedCity = cityVal.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+          addr = addr.replace(new RegExp(`,\\s*${escapedCity}\\s*$`, "i"), "").trim();
+          addr = addr.replace(/,\s*,/g, ",").replace(/,\s*$/g, "").trim();
+          setAddress(addr);
+          setCity(cityVal);
+        }
+      }
+    } catch (err) {
+      console.log("Reverse geocode error:", err);
+    }
+  };
 
   // Handle Leaflet Map coordinates selection
   useEffect(() => {
@@ -81,6 +148,7 @@ export default function EmployerProfile() {
         const position = markerRef.current.getLatLng();
         setLatitude(position.lat);
         setLongitude(position.lng);
+        reverseGeocodeCoords(position.lat, position.lng);
       });
 
       // Handle map click
@@ -89,6 +157,7 @@ export default function EmployerProfile() {
         markerRef.current.setLatLng(coords);
         setLatitude(coords.lat);
         setLongitude(coords.lng);
+        reverseGeocodeCoords(coords.lat, coords.lng);
       });
     } else {
       profileMap.current.setView([latitude, longitude], 16);
@@ -117,7 +186,7 @@ export default function EmployerProfile() {
       await updateQrLocation(Number(latitude), Number(longitude));
 
       toast.success("Cập nhật thông tin cửa hàng thành công! ✨");
-      fetchProfile();
+      fetchProfile(false);
     } catch (err) {
       toast.error(err.message || "Cập nhật hồ sơ cửa hàng thất bại.");
     } finally {
