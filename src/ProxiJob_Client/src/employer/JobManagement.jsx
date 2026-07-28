@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Calendar, Clock, Check, X, FileText, Briefcase, RefreshCw, Star, UserCheck, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Calendar, Clock, Check, X, FileText, Briefcase, RefreshCw, Star, UserCheck, AlertTriangle, Wallet, Zap } from "lucide-react";
 import { getJobPostsByBusiness, createJobPost, createJobShift, getJobPostShifts, deleteJobPostApi, getApplicationsByShift, approveApplication, rejectApplication, publishJobPost } from "../api/jobs";
 import { useAuth } from "../auth/AuthContext";
 
@@ -446,60 +446,86 @@ export default function JobManagement() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 flex flex-col gap-6 min-h-screen">
-      {/* 1. Header & Section Tab controls */}
-      <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Quản lý Đăng Ca & Duyệt Tin</h1>
-          <p className="text-slate-400 text-xs mt-0.5">Trình tạo ca làm tuyển dụng và phê duyệt ứng viên.</p>
-        </div>
+    <div className="max-w-7xl mx-auto p-4 flex flex-col gap-6">
 
-        {/* Tab Switcher */}
-        <div className="flex gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
-          <button
-            onClick={() => setActiveTab("posts")}
-            className={`text-xs font-bold px-4 py-2 rounded-xl transition ${
-              activeTab === "posts" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            📂 Tin Đăng Tuyển
-          </button>
-          <button
-            onClick={() => setActiveTab("approvals")}
-            className={`text-xs font-bold px-4 py-2 rounded-xl transition ${
-              activeTab === "approvals" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            📋 Duyệt Đơn ({applicants.length})
-          </button>
+      {/* ==================== 1. PREMIUM HEADER BANNER ==================== */}
+      <div
+        className="dashboard-fade-in dashboard-fade-in-1 relative overflow-hidden rounded-3xl shadow-lg border border-orange-100/80 dots-pattern"
+        style={{ background: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fef3c7 100%)" }}
+      >
+        <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full opacity-40 blur-2xl" style={{ background: "radial-gradient(circle, #f97316, transparent)" }} />
+
+        <div className="relative z-10 p-6 md:p-7 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-md shadow-orange-500/20 text-white">
+              <Briefcase size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">Quản lý Đăng Ca & Duyệt Tin</h1>
+              <p className="text-slate-600 text-xs font-medium mt-0.5">Trình tạo ca làm tuyển dụng và phê duyệt ứng viên.</p>
+            </div>
+          </div>
+
+          {/* Tab Switcher */}
+          <div className="flex gap-1.5 bg-white/80 backdrop-blur-sm p-1.5 rounded-2xl border border-orange-200/60 shadow-xs">
+            <button
+              onClick={() => setActiveTab("posts")}
+              className={`text-xs font-extrabold px-5 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 ${
+                activeTab === "posts"
+                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20"
+                  : "text-slate-600 hover:text-orange-600 hover:bg-orange-50"
+              }`}
+            >
+              <Briefcase size={15} /> Tin Đăng Tuyển
+            </button>
+            <button
+              onClick={() => setActiveTab("approvals")}
+              className={`text-xs font-extrabold px-5 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 ${
+                activeTab === "approvals"
+                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20"
+                  : "text-slate-600 hover:text-orange-600 hover:bg-orange-50"
+              }`}
+            >
+              <UserCheck size={15} /> Duyệt Đơn ({applicants.length})
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 2. Main Tab views */}
+      {/* ==================== 2. TAB VIEWS ==================== */}
       {activeTab === "posts" ? (
-        <div className="grid gap-6 md:grid-cols-12">
-          {/* List of Job Posts (Left side) */}
-          <div className="md:col-span-8 flex flex-col gap-4">
-            <div className="flex justify-between items-center">
-              <h2 className="font-extrabold text-slate-800 text-base">Tin tuyển dụng đang chạy</h2>
+        <div className="dashboard-fade-in dashboard-fade-in-2 grid gap-6 lg:grid-cols-12">
+
+          {/* ===== LEFT: Job List ===== */}
+          <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h2 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                  <FileText size={18} className="text-orange-500" />
+                  Tin tuyển dụng đang chạy
+                </h2>
+                <p className="text-slate-400 text-xs mt-0.5">{jobs.length} tin đăng tuyển</p>
+              </div>
               <button
                 onClick={handleOpenWizard}
-                className="flex items-center gap-1 text-xs font-black bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white px-4 py-2 rounded-xl shadow-md transition"
+                className="btn-premium text-white px-5 py-3 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg"
               >
-                <Plus size={14} /> Đăng ca làm mới ⚡
+                <Plus size={16} /> Đăng ca làm mới
               </button>
             </div>
 
             {loadingJobs ? (
-              <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl border border-slate-100">
-                <div className="animate-spin rounded-full h-8 w-8 border-4 border-orange-600 border-t-transparent mb-4" />
-                <p className="text-slate-400 text-xs font-semibold">Đang tải danh sách ca tuyển dụng...</p>
+              <div className="flex flex-col items-center justify-center p-16 bg-white/80 backdrop-blur-sm rounded-3xl border border-slate-100 shadow-md">
+                <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-600 border-t-transparent mb-4" />
+                <p className="text-slate-500 text-sm font-semibold">Đang tải danh sách ca tuyển dụng...</p>
               </div>
             ) : jobs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl border text-center">
-                <Briefcase className="text-slate-300 mb-3" size={36} />
-                <p className="text-slate-800 font-bold text-sm">Chưa đăng ca làm việc nào</p>
-                <p className="text-slate-400 text-xs mt-1">Bấm nút phía trên để đăng tuyển ca phục vụ, pha chế đầu tiên.</p>
+              <div className="flex flex-col items-center justify-center p-16 bg-white/80 backdrop-blur-sm rounded-3xl border border-slate-100 text-center shadow-md">
+                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
+                  <Briefcase className="text-slate-300" size={28} />
+                </div>
+                <p className="text-slate-800 font-bold text-base">Chưa đăng ca làm việc nào</p>
+                <p className="text-slate-400 text-sm mt-2 max-w-sm">Bấm nút "Đăng ca làm mới" phía trên để tạo tin tuyển dụng phục vụ, pha chế đầu tiên.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -511,21 +537,26 @@ export default function JobManagement() {
                     <article
                       key={job.id}
                       onClick={() => handleSelectJob(job)}
-                      style={{
-                        borderLeft: `5px solid ${theme.accent}`
-                      }}
-                      className={`p-4 bg-white border rounded-2xl cursor-pointer hover:border-orange-200 shadow-xs hover:shadow-md transition relative flex flex-col gap-2 ${
-                        isSelected ? "border-orange-500 shadow-md bg-orange-50/5" : "border-slate-100"
+                      className={`group relative p-5 bg-white/80 backdrop-blur-sm border-2 rounded-2xl cursor-pointer card-hover-lift transition-all duration-300 ${
+                        isSelected
+                          ? "border-orange-400 shadow-lg shadow-orange-500/10 bg-gradient-to-r from-orange-50/50 to-amber-50/30"
+                          : "border-slate-100 hover:border-orange-200"
                       }`}
                     >
-                      <div className="flex justify-between items-start gap-4">
+                      {/* Color accent bar */}
+                      <div
+                        className="absolute left-0 top-3 bottom-3 w-1 rounded-full"
+                        style={{ background: theme.accent }}
+                      />
+
+                      <div className="flex justify-between items-start gap-4 pl-3">
                         <div className="flex-1 min-w-0">
                           {/* Badges */}
-                          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${theme.bg} ${theme.text} border ${theme.border}`}>
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${theme.bg} ${theme.text} border ${theme.border}`}>
                               {job.categoryName || "Đăng tin"}
                             </span>
-                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${
+                            <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
                               job.status === "Published"
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                 : job.status === "Draft"
@@ -535,23 +566,25 @@ export default function JobManagement() {
                               {job.status === "Published" ? "Công khai" : job.status === "Draft" ? "Bản nháp" : "Đã đóng"}
                             </span>
                             {isUrgent && (
-                              <span className="text-[9px] font-black uppercase text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
+                              <span className="text-[10px] font-black uppercase text-white bg-gradient-to-r from-red-500 to-rose-500 px-2.5 py-1 rounded-full shadow-sm">
                                 🔥 Gấp
                               </span>
                             )}
                           </div>
 
-                          <h4 className="font-extrabold text-slate-800 text-sm line-clamp-1 group-hover:text-orange-600 transition">
+                          <h4 className="font-black text-slate-800 text-base line-clamp-1 group-hover:text-orange-600 transition-colors">
                             {job.title}
                           </h4>
-                          <p className="text-[11px] text-slate-400 font-semibold line-clamp-1 mt-0.5">{job.address || "Tại cửa hàng"}</p>
-                          
-                          <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500 font-semibold">
-                            <span className="flex items-center gap-1">
-                              📅 Ca làm: <strong>{job.shiftCount || 0} ca</strong>
+                          <p className="text-sm text-slate-400 font-medium line-clamp-1 mt-1">{job.address || "Tại cửa hàng"}</p>
+
+                          <div className="flex flex-wrap items-center gap-4 mt-3">
+                            <span className="flex items-center gap-1.5 text-sm text-slate-500 font-semibold">
+                              <Calendar size={14} className="text-orange-400" />
+                              Ca làm: <strong className="text-slate-700">{job.shiftCount || 0} ca</strong>
                             </span>
-                            <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                              💰 Lương: {job.salary && job.salary > 0 ? `${job.salary.toLocaleString()}đ/h` : "Lương ca"}
+                            <span className="flex items-center gap-1.5 text-sm font-bold text-emerald-600">
+                              <Wallet size={14} />
+                              {job.salary && job.salary > 0 ? `${job.salary.toLocaleString()}đ/h` : "Lương ca"}
                             </span>
                           </div>
                         </div>
@@ -562,36 +595,36 @@ export default function JobManagement() {
                             e.stopPropagation();
                             handleDeleteJob(job.id);
                           }}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shrink-0 self-start"
+                          className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 shrink-0 self-start opacity-0 group-hover:opacity-100"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </article>
                   );
                 })}
 
-                {/* Pagination Controls */}
+                {/* Pagination */}
                 {jobs.length > jobsPerPage && (
-                  <div className="flex items-center justify-center gap-3 mt-4 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                  <div className="flex items-center justify-center gap-3 mt-4 bg-white/60 backdrop-blur-sm p-3 rounded-2xl border border-slate-100">
                     <button
                       type="button"
                       disabled={currentPage === 1}
                       onClick={() => setCurrentPage((prev) => prev - 1)}
-                      className="px-3 py-1.5 bg-white border border-slate-200 text-xs font-bold text-slate-600 rounded-xl hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
                     >
-                      Trước
+                      ← Trước
                     </button>
-                    <span className="text-xs font-extrabold text-slate-500">
-                      Trang {currentPage} / {Math.ceil(jobs.length / jobsPerPage)}
+                    <span className="text-sm font-extrabold text-slate-500">
+                      {currentPage} / {Math.ceil(jobs.length / jobsPerPage)}
                     </span>
                     <button
                       type="button"
                       disabled={currentPage === Math.ceil(jobs.length / jobsPerPage)}
                       onClick={() => setCurrentPage((prev) => prev + 1)}
-                      className="px-3 py-1.5 bg-white border border-slate-200 text-xs font-bold text-slate-600 rounded-xl hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
                     >
-                      Sau
+                      Sau →
                     </button>
                   </div>
                 )}
@@ -599,36 +632,40 @@ export default function JobManagement() {
             )}
           </div>
 
-          {/* Job details and shifts list (Right side) */}
-          <div className="md:col-span-4 bg-white border border-slate-100 shadow-md rounded-3xl p-6 flex flex-col gap-6">
+          {/* ===== RIGHT: Job Detail Panel ===== */}
+          <div className="lg:col-span-5 xl:col-span-4 bg-white/80 backdrop-blur-sm border border-slate-100 shadow-lg rounded-3xl p-6 flex flex-col gap-5 lg:sticky lg:top-4 lg:self-start">
             {!selectedJob ? (
-              <div className="flex-1 flex flex-col justify-center items-center text-center p-12 text-slate-400 h-full min-h-[300px]">
-                <FileText size={48} className="text-slate-300 mb-3" />
-                <h3 className="font-extrabold text-slate-700 text-sm">Chưa chọn tin tuyển dụng</h3>
-                <p className="text-xs text-slate-400 max-w-xs mt-1">Bấm chọn một tin tuyển dụng bên trái để xem các ca làm việc và danh sách chi tiết.</p>
+              <div className="flex-1 flex flex-col justify-center items-center text-center p-12 min-h-[350px]">
+                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-4">
+                  <FileText size={32} className="text-slate-300" />
+                </div>
+                <h3 className="font-black text-slate-700 text-base">Chưa chọn tin tuyển dụng</h3>
+                <p className="text-sm text-slate-400 max-w-xs mt-2">Bấm chọn một tin tuyển dụng bên trái để xem các ca làm việc và danh sách chi tiết.</p>
               </div>
             ) : (
               <>
-                <div className="border-b border-slate-50 pb-3 flex justify-between items-start">
-                  <div>
-                    <h3 className="font-black text-slate-800 text-base">{selectedJob.title}</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">ID Tin tuyển dụng: #{selectedJob.id}</p>
-                  </div>
+                <div className="border-b border-slate-100 pb-4">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Chi tiết tin tuyển dụng</span>
+                  <h3 className="font-black text-slate-800 text-lg mt-1">{selectedJob.title}</h3>
+                  <p className="text-sm text-slate-400 mt-1">ID: #{selectedJob.id}</p>
                 </div>
 
-                {/* Description info */}
-                <div className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <p className="font-bold text-slate-700 mb-1">MÔ TẢ CÔNG VIỆC:</p>
-                  <p>{selectedJob.description || "Không có mô tả."}</p>
-                  <p className="font-bold text-slate-700 mt-3 mb-1">YÊU CẦU:</p>
-                  <p>{selectedJob.requirements || "Làm việc nghiêm túc, trách nhiệm."}</p>
+                {/* Description */}
+                <div className="text-sm text-slate-500 leading-relaxed bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                  <p className="font-bold text-slate-700 mb-2 text-xs uppercase tracking-wider">Mô tả công việc</p>
+                  <p className="text-sm">{selectedJob.description || "Không có mô tả."}</p>
+                  <p className="font-bold text-slate-700 mt-4 mb-2 text-xs uppercase tracking-wider">Yêu cầu</p>
+                  <p className="text-sm">{selectedJob.requirements || "Làm việc nghiêm túc, trách nhiệm."}</p>
                 </div>
 
-                {/* Shifts list */}
+                {/* Shifts */}
                 <div>
-                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3">Các ca làm việc trực thuộc:</h4>
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Calendar size={14} className="text-orange-500" />
+                    Các ca làm việc trực thuộc
+                  </h4>
                   {jobShifts.length === 0 ? (
-                    <p className="text-slate-400 text-xs">Tin tuyển dụng này chưa được cấu hình ca làm.</p>
+                    <p className="text-slate-400 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">Chưa cấu hình ca làm.</p>
                   ) : (
                     <div className="flex flex-col gap-3">
                       {jobShifts.map((shift) => {
@@ -636,16 +673,16 @@ export default function JobManagement() {
                         return (
                           <div
                             key={shift.id}
-                            className="border border-slate-100 p-4 rounded-2xl flex justify-between items-center hover:border-orange-200 transition"
+                            className="border border-slate-100 hover:border-orange-200 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all card-hover-lift"
                           >
-                            <div className="flex flex-col gap-1">
-                              <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                                <Calendar size={13} className="text-orange-500" /> {dateStr}
+                            <div className="flex flex-col gap-1.5">
+                              <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                                <Calendar size={14} className="text-orange-500" /> {dateStr}
                               </span>
-                              <span className="text-xs text-slate-500 flex items-center gap-1 font-medium">
-                                <Clock size={13} className="text-slate-400" /> {shift.startTime?.slice(0, 5)} - {shift.endTime?.slice(0, 5)}
+                              <span className="text-sm text-slate-500 flex items-center gap-1.5 font-medium">
+                                <Clock size={14} className="text-slate-400" /> {shift.startTime?.slice(0, 5)} - {shift.endTime?.slice(0, 5)}
                               </span>
-                              <span className="text-[10px] text-slate-400 font-semibold mt-1">
+                              <span className="text-xs text-slate-400 font-semibold mt-0.5">
                                 Slots: {shift.slotsFilled || 0}/{shift.slotsRequired}
                               </span>
                             </div>
@@ -654,7 +691,7 @@ export default function JobManagement() {
                                 handleSelectShiftForApprovals(shift);
                                 setActiveTab("approvals");
                               }}
-                              className="px-3.5 h-8 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-600 rounded-xl font-bold text-[10px] uppercase transition shrink-0"
+                              className="px-4 py-2.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-600 rounded-xl font-bold text-xs uppercase transition whitespace-nowrap"
                             >
                               Xem Đơn Ứng Tuyển
                             </button>
@@ -669,21 +706,23 @@ export default function JobManagement() {
           </div>
         </div>
       ) : (
-        /* Tab Duyệt đơn ứng cử */
-        <div className="grid gap-6 md:grid-cols-12">
-          {/* List of Shifts waiting for approvals (Left side) */}
-          <div className="md:col-span-5 flex flex-col gap-4">
-            <h2 className="font-extrabold text-slate-800 text-base">Chọn ca làm đối soát đơn</h2>
+        /* ==================== TAB: DUYỆT ĐƠN ==================== */
+        <div className="dashboard-fade-in dashboard-fade-in-2 grid gap-6 lg:grid-cols-12">
+
+          {/* LEFT: Shifts list */}
+          <div className="lg:col-span-5 flex flex-col gap-4">
+            <h2 className="font-black text-slate-800 text-lg flex items-center gap-2">
+              <UserCheck size={18} className="text-orange-500" />
+              Chọn ca làm đối soát đơn
+            </h2>
             {jobs.length === 0 ? (
-              <p className="text-slate-400 text-xs">Chưa có tin tuyển dụng.</p>
+              <p className="text-slate-400 text-sm bg-white/80 p-6 rounded-2xl border border-slate-100 text-center">Chưa có tin tuyển dụng.</p>
             ) : (
               <div className="flex flex-col gap-3">
                 {jobs.slice((currentApprovalsPage - 1) * jobsPerPage, currentApprovalsPage * jobsPerPage).map((job) => (
-                  <div key={job.id} className="border border-slate-100 bg-white rounded-3xl p-4 space-y-3">
-                    <h4 className="font-extrabold text-slate-800 text-xs truncate">{job.title}</h4>
-                    
-                    {/* Tiny shifts triggers */}
-                    <div className="flex flex-col gap-2 border-t pt-2 border-slate-50">
+                  <div key={job.id} className="border border-slate-100 bg-white/80 backdrop-blur-sm rounded-2xl p-5 space-y-3 card-hover-lift">
+                    <h4 className="font-black text-slate-800 text-base truncate">{job.title}</h4>
+                    <div className="border-t pt-3 border-slate-100">
                       <button
                         onClick={async () => {
                           const data = await getJobPostShifts(job.id);
@@ -693,35 +732,35 @@ export default function JobManagement() {
                             alert("Tin tuyển dụng chưa có ca làm!");
                           }
                         }}
-                        className="w-full text-left p-2.5 bg-slate-50 hover:bg-orange-50/50 rounded-xl text-xs font-bold text-slate-600 transition"
+                        className="w-full text-left p-3 bg-slate-50 hover:bg-orange-50 border border-slate-100 hover:border-orange-200 rounded-xl text-sm font-bold text-slate-600 hover:text-orange-600 transition-all flex items-center gap-2"
                       >
-                        📂 Xem ca làm tuyển dụng
+                        <FileText size={14} /> Xem ca làm tuyển dụng
                       </button>
                     </div>
                   </div>
                 ))}
 
-                {/* Pagination Controls for Approvals Tab */}
+                {/* Pagination */}
                 {jobs.length > jobsPerPage && (
-                  <div className="flex items-center justify-center gap-3 mt-4 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                  <div className="flex items-center justify-center gap-3 mt-4 bg-white/60 backdrop-blur-sm p-3 rounded-2xl border border-slate-100">
                     <button
                       type="button"
                       disabled={currentApprovalsPage === 1}
                       onClick={() => setCurrentApprovalsPage((prev) => prev - 1)}
-                      className="px-3 py-1.5 bg-white border border-slate-200 text-xs font-bold text-slate-600 rounded-xl hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
                     >
-                      Trước
+                      ← Trước
                     </button>
-                    <span className="text-xs font-extrabold text-slate-500">
-                      Trang {currentApprovalsPage} / {Math.ceil(jobs.length / jobsPerPage)}
+                    <span className="text-sm font-extrabold text-slate-500">
+                      {currentApprovalsPage} / {Math.ceil(jobs.length / jobsPerPage)}
                     </span>
                     <button
                       type="button"
                       disabled={currentApprovalsPage === Math.ceil(jobs.length / jobsPerPage)}
                       onClick={() => setCurrentApprovalsPage((prev) => prev + 1)}
-                      className="px-3 py-1.5 bg-white border border-slate-200 text-xs font-bold text-slate-600 rounded-xl hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
                     >
-                      Sau
+                      Sau →
                     </button>
                   </div>
                 )}
@@ -729,31 +768,35 @@ export default function JobManagement() {
             )}
           </div>
 
-          {/* Candidate list (Right side) */}
-          <div className="md:col-span-7 bg-white border border-slate-100 shadow-md rounded-3xl p-6 flex flex-col gap-6">
+          {/* RIGHT: Candidate list */}
+          <div className="lg:col-span-7 bg-white/80 backdrop-blur-sm border border-slate-100 shadow-lg rounded-3xl p-6 flex flex-col gap-5 lg:sticky lg:top-4 lg:self-start">
             {!selectedShiftForApprovals ? (
-              <div className="flex-1 flex flex-col justify-center items-center text-center p-12 text-slate-400 min-h-[300px]">
-                <UserCheck size={48} className="text-slate-300 mb-3" />
-                <h3 className="font-extrabold text-slate-700 text-sm">Chưa chọn ca làm duyệt đơn</h3>
-                <p className="text-xs text-slate-400 max-w-xs mt-1">Vui lòng chọn ca làm bên trái để hiển thị danh sách hồ sơ xin việc của các bạn sinh viên.</p>
+              <div className="flex-1 flex flex-col justify-center items-center text-center p-12 min-h-[350px]">
+                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-4">
+                  <UserCheck size={32} className="text-slate-300" />
+                </div>
+                <h3 className="font-black text-slate-700 text-base">Chưa chọn ca làm duyệt đơn</h3>
+                <p className="text-sm text-slate-400 max-w-xs mt-2">Vui lòng chọn ca làm bên trái để hiển thị danh sách hồ sơ xin việc.</p>
               </div>
             ) : (
               <>
-                <div className="border-b border-slate-50 pb-3 flex justify-between items-baseline">
-                  <div>
-                    <h3 className="font-black text-slate-800 text-sm">Đơn ứng cử ca: #{selectedShiftForApprovals.id}</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Thời gian: {selectedShiftForApprovals.startTime?.slice(0, 5)} - {selectedShiftForApprovals.endTime?.slice(0, 5)} | Slots: {selectedShiftForApprovals.slotsFilled || 0}/{selectedShiftForApprovals.slotsRequired}
-                    </p>
-                  </div>
+                <div className="border-b border-slate-100 pb-4">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Đơn ứng cử</span>
+                  <h3 className="font-black text-slate-800 text-lg mt-1">Ca: #{selectedShiftForApprovals.id}</h3>
+                  <p className="text-sm text-slate-400 mt-1">
+                    ⏰ {selectedShiftForApprovals.startTime?.slice(0, 5)} - {selectedShiftForApprovals.endTime?.slice(0, 5)} | Slots: {selectedShiftForApprovals.slotsFilled || 0}/{selectedShiftForApprovals.slotsRequired}
+                  </p>
                 </div>
 
                 {loadingApplicants ? (
-                  <div className="text-center p-6 text-xs text-slate-400">Đang tìm hồ sơ ứng tuyển...</div>
+                  <div className="flex flex-col items-center p-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-orange-600 border-t-transparent mb-3" />
+                    <p className="text-sm text-slate-400">Đang tìm hồ sơ ứng tuyển...</p>
+                  </div>
                 ) : applicants.length === 0 ? (
-                  <div className="text-center p-12 text-slate-400">
-                    <UserCheck size={36} className="text-slate-200 mb-2 mx-auto" />
-                    <p className="font-bold text-xs">Chưa có sinh viên nào nộp đơn ứng tuyển ca này.</p>
+                  <div className="text-center p-12">
+                    <UserCheck size={40} className="text-slate-200 mb-3 mx-auto" />
+                    <p className="font-bold text-sm text-slate-500">Chưa có sinh viên nào nộp đơn ứng tuyển ca này.</p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -763,34 +806,34 @@ export default function JobManagement() {
                       return (
                         <div
                           key={app.id}
-                          className="border border-slate-100 hover:border-orange-200 p-5 rounded-2xl flex flex-col gap-3 transition"
+                          className="border border-slate-100 hover:border-orange-200 p-5 rounded-2xl flex flex-col gap-3 transition-all card-hover-lift"
                         >
                           <div className="flex justify-between items-start gap-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold border shrink-0">
+                              <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-amber-100 rounded-2xl flex items-center justify-center font-bold text-lg border border-orange-200 shrink-0">
                                 👨‍🎓
                               </div>
                               <div>
-                                <h4 className="font-black text-slate-800 text-xs">{app.studentName || "Sinh viên"}</h4>
-                                <p className="text-[10px] text-slate-400 mt-0.5">{app.studentSchool || "Đại học FPT"}</p>
+                                <h4 className="font-black text-slate-800 text-sm">{app.studentName || "Sinh viên"}</h4>
+                                <p className="text-xs text-slate-400 mt-0.5">{app.studentSchool || "Đại học FPT"}</p>
                               </div>
                             </div>
 
-                            <span className="flex items-center gap-0.5 text-xs font-bold text-amber-500 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full shrink-0">
-                              <Star size={11} fill="currentColor" /> {app.studentReputationScore || "4.8"}
+                            <span className="flex items-center gap-1 text-sm font-bold text-amber-500 bg-amber-50 border border-amber-100 px-3 py-1 rounded-full shrink-0">
+                              <Star size={13} fill="currentColor" /> {app.studentReputationScore || "4.8"}
                             </span>
                           </div>
 
-                          {/* Introduction Letter */}
+                          {/* Introduction */}
                           {app.introduction && (
-                            <div className="bg-slate-50 p-3 rounded-xl border text-[11px] text-slate-500 leading-relaxed italic">
+                            <div className="bg-slate-50 p-4 rounded-xl border text-sm text-slate-500 leading-relaxed italic">
                               "{app.introduction}"
                             </div>
                           )}
 
                           {/* Actions */}
-                          <div className="flex justify-between items-center border-t border-slate-50 pt-3">
-                            <span className={`text-[9px] uppercase font-black px-2 py-0.5 rounded-full border ${
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-t border-slate-100 pt-3">
+                            <span className={`text-[10px] uppercase font-extrabold px-3 py-1 rounded-full border ${
                               status === "approved" ? "bg-green-50 text-green-600 border-green-200" :
                               status === "rejected" ? "bg-red-50 text-red-500 border-red-200" :
                               "bg-amber-50 text-amber-600 border-amber-200"
@@ -802,15 +845,15 @@ export default function JobManagement() {
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => handleReject(app.id)}
-                                  className="h-8 w-8 bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-lg flex items-center justify-center transition"
+                                  className="h-9 px-3 bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-xl flex items-center justify-center gap-1.5 transition text-xs font-bold"
                                 >
-                                  <X size={14} />
+                                  <X size={14} /> Từ chối
                                 </button>
                                 <button
                                   onClick={() => handleApprove(app.id)}
-                                  className="px-3.5 h-8 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-lg font-bold text-[10px] uppercase shadow-md shadow-orange-500/10 flex items-center gap-1 transition"
+                                  className="h-9 px-4 btn-premium text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-md"
                                 >
-                                  <Check size={12} /> Duyệt ứng viên
+                                  <Check size={14} /> Duyệt ứng viên
                                 </button>
                               </div>
                             )}
@@ -826,27 +869,29 @@ export default function JobManagement() {
         </div>
       )}
 
-      {/* Post new job Wizard Modal overlay */}
+      {/* ==================== WIZARD MODAL ==================== */}
       {showWizard && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <form onSubmit={handleCreateJob} className="p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-              
-              {/* Wizard Header and Step Indicators */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                <div className="flex items-center gap-2">
-                  <Briefcase size={22} className="text-orange-600" />
-                  <h3 className="font-black text-lg text-slate-800 tracking-tight">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden" style={{ animation: "fadeInUp 0.3s ease-out" }}>
+            <form onSubmit={handleCreateJob} className="p-6 md:p-8 flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
+
+              {/* Wizard Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center">
+                    <Briefcase size={18} className="text-white" />
+                  </div>
+                  <h3 className="font-black text-xl text-slate-800 tracking-tight">
                     Tạo tuyển dụng mới
                   </h3>
                 </div>
-                
-                {/* Step Progress Line */}
-                <div className="flex items-center gap-3 bg-slate-50 px-3.5 py-1.5 rounded-2xl border border-slate-100">
+
+                {/* Step Progress */}
+                <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
                   {[1, 2, 3].map((num) => (
                     <div key={num} className="flex items-center gap-1.5">
                       <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300 ${
+                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300 ${
                           wizardStep >= num
                             ? "bg-gradient-to-r from-orange-600 to-amber-500 text-white shadow-sm scale-110"
                             : "bg-slate-200 text-slate-500"
@@ -855,43 +900,43 @@ export default function JobManagement() {
                         {num}
                       </div>
                       <span
-                        className={`text-[9px] font-black uppercase tracking-wider ${
+                        className={`text-[10px] font-bold uppercase tracking-wider hidden sm:inline ${
                           wizardStep >= num ? "text-slate-800" : "text-slate-400"
                         }`}
                       >
                         Bước {num}
                       </span>
-                      {num < 3 && <div className="w-3 h-0.5 bg-slate-200" />}
+                      {num < 3 && <div className={`w-4 h-0.5 ${wizardStep > num ? "bg-orange-400" : "bg-slate-200"} transition-colors`} />}
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Step 1: Nội dung ca làm */}
+              {/* Step 1 */}
               {wizardStep === 1 && (
-                <div className="flex flex-col gap-4">
-                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider border-l-4 border-orange-500 pl-2">
+                <div className="flex flex-col gap-5">
+                  <h4 className="font-bold text-slate-800 text-sm uppercase tracking-wider border-l-4 border-orange-500 pl-3">
                     Nội dung ca làm (Bước 1/3)
                   </h4>
-                  
+
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-700">Tiêu đề công việc</label>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold text-slate-700">Tiêu đề công việc</label>
                       <input
                         type="text"
                         required
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         placeholder="Ví dụ: Phục vụ bàn ca sáng..."
-                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
+                        className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white focus:shadow-md focus:shadow-orange-500/5 transition-all"
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-700">Ngành nghề</label>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold text-slate-700">Ngành nghề</label>
                       <select
                         value={categoryId}
                         onChange={(e) => setCategoryId(Number(e.target.value))}
-                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition appearance-none cursor-pointer font-bold"
+                        className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white focus:shadow-md transition-all appearance-none cursor-pointer font-bold"
                       >
                         <option value={1}>Phục vụ ăn uống</option>
                         <option value={2}>Pha chế</option>
@@ -903,100 +948,100 @@ export default function JobManagement() {
                   </div>
 
                   {Number(categoryId) === 9999 && (
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-700">Tên ngành nghề khác tự chọn</label>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold text-slate-700">Tên ngành nghề khác tự chọn</label>
                       <input
                         type="text"
                         required
                         value={customCategory}
                         onChange={(e) => setCustomCategory(e.target.value)}
                         placeholder="Ví dụ: Tạp vụ rửa bát, PG sự kiện..."
-                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
+                        className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white transition-all"
                       />
                     </div>
                   )}
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-700">Mô tả chi tiết</label>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold text-slate-700">Mô tả chi tiết</label>
                       <textarea
                         rows={4}
                         required
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         placeholder="Mô tả công việc chi tiết..."
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
+                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white transition-all"
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-700">Yêu cầu đối với ứng viên</label>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold text-slate-700">Yêu cầu đối với ứng viên</label>
                       <textarea
                         rows={4}
                         required
                         value={requirements}
                         onChange={(e) => setRequirements(e.target.value)}
                         placeholder="Các yêu cầu kỹ năng, thái độ..."
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
+                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white transition-all"
                       />
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Step 2: Quyền lợi & Kỹ năng */}
+              {/* Step 2 */}
               {wizardStep === 2 && (
-                <div className="flex flex-col gap-4">
-                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider border-l-4 border-orange-500 pl-2">
+                <div className="flex flex-col gap-5">
+                  <h4 className="font-bold text-slate-800 text-sm uppercase tracking-wider border-l-4 border-orange-500 pl-3">
                     Quyền lợi & Kỹ năng (Bước 2/3)
                   </h4>
 
-                  {/* Emergency Mode Toggle */}
-                  <div className="bg-red-50/50 border border-red-100 rounded-2xl p-4 flex justify-between items-center gap-4">
-                    <div className="flex flex-col gap-0.5">
-                      <h4 className="text-xs font-extrabold text-red-600 flex items-center gap-1">
-                        🔥 CHẾ ĐỘ ĐĂNG CA GẤP (EMERGENCY)
+                  {/* Emergency Toggle */}
+                  <div className="bg-red-50/50 border border-red-100 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex flex-col gap-1">
+                      <h4 className="text-sm font-extrabold text-red-600 flex items-center gap-1.5">
+                        <AlertTriangle size={15} /> CHẾ ĐỘ ĐĂNG CA GẤP (EMERGENCY)
                       </h4>
-                      <p className="text-[10px] text-slate-500 font-semibold leading-normal">
+                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
                         Tự động nhân hệ số khẩn cấp (+30% lương đề xuất), đẩy tin tức thì qua thông báo tới các ứng viên trong bán kính 3km.
                       </p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
                       <input
                         type="checkbox"
                         checked={isEmergency}
                         onChange={(e) => setIsEmergency(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                      <div className="w-12 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-red-600"></div>
                     </label>
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-slate-700">Mức lương đề xuất (VND/giờ)</label>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-bold text-slate-700">Mức lương đề xuất (VND/giờ)</label>
                     <div className="relative">
                       <input
                         type="number"
                         required
                         value={salary}
                         onChange={(e) => setSalary(Number(e.target.value))}
-                        className="w-full h-11 pl-4 pr-12 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
+                        className="w-full h-12 pl-4 pr-14 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white transition-all"
                       />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">VND</span>
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">VND</span>
                     </div>
                   </div>
 
                   {isEmergency && salary > 0 && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 text-xs flex justify-between items-center animate-pulse">
+                    <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 text-sm flex justify-between items-center">
                       <span className="font-bold text-orange-800">🔥 Mức lương thực tế ca gấp (+30%):</span>
-                      <span className="font-black text-orange-700 text-sm">
+                      <span className="font-black text-orange-700 text-lg">
                         {Math.round(salary * 1.3).toLocaleString()} đ/giờ
                       </span>
                     </div>
                   )}
 
-                  {/* Skills tags selection */}
+                  {/* Skills */}
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold text-slate-700">Kỹ năng cần thiết</label>
+                    <label className="text-sm font-bold text-slate-700">Kỹ năng cần thiết</label>
                     <div className="flex flex-wrap gap-2">
                       {[
                         'Giao tiếp',
@@ -1020,10 +1065,10 @@ export default function JobManagement() {
                                 setSelectedSkills([...selectedSkills, skillName]);
                               }
                             }}
-                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                            className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all border ${
                               isSelected
-                                ? "bg-orange-500 text-white border-orange-600 shadow-xs"
-                                : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                                ? "bg-orange-500 text-white border-orange-600 shadow-sm"
+                                : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
                             }`}
                           >
                             {isSelected ? '✓ ' : ''}{skillName}
@@ -1033,9 +1078,9 @@ export default function JobManagement() {
                       <button
                         type="button"
                         onClick={() => setShowCustomSkillInput(!showCustomSkillInput)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                        className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all border ${
                           showCustomSkillInput
-                            ? "bg-amber-500 text-white border-amber-600 shadow-xs"
+                            ? "bg-amber-500 text-white border-amber-600 shadow-sm"
                             : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                         }`}
                       >
@@ -1045,64 +1090,63 @@ export default function JobManagement() {
                   </div>
 
                   {showCustomSkillInput && (
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-700">Nhập kỹ năng khác (cách nhau bởi dấu phẩy)</label>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-bold text-slate-700">Nhập kỹ năng khác (cách nhau bởi dấu phẩy)</label>
                       <input
                         type="text"
                         value={customSkill}
                         onChange={(e) => setCustomSkill(e.target.value)}
                         placeholder="Ví dụ: Rửa cốc chén, sử dụng máy xay sinh tố..."
-                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
+                        className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white transition-all"
                       />
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Step 3: Địa điểm & Thời gian */}
+              {/* Step 3 */}
               {wizardStep === 3 && (
-                <div className="flex flex-col gap-4">
-                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider border-l-4 border-orange-500 pl-2">
+                <div className="flex flex-col gap-5">
+                  <h4 className="font-bold text-slate-800 text-sm uppercase tracking-wider border-l-4 border-orange-500 pl-3">
                     Địa điểm & Thời gian (Bước 3/3)
                   </h4>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-1.5 sm:col-span-2">
-                      <label className="text-xs font-bold text-slate-700">Địa chỉ ca làm</label>
+                    <div className="flex flex-col gap-2 sm:col-span-2">
+                      <label className="text-sm font-bold text-slate-700">Địa chỉ ca làm</label>
                       <input
                         type="text"
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
                         placeholder="Nhập địa chỉ ca làm việc..."
-                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
+                        className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white transition-all"
                       />
                     </div>
 
-                    <div className="flex flex-col gap-1.5 sm:col-span-2">
-                      <label className="text-xs font-bold text-slate-700">Định vị & Bản đồ</label>
+                    <div className="flex flex-col gap-2 sm:col-span-2">
+                      <label className="text-sm font-bold text-slate-700">Định vị & Bản đồ</label>
                       <div className="flex gap-2">
                         <button
                           type="button"
                           disabled={loadingGps}
                           onClick={handleGetCurrentLocation}
-                          className="flex-1 h-11 px-4 border border-orange-200 hover:border-orange-300 text-orange-600 bg-orange-50/50 hover:bg-orange-50 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                          className="flex-1 h-12 px-4 border border-orange-200 hover:border-orange-300 text-orange-600 bg-orange-50/50 hover:bg-orange-50 rounded-2xl text-sm font-bold transition flex items-center justify-center gap-2"
                         >
                           {loadingGps ? "Đang định vị..." : "📍 GPS Hiện Tại"}
                         </button>
                         <button
                           type="button"
                           onClick={() => setShowMapModal(true)}
-                          className="flex-1 h-11 px-4 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                          className="flex-1 h-12 px-4 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl text-sm font-bold transition flex items-center justify-center gap-2"
                         >
                           🗺 Chọn Bản Đồ
                         </button>
                       </div>
 
-                      {/* Coordinates details */}
-                      <div className="flex flex-wrap items-center gap-2 mt-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 text-[11px] text-slate-500 font-semibold font-mono">
-                        <span className="bg-white px-2.5 py-1 rounded-lg border">Lat: {latitude ? Number(latitude).toFixed(6) : "N/A"}</span>
-                        <span className="bg-white px-2.5 py-1 rounded-lg border">Lng: {longitude ? Number(longitude).toFixed(6) : "N/A"}</span>
-                        <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg border border-emerald-200">
+                      <div className="flex flex-wrap items-center gap-2 mt-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 text-xs text-slate-500 font-semibold font-mono">
+                        <span className="bg-white px-3 py-1.5 rounded-lg border">Lat: {latitude ? Number(latitude).toFixed(6) : "N/A"}</span>
+                        <span className="bg-white px-3 py-1.5 rounded-lg border">Lng: {longitude ? Number(longitude).toFixed(6) : "N/A"}</span>
+                        <span className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-200">
                           ✓ Định vị sẵn sàng
                         </span>
                       </div>
@@ -1110,15 +1154,15 @@ export default function JobManagement() {
                   </div>
 
                   {/* Shift Creator */}
-                  <div className="border-t border-slate-100 pt-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1">
-                        <Calendar size={14} className="text-orange-500" /> Thiết lập ca làm:
+                  <div className="border-t border-slate-100 pt-5">
+                    <div className="flex justify-between items-center mb-4">
+                      <label className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <Calendar size={15} className="text-orange-500" /> Thiết lập ca làm:
                       </label>
                       <button
                         type="button"
                         onClick={() => setShiftsInput([...shiftsInput, { date: "", startTime: "08:00", endTime: "12:00", slotsRequired: 1 }])}
-                        className="text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1.5 rounded-xl hover:bg-orange-100 transition"
+                        className="text-sm font-bold text-orange-600 bg-orange-50 px-4 py-2 rounded-xl hover:bg-orange-100 transition"
                       >
                         + Thêm ca làm
                       </button>
@@ -1128,7 +1172,7 @@ export default function JobManagement() {
                       {shiftsInput.map((shift, idx) => (
                         <div key={idx} className="bg-white border p-4 rounded-xl flex flex-wrap gap-3 items-end">
                           <div className="flex-1 min-w-[120px]">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Ngày làm việc</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Ngày làm việc</p>
                             <input
                               type="date"
                               required
@@ -1138,11 +1182,11 @@ export default function JobManagement() {
                                 newShifts[idx].date = e.target.value;
                                 setShiftsInput(newShifts);
                               }}
-                              className="w-full h-9 border border-slate-200 rounded-lg text-xs px-2 focus:outline-none focus:border-orange-400 mt-1"
+                              className="w-full h-10 border border-slate-200 rounded-lg text-sm px-3 focus:outline-none focus:border-orange-400"
                             />
                           </div>
-                          <div className="w-20">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Giờ vào</p>
+                          <div className="w-24">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Giờ vào</p>
                             <input
                               type="text"
                               required
@@ -1152,11 +1196,11 @@ export default function JobManagement() {
                                 newShifts[idx].startTime = e.target.value;
                                 setShiftsInput(newShifts);
                               }}
-                              className="w-full h-9 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:border-orange-400 mt-1"
+                              className="w-full h-10 border border-slate-200 rounded-lg text-sm text-center focus:outline-none focus:border-orange-400"
                             />
                           </div>
-                          <div className="w-20">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Giờ ra</p>
+                          <div className="w-24">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Giờ ra</p>
                             <input
                               type="text"
                               required
@@ -1166,11 +1210,11 @@ export default function JobManagement() {
                                 newShifts[idx].endTime = e.target.value;
                                 setShiftsInput(newShifts);
                               }}
-                              className="w-full h-9 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:border-orange-400 mt-1"
+                              className="w-full h-10 border border-slate-200 rounded-lg text-sm text-center focus:outline-none focus:border-orange-400"
                             />
                           </div>
-                          <div className="w-16">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Slots</p>
+                          <div className="w-20">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Slots</p>
                             <input
                               type="number"
                               required
@@ -1180,14 +1224,14 @@ export default function JobManagement() {
                                 newShifts[idx].slotsRequired = Number(e.target.value);
                                 setShiftsInput(newShifts);
                               }}
-                              className="w-full h-9 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:border-orange-400 mt-1"
+                              className="w-full h-10 border border-slate-200 rounded-lg text-sm text-center focus:outline-none focus:border-orange-400"
                             />
                           </div>
                           {shiftsInput.length > 1 && (
                             <button
                               type="button"
                               onClick={() => setShiftsInput(shiftsInput.filter((_, i) => i !== idx))}
-                              className="h-9 w-9 bg-red-50 text-red-600 border border-red-200 rounded-lg flex items-center justify-center hover:bg-red-100 transition"
+                              className="h-10 w-10 bg-red-50 text-red-600 border border-red-200 rounded-lg flex items-center justify-center hover:bg-red-100 transition"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -1199,26 +1243,26 @@ export default function JobManagement() {
                 </div>
               )}
 
-              {/* Secure notification */}
-              <p className="text-[10px] text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200 leading-relaxed">
-                ⚠️ **Chú ý:** Hệ thống tự động trừ hạn ngạch đăng ca làm dựa trên gói Subscription (Trial: 3 ca, Recruit: 30 ca, HRM Basic: 60 ca, Enterprise: Vô hạn).
+              {/* Notice */}
+              <p className="text-xs text-amber-700 bg-amber-50 p-4 rounded-xl border border-amber-200 leading-relaxed font-medium">
+                ⚠️ <strong>Chú ý:</strong> Hệ thống tự động trừ hạn ngạch đăng ca làm dựa trên gói Subscription (Trial: 3 ca, Recruit: 30 ca, HRM Basic: 60 ca, Enterprise: Vô hạn).
               </p>
 
-              {/* Wizard Action Buttons */}
-              <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-2">
+              {/* Wizard Actions */}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-5">
                 {wizardStep > 1 ? (
                   <button
                     type="button"
                     onClick={() => setWizardStep(wizardStep - 1)}
-                    className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition"
+                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition"
                   >
-                    Quay lại
+                    ← Quay lại
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => setShowWizard(false)}
-                    className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition"
+                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition"
                   >
                     Hủy bỏ
                   </button>
@@ -1245,16 +1289,16 @@ export default function JobManagement() {
                       }
                       setWizardStep(wizardStep + 1);
                     }}
-                    className="px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-600/10"
+                    className="px-6 py-3 btn-premium text-white rounded-xl text-sm font-bold shadow-lg"
                   >
-                    Tiếp theo
+                    Tiếp theo →
                   </button>
                 ) : (
                   <button
                     type="submit"
-                    className="px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-600/10"
+                    className="px-6 py-3 btn-premium text-white rounded-xl text-sm font-bold shadow-lg flex items-center gap-2"
                   >
-                    Đăng tin ngay tuyển dụng ⚡
+                    <Zap size={15} /> Đăng tin tuyển dụng
                   </button>
                 )}
               </div>
@@ -1262,36 +1306,36 @@ export default function JobManagement() {
           </div>
         </div>
       )}
-      {/* Leaflet Map Picker Modal */}
+
+      {/* ==================== MAP MODAL ==================== */}
       {showMapModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[60] p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4" style={{ animation: "fadeInUp 0.3s ease-out" }}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col h-[500px]">
-            <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-              <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-1.5">
+            <div className="p-5 border-b flex justify-between items-center bg-slate-50">
+              <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
                 🗺 Chọn Vị Trí Trên Bản Đồ
               </h3>
               <button
                 type="button"
                 onClick={() => setShowMapModal(false)}
-                className="text-xs font-bold text-slate-400 bg-white hover:bg-slate-100 border px-2.5 py-1.5 rounded-lg transition"
+                className="text-sm font-bold text-slate-400 bg-white hover:bg-slate-100 border px-3 py-2 rounded-lg transition"
               >
                 Đóng
               </button>
             </div>
-            
+
             <div className="flex-1 relative bg-slate-100">
-              {/* Map target node */}
               <div id="leaflet-map-picker" className="absolute inset-0 z-10" />
             </div>
 
-            <div className="p-4 border-t bg-slate-50 flex justify-between items-center gap-4">
-              <p className="text-[10px] text-slate-500 font-semibold max-w-xs leading-normal">
-                💡 **Mẹo:** Kéo thả ghim đỏ hoặc nhấp chọn lên bản đồ để chọn tọa độ mới cho ca làm việc.
+            <div className="p-5 border-t bg-slate-50 flex justify-between items-center gap-4">
+              <p className="text-xs text-slate-500 font-medium max-w-xs leading-relaxed">
+                💡 <strong>Mẹo:</strong> Kéo thả ghim đỏ hoặc nhấp chọn lên bản đồ để chọn tọa độ mới cho ca làm việc.
               </p>
               <button
                 type="button"
                 onClick={handleConfirmMapLocation}
-                className="px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-600/10 shrink-0"
+                className="px-5 py-3 btn-premium text-white rounded-xl text-sm font-bold shadow-lg shrink-0"
               >
                 Xác nhận Vị trí
               </button>

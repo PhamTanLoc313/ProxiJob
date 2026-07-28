@@ -1,7 +1,17 @@
 import { useState, useEffect } from "react";
-import { Wallet, Star, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Clock, DollarSign, Check } from "lucide-react";
+import {
+  Wallet, Star, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Clock,
+  DollarSign, Check, Users, Sparkles, AlertCircle, ArrowUpRight, Award, UserCheck
+} from "lucide-react";
 import { getPayrolls, approveInterimPayroll, getPayrollAnalytics, getTimekeepingLogs } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
+
+const getInitials = (name) => {
+  if (!name) return "SV";
+  const words = name.trim().split(" ").filter(Boolean);
+  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+};
 
 export default function PayrollSettlement() {
   const { user } = useAuth();
@@ -9,7 +19,7 @@ export default function PayrollSettlement() {
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPayroll, setSelectedPayroll] = useState(null);
-  
+
   const [analytics, setAnalytics] = useState({
     totalDisbursedThisMonth: 0,
     pendingApprovalAmount: 0,
@@ -17,7 +27,6 @@ export default function PayrollSettlement() {
     chartData: { labels: [], datasets: [{ data: [] }] }
   });
   const [selectedPeriod, setSelectedPeriod] = useState("week");
-
   const [expandedCardIds, setExpandedCardIds] = useState([]);
 
   const [customHours, setCustomHours] = useState("4");
@@ -43,7 +52,7 @@ export default function PayrollSettlement() {
       ]);
 
       setPayrolls(Array.isArray(payrollsData) ? payrollsData : []);
-      
+
       if (analyticsData) {
         setAnalytics(analyticsData);
       } else {
@@ -57,7 +66,7 @@ export default function PayrollSettlement() {
           activeEmployees: Math.max(1, new Set(settled.map(p => p.employeeId)).size)
         }));
       }
-      
+
       const rawLogs = Array.isArray(logsData) ? logsData : (Array.isArray(logsData?.data) ? logsData.data : (logsData?.items || []));
       setAttendanceLogs(rawLogs);
     } catch (err) {
@@ -76,10 +85,10 @@ export default function PayrollSettlement() {
     setOfflineConfirmed(false);
     setRating(5);
     setComments("");
-    
+
     const defaultHrs = payroll.totalHours || 4;
     setCustomHours(defaultHrs.toString());
-    
+
     const rate = payroll.hourlyRate || (payroll.totalHours > 0 ? (payroll.finalAmount / payroll.totalHours) : 35000) || 35000;
     setCustomAmount(Math.round(defaultHrs * rate));
   };
@@ -141,12 +150,12 @@ export default function PayrollSettlement() {
   const getStatusBadge = (status) => {
     const s = (status || "").toLowerCase();
     if (s === "paid") {
-      return <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-200">ĐÃ CHỐT</span>;
+      return <span className="text-[10px] uppercase font-black px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">✅ ĐÃ CHỐT</span>;
     }
     if (s === "pendingstudentconfirmation") {
-      return <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200 font-bold">Chờ SV duyệt</span>;
+      return <span className="text-[10px] uppercase font-black px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold">👨‍🎓 Chờ SV duyệt</span>;
     }
-    return <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200">Chờ duyệt</span>;
+    return <span className="text-[10px] uppercase font-black px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">⏳ Chờ duyệt</span>;
   };
 
   const allSettled = payrolls.filter(p => p.status === 'Paid' || p.status === 'PendingStudentConfirmation');
@@ -313,68 +322,112 @@ export default function PayrollSettlement() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 flex flex-col gap-6 min-h-screen">
-      <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-            🪙 Đối Soát & Quyết Toán Chi Phí
-          </h1>
-          <p className="text-slate-400 text-[11px] mt-0.5">Xác nhận chi trả, cộng thưởng/phạt và chấm điểm xếp hạng sinh viên.</p>
-        </div>
-        <button
-          onClick={loadDashboardData}
-          className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-xl transition-all"
-        >
-          <RefreshCw size={15} />
-        </button>
-      </div>
+    <div className="max-w-7xl mx-auto p-4 flex flex-col gap-6">
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-slate-900 border border-slate-800 shadow-lg rounded-3xl p-5 flex flex-col justify-between h-36 text-white relative overflow-hidden">
-          <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 opacity-5 pointer-events-none">
-            <DollarSign size={140} />
-          </div>
-          <div>
-            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Tổng chi tháng này</p>
-            <h2 className="text-2xl font-black mt-2 tracking-tight">{(analytics.totalDisbursedThisMonth || 0).toLocaleString("vi-VN")} đ</h2>
-          </div>
-          <p className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">✓ Đối soát tài chính thực tế</p>
-        </div>
+      {/* ==================== 1. PREMIUM HEADER BANNER ==================== */}
+      <div
+        className="dashboard-fade-in dashboard-fade-in-1 relative overflow-hidden rounded-3xl shadow-lg border border-orange-100/80 dots-pattern"
+        style={{ background: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fef3c7 100%)" }}
+      >
+        <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full opacity-40 blur-2xl" style={{ background: "radial-gradient(circle, #f97316, transparent)" }} />
 
-        <div className="bg-amber-500/10 border border-amber-500/20 shadow-md rounded-3xl p-5 flex flex-col justify-between h-36">
-          <div>
-            <p className="text-[10px] uppercase font-bold text-amber-700 tracking-wider">Quỹ lương chờ chốt</p>
-            <h2 className="text-2xl font-black mt-2 tracking-tight text-amber-900">{(localPendingAmount || 0).toLocaleString("vi-VN")} đ</h2>
+        <div className="relative z-10 p-6 md:p-7 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-md shadow-orange-500/20 text-white">
+              <Wallet size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
+                Đối Soát & Quyết Toán Chi Phí
+              </h1>
+              <p className="text-slate-600 text-xs font-medium mt-0.5">
+                Xác nhận chi trả, cộng thưởng/phạt và chấm điểm xếp hạng sinh viên.
+              </p>
+            </div>
           </div>
-          <p className="text-[10px] text-amber-700 font-bold">⚠ Cần duyệt chi trả sớm</p>
-        </div>
 
-        <div className="bg-emerald-500/10 border border-emerald-500/20 shadow-md rounded-3xl p-5 flex flex-col justify-between h-36">
-          <div>
-            <p className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Nhân sự làm việc</p>
-            <h2 className="text-2xl font-black mt-2 tracking-tight text-emerald-900">{analytics.activeEmployees || 0} sinh viên</h2>
-          </div>
-          <p className="text-[10px] text-emerald-700 font-bold">💡 Ghi nhận đi làm thực tế</p>
+          <button
+            onClick={loadDashboardData}
+            className="bg-white/80 backdrop-blur-sm hover:bg-white text-slate-700 hover:text-orange-600 p-3 rounded-2xl border border-orange-200/60 shadow-xs transition-all duration-300 flex items-center gap-2 text-xs font-extrabold shrink-0"
+          >
+            <RefreshCw size={16} /> Refresh Dữ Liệu
+          </button>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+      {/* ==================== 2. QUICK METRICS ROW ==================== */}
+      <div className="dashboard-fade-in dashboard-fade-in-2 grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Card 1: Total Disbursed */}
+        <div className="relative overflow-hidden rounded-3xl p-6 text-white shadow-lg card-hover-lift dots-pattern" style={{ background: "linear-gradient(135deg, #ea580c 0%, #f97316 50%, #f59e0b 100%)" }}>
+          <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 opacity-20 pointer-events-none text-white">
+            <DollarSign size={150} />
+          </div>
+          <div className="relative z-10 flex flex-col justify-between h-full min-h-[110px]">
+            <div>
+              <span className="text-[10px] uppercase font-extrabold text-orange-100 tracking-wider">Tổng chi tháng này</span>
+              <h2 className="text-3xl font-black mt-1.5 tracking-tight text-white">
+                {(analytics.totalDisbursedThisMonth || 0).toLocaleString("vi-VN")} đ
+              </h2>
+            </div>
+            <p className="text-xs text-white/95 font-bold flex items-center gap-1.5 mt-4">
+              <CheckCircle2 size={14} /> Đối soát tài chính thực tế
+            </p>
+          </div>
+        </div>
+
+        {/* Card 2: Pending Approval */}
+        <div className="stat-card-orange rounded-3xl p-6 border shadow-md flex flex-col justify-between min-h-[110px] card-hover-lift">
           <div>
-            <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider flex items-center gap-2">
-              📊 Biểu Đồ Biến Động Chi Phí
+            <span className="text-[10px] uppercase font-extrabold text-orange-700 tracking-wider">Quỹ lương chờ chốt</span>
+            <h2 className="text-3xl font-black mt-1.5 tracking-tight text-orange-950">
+              {(localPendingAmount || 0).toLocaleString("vi-VN")} đ
+            </h2>
+          </div>
+          <p className="text-xs text-orange-700 font-bold flex items-center gap-1.5 mt-4">
+            <Clock size={14} /> Cần duyệt chi trả sớm
+          </p>
+        </div>
+
+        {/* Card 3: Active Employees */}
+        <div className="stat-card-emerald rounded-3xl p-6 border shadow-md flex flex-col justify-between min-h-[110px] card-hover-lift">
+          <div>
+            <span className="text-[10px] uppercase font-extrabold text-emerald-700 tracking-wider">Nhân sự làm việc</span>
+            <h2 className="text-3xl font-black mt-1.5 tracking-tight text-emerald-950">
+              {analytics.activeEmployees || 0} sinh viên
+            </h2>
+          </div>
+          <p className="text-xs text-emerald-700 font-bold flex items-center gap-1.5 mt-4">
+            <Users size={14} /> Ghi nhận đi làm thực tế
+          </p>
+        </div>
+      </div>
+
+      {/* ==================== 3. EXPENSE CHART CARD ==================== */}
+      <div className="dashboard-fade-in dashboard-fade-in-3 bg-white/80 backdrop-blur-sm border border-slate-100 shadow-lg rounded-3xl p-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5">
+          <div>
+            <h3 className="text-base font-black text-slate-800 tracking-tight flex items-center gap-2">
+              <Sparkles size={18} className="text-orange-500" /> Biểu Đồ Biến Động Chi Phí
             </h3>
-            <p className="text-[11px] text-slate-400 font-semibold mt-1">Theo dõi xu hướng chi phí quyết toán lương theo thời gian</p>
+            <p className="text-xs text-slate-400 mt-0.5 font-medium">Theo dõi xu hướng chi phí quyết toán lương theo thời gian</p>
           </div>
-          <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 self-end sm:self-auto">
-            {["day", "week", "month"].map((p) => (
+
+          <div className="flex bg-slate-100 rounded-2xl p-1.5 gap-1">
+            {[
+              { id: "day", label: "Ngày" },
+              { id: "week", label: "Tuần" },
+              { id: "month", label: "Tháng" }
+            ].map((p) => (
               <button
-                key={p}
-                onClick={() => setSelectedPeriod(p)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all
-                  ${selectedPeriod === p ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                key={p.id}
+                onClick={() => setSelectedPeriod(p.id)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${
+                  selectedPeriod === p.id
+                    ? "bg-white text-slate-800 shadow-sm"
+                    : "text-slate-400 hover:text-slate-800"
+                }`}
               >
-                {p === "day" ? "Ngày" : p === "week" ? "Tuần" : "Tháng"}
+                {p.label}
               </button>
             ))}
           </div>
@@ -389,118 +442,150 @@ export default function PayrollSettlement() {
         )}
       </div>
 
+      {/* ==================== 4. PAYROLL LISTS (PENDING & HISTORY) ==================== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <div className="bg-white border border-slate-100 shadow-xl rounded-3xl p-6 flex flex-col gap-4">
-          <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider border-b border-slate-50 pb-3 flex items-center gap-2">
-            <Clock size={14} className="text-amber-500" /> Danh sách chờ chốt bảng lương
-          </h3>
+
+        {/* ===== LEFT: Pending Payrolls ===== */}
+        <div className="bg-white/80 backdrop-blur-sm border border-slate-100 shadow-lg rounded-3xl p-6 flex flex-col gap-4">
+          <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
+              <Clock size={16} className="text-amber-500" /> Danh sách chờ chốt bảng lương
+            </h3>
+            <span className="text-xs font-extrabold bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
+              {consolidatedPending.length} ca
+            </span>
+          </div>
+
           {loading ? (
-            <div className="text-center p-8 text-xs text-slate-400">Đang tìm dữ liệu...</div>
+            <div className="text-center p-8 text-xs text-slate-400 font-semibold">Đang tìm dữ liệu...</div>
           ) : consolidatedPending.length === 0 ? (
-            <div className="text-center py-10 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/20 text-slate-400 text-xs font-semibold">
+            <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-3xl bg-slate-50/50 text-slate-400 text-xs font-semibold">
+              <CheckCircle2 size={32} className="text-emerald-400 mb-2 mx-auto" />
               ✨ Không có bảng lương nào đang chờ chốt
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
-              {consolidatedPending.map((p) => (
-                <div key={p.id} className="border border-slate-100 bg-slate-50/30 rounded-2xl p-4 flex flex-col gap-3 hover:border-amber-200 transition">
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center text-white font-black text-sm shrink-0">
-                        {p.employeeName[0]}
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800">{p.employeeName}</h4>
-                        <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Mã bảng lương: #{p.id}</p>
-                      </div>
-                    </div>
-                    {getStatusBadge(p.status)}
-                  </div>
-                  <div className="flex justify-between items-center text-[11px] font-semibold text-slate-500 border-t border-slate-100 pt-3 mt-1.5">
-                    <div>
-                      <p className="text-[9px] uppercase tracking-wider text-slate-400">Thành tiền</p>
-                      <p className="text-sm font-black text-slate-800 mt-0.5">{(p.finalAmount || 0).toLocaleString("vi-VN")}đ</p>
-                    </div>
-                    <button
-                      onClick={() => handleOpenApproveModal(p)}
-                      className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-xl text-[10px] font-bold uppercase transition shadow-md shadow-orange-600/10"
-                    >
-                      Chốt ca làm ⚡
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white border border-slate-100 shadow-xl rounded-3xl p-6 flex flex-col gap-4">
-          <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider border-b border-slate-50 pb-3 flex items-center gap-2">
-            <CheckCircle2 size={14} className="text-emerald-500" /> Lịch sử đã quyết toán chi phí
-          </h3>
-          {loading ? (
-            <div className="text-center p-8 text-xs text-slate-400">Đang tìm dữ liệu...</div>
-          ) : allSettled.length === 0 ? (
-            <div className="text-center py-10 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/20 text-slate-400 text-xs font-semibold">
-              Chưa ghi nhận chi phí nào được chốt
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {allSettled.map((p) => {
-                const isExpanded = expandedCardIds.includes(p.id);
+            <div className="flex flex-col gap-3.5">
+              {consolidatedPending.map((p) => {
+                const empName = p.employeeName || "Sinh viên";
                 return (
-                  <div key={p.id} className="border border-slate-100 bg-white rounded-2xl p-4 flex flex-col gap-2.5">
+                  <div
+                    key={p.id}
+                    className="border border-slate-100 bg-white hover:border-orange-200 rounded-2xl p-4 flex flex-col gap-3 shadow-xs hover:shadow-md transition card-hover-lift"
+                  >
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-400 to-indigo-400 flex items-center justify-center text-white font-black text-sm shrink-0">
-                          {p.employeeName[0]}
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-black text-xs uppercase shadow-xs shrink-0">
+                          {getInitials(empName)}
                         </div>
                         <div>
-                          <h4 className="text-xs font-black text-slate-800">{p.employeeName}</h4>
-                          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Mã bảng lương: #{p.id}</p>
+                          <h4 className="text-sm font-black text-slate-800">{empName}</h4>
+                          <p className="text-xs text-slate-400 font-semibold mt-0.5">Mã bảng lương: #{p.id}</p>
                         </div>
                       </div>
                       {getStatusBadge(p.status)}
                     </div>
+
+                    <div className="flex justify-between items-center text-xs font-semibold border-t border-slate-100 pt-3 mt-1">
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-slate-400">Thành tiền</p>
+                        <p className="text-base font-black text-slate-800 mt-0.5">{(p.finalAmount || 0).toLocaleString("vi-VN")} đ</p>
+                      </div>
+                      <button
+                        onClick={() => handleOpenApproveModal(p)}
+                        className="btn-premium text-white px-4 py-2.5 rounded-xl text-xs font-extrabold shadow-md flex items-center gap-1.5"
+                      >
+                        <Zap size={14} /> Chốt ca làm
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ===== RIGHT: Paid History ===== */}
+        <div className="bg-white/80 backdrop-blur-sm border border-slate-100 shadow-lg rounded-3xl p-6 flex flex-col gap-4">
+          <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-500" /> Lịch sử đã quyết toán chi phí
+            </h3>
+            <span className="text-xs font-extrabold bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
+              {allSettled.length} ca
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="text-center p-8 text-xs text-slate-400 font-semibold">Đang tìm dữ liệu...</div>
+          ) : allSettled.length === 0 ? (
+            <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-3xl bg-slate-50/50 text-slate-400 text-xs font-semibold">
+              Chưa ghi nhận chi phí nào được chốt
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3.5">
+              {allSettled.map((p) => {
+                const isExpanded = expandedCardIds.includes(p.id);
+                const empName = p.employeeName || "Sinh viên";
+                return (
+                  <div key={p.id} className="border border-slate-100 bg-white rounded-2xl p-4 flex flex-col gap-3 shadow-xs card-hover-lift">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-xs uppercase shadow-xs shrink-0">
+                          {getInitials(empName)}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-slate-800">{empName}</h4>
+                          <p className="text-xs text-slate-400 font-semibold mt-0.5">Mã bảng lương: #{p.id}</p>
+                        </div>
+                      </div>
+                      {getStatusBadge(p.status)}
+                    </div>
+
                     <button
                       onClick={() => toggleCardDetails(p.id)}
-                      className="flex items-center justify-center gap-1 py-1 px-3 bg-slate-50 hover:bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 transition w-full text-center"
+                      className="flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-500 transition w-full text-center"
                     >
                       <span>{isExpanded ? "Thu gọn chi tiết" : "Xem chi tiết ca làm"}</span>
-                      {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                      {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                     </button>
+
                     {isExpanded && (
-                      <div className="bg-slate-50/70 rounded-xl p-3 border border-slate-100 text-[11px] font-semibold text-slate-600 flex flex-col gap-2 mt-1">
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 text-xs font-semibold text-slate-600 flex flex-col gap-2.5 mt-1">
                         <div className="flex justify-between items-center">
-                          <span className="text-slate-400">Tổng giờ làm:</span>
+                          <span className="text-slate-400 font-medium">Tổng giờ làm:</span>
                           <span className="text-slate-800 font-bold">{p.totalHours} giờ công</span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-slate-400">Trạng thái:</span>
-                          <span className="text-slate-800 font-bold">{p.status === "PendingStudentConfirmation" ? "Chờ sinh viên đối soát ví" : "Đã thanh toán thành công"}</span>
+                          <span className="text-slate-400 font-medium">Trạng thái:</span>
+                          <span className="text-slate-800 font-bold">
+                            {p.status === "PendingStudentConfirmation" ? "Chờ sinh viên đối soát ví" : "Đã thanh toán thành công"}
+                          </span>
                         </div>
                         {p.payDate && (
                           <div className="flex justify-between items-center">
-                            <span className="text-slate-400">Ngày chốt:</span>
+                            <span className="text-slate-400 font-medium">Ngày chốt:</span>
                             <span className="text-slate-800 font-bold">{new Date(p.payDate).toLocaleDateString("vi-VN")}</span>
                           </div>
                         )}
                         {p.rating && (
-                          <div className="border-t border-slate-200/50 pt-2 mt-1 flex flex-col gap-1">
-                            <p className="text-[9px] uppercase tracking-wider text-slate-400">Đánh giá của bạn</p>
-                            <div className="flex text-amber-500 font-black">{"★".repeat(p.rating)}{"☆".repeat(5 - p.rating)}</div>
-                            {p.comments && <p className="text-[10px] text-slate-500 bg-white border border-slate-100 p-2 rounded-lg italic font-medium">{p.comments}</p>}
+                          <div className="border-t border-slate-200/60 pt-2.5 mt-1 flex flex-col gap-1.5">
+                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Đánh giá của bạn</p>
+                            <div className="flex text-amber-400 font-black text-sm">{"★".repeat(p.rating)}{"☆".repeat(5 - p.rating)}</div>
+                            {p.comments && <p className="text-xs text-slate-600 bg-white border border-slate-100 p-3 rounded-xl italic font-medium">{p.comments}</p>}
                           </div>
                         )}
                       </div>
                     )}
-                    <div className="flex justify-between items-center text-[11px] font-semibold text-slate-500 border-t border-slate-100 pt-3 mt-1.5">
+
+                    <div className="flex justify-between items-center text-xs font-semibold border-t border-slate-100 pt-3 mt-1">
                       <div>
-                        <p className="text-[9px] uppercase tracking-wider text-slate-400">Số tiền chi trả</p>
-                        <p className="text-sm font-black text-slate-800 mt-0.5">{(p.finalAmount || 0).toLocaleString("vi-VN")}đ</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-400">Số tiền chi trả</p>
+                        <p className="text-base font-black text-slate-800 mt-0.5">{(p.finalAmount || 0).toLocaleString("vi-VN")} đ</p>
                       </div>
-                      <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 ${p.status === "PendingStudentConfirmation" ? "bg-indigo-50 text-indigo-700" : "bg-emerald-50 text-emerald-700"}`}>
-                        {p.status === "PendingStudentConfirmation" ? "Chờ SV xác nhận nhận tiền" : "✓ Hoàn thành"}
+                      <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
+                        p.status === "PendingStudentConfirmation" ? "bg-indigo-50 text-indigo-700 border border-indigo-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      }`}>
+                        {p.status === "PendingStudentConfirmation" ? "Chờ SV xác nhận" : "✓ Hoàn thành"}
                       </div>
                     </div>
                   </div>
@@ -511,78 +596,156 @@ export default function PayrollSettlement() {
         </div>
       </div>
 
+      {/* ==================== 5. MODAL: SETTLEMENT APPROVAL & RATING ==================== */}
       {selectedPayroll && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <form onSubmit={handleSettlementSubmit} className="p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="font-black text-base text-slate-800 flex items-center gap-2">
-                  <Wallet size={18} className="text-orange-600" /> Bảng Quyết Toán Ca Làm Việc
-                </h3>
-                <button type="button" onClick={() => setSelectedPayroll(null)} className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1.5 rounded-lg hover:bg-slate-100">Đóng</button>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden" style={{ animation: "fadeInUp 0.3s ease-out" }}>
+            <form onSubmit={handleSettlementSubmit} className="p-6 md:p-7 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-md">
+                    <Wallet size={18} className="text-white" />
+                  </div>
+                  <h3 className="font-black text-lg text-slate-800 tracking-tight">
+                    Bảng Quyết Toán Ca Làm Việc
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPayroll(null)}
+                  className="text-xs font-bold text-slate-400 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition"
+                >
+                  Đóng
+                </button>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-2xl grid grid-cols-2 gap-4 text-xs border border-slate-100">
+              {/* Info summary */}
+              <div className="bg-slate-50/80 p-4 rounded-2xl grid grid-cols-2 gap-4 text-xs border border-slate-100">
                 <div>
-                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Nhân sự nhận</p>
-                  <p className="font-extrabold text-slate-800 text-sm mt-0.5">{selectedPayroll.employeeName}</p>
-                  <p className="text-slate-500 font-semibold">{selectedPayroll.shiftName || "Quyết toán ca làm"}</p>
+                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Nhân sự nhận</p>
+                  <p className="font-black text-slate-800 text-base mt-0.5">{selectedPayroll.employeeName}</p>
+                  <p className="text-slate-500 font-semibold mt-0.5">{selectedPayroll.shiftName || "Quyết toán ca làm"}</p>
                 </div>
-                <div className="text-right border-l border-slate-200/50 pl-4">
-                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Tổng công thực tế</p>
-                  <p className="font-black text-slate-800 text-sm mt-0.5">{selectedPayroll.totalHours} giờ</p>
-                  <p className="text-slate-500 font-semibold">Gốc: {selectedPayroll.finalAmount?.toLocaleString("vi-VN")}đ</p>
+                <div className="text-right border-l border-slate-200/60 pl-4">
+                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Tổng công thực tế</p>
+                  <p className="font-black text-slate-800 text-base mt-0.5">{selectedPayroll.totalHours} giờ</p>
+                  <p className="text-slate-500 font-semibold mt-0.5">Gốc: {selectedPayroll.finalAmount?.toLocaleString("vi-VN")} đ</p>
                 </div>
               </div>
 
-              <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col gap-2.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Số giờ công quyết toán thực tế</label>
+              {/* Adjust hours */}
+              <div className="bg-slate-50/80 border border-slate-100 p-4 rounded-2xl flex flex-col gap-2.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Số giờ công quyết toán thực tế</label>
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm shrink-0">
-                    <button type="button" onClick={() => adjustHours(-0.5)} className="w-10 h-10 flex items-center justify-center hover:bg-slate-50 text-slate-600 font-black transition">-</button>
-                    <input type="text" value={customHours} onChange={(e) => handleHoursChange(e.target.value)} className="w-16 h-10 border-x border-slate-100 text-center text-xs font-bold focus:outline-none" />
-                    <button type="button" onClick={() => adjustHours(0.5)} className="w-10 h-10 flex items-center justify-center hover:bg-slate-50 text-slate-600 font-black transition">+</button>
+                  <div className="flex items-center border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => adjustHours(-0.5)}
+                      className="w-11 h-11 flex items-center justify-center hover:bg-slate-100 text-slate-700 font-black text-base transition"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="text"
+                      value={customHours}
+                      onChange={(e) => handleHoursChange(e.target.value)}
+                      className="w-16 h-11 border-x border-slate-100 text-center text-sm font-black focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => adjustHours(0.5)}
+                      className="w-11 h-11 flex items-center justify-center hover:bg-slate-100 text-slate-700 font-black text-base transition"
+                    >
+                      +
+                    </button>
                   </div>
                   {parseFloat(customHours) !== parseFloat(selectedPayroll.totalHours || 0) && (
-                    <button type="button" onClick={() => { setCustomHours(selectedPayroll.totalHours.toString()); const rate = selectedPayroll.hourlyRate || (selectedPayroll.totalHours > 0 ? (selectedPayroll.finalAmount / selectedPayroll.totalHours) : 35000) || 35000; setCustomAmount(Math.round(selectedPayroll.totalHours * rate)); }} className="px-3.5 h-10 border border-orange-200 hover:bg-orange-50/50 text-orange-600 rounded-xl text-[10px] font-bold transition flex items-center gap-1">Đặt mặc định</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomHours(selectedPayroll.totalHours.toString());
+                        const rate = selectedPayroll.hourlyRate || (selectedPayroll.totalHours > 0 ? (selectedPayroll.finalAmount / selectedPayroll.totalHours) : 35000) || 35000;
+                        setCustomAmount(Math.round(selectedPayroll.totalHours * rate));
+                      }}
+                      className="px-4 h-11 border border-orange-200 hover:bg-orange-50 text-orange-600 rounded-2xl text-xs font-bold transition flex items-center gap-1"
+                    >
+                      Đặt mặc định
+                    </button>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 py-2 border-y border-slate-100 mt-1">
+              {/* Rating */}
+              <div className="flex items-center justify-between py-2 border-y border-slate-100">
                 <span className="text-xs font-bold text-slate-700">Đánh giá thái độ sinh viên:</span>
                 <div className="flex gap-1.5">
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <button key={star} type="button" onClick={() => setRating(star)} className="focus:outline-none text-amber-400">
-                      <Star size={20} fill={rating >= star ? "currentColor" : "none"} />
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRating(star)}
+                      className="focus:outline-none text-amber-400 hover:scale-125 transition-transform"
+                    >
+                      <Star size={22} fill={rating >= star ? "currentColor" : "none"} />
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Comments */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Nhận xét chi tiết thái độ</label>
-                <textarea rows={2} value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Nhận xét thái độ của sinh viên ca này..." className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition" />
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nhận xét chi tiết thái độ</label>
+                <textarea
+                  rows={2}
+                  value={comments}
+                  onChange={(e) => setComments(e.target.value)}
+                  placeholder="Nhận xét thái độ của sinh viên ca này..."
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-orange-400 focus:bg-white transition"
+                />
               </div>
 
-              <button type="button" onClick={() => setOfflineConfirmed(!offlineConfirmed)} className={`w-full p-3.5 border rounded-2xl text-left flex gap-3 transition-all duration-200 hover:shadow-sm ${offlineConfirmed ? "bg-emerald-50 border-emerald-300 text-slate-800" : "bg-slate-50/30 border-slate-200 text-slate-500"}`}>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition shrink-0 ${offlineConfirmed ? "border-emerald-500 bg-emerald-500" : "border-slate-300"}`}>
+              {/* Offline confirm */}
+              <button
+                type="button"
+                onClick={() => setOfflineConfirmed(!offlineConfirmed)}
+                className={`w-full p-4 border rounded-2xl text-left flex gap-3 transition-all duration-200 hover:shadow-xs ${
+                  offlineConfirmed ? "bg-emerald-50 border-emerald-300 text-slate-800" : "bg-slate-50/50 border-slate-200 text-slate-500"
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition shrink-0 mt-0.5 ${
+                  offlineConfirmed ? "border-emerald-500 bg-emerald-500" : "border-slate-300"
+                }`}>
                   {offlineConfirmed && <Check size={12} className="text-white" />}
                 </div>
-                <span className={`text-[10px] font-bold leading-normal ${offlineConfirmed ? "text-emerald-900" : "text-slate-500"}`}>Tôi xác nhận đã chuyển khoản ngân hàng hoặc trả tiền mặt trực tiếp cho sinh viên này ngoài đời thực.</span>
+                <span className={`text-xs font-bold leading-relaxed ${offlineConfirmed ? "text-emerald-950" : "text-slate-500"}`}>
+                  Tôi xác nhận đã chuyển khoản ngân hàng hoặc trả tiền mặt trực tiếp cho sinh viên này ngoài đời thực.
+                </span>
               </button>
 
+              {/* Total amount summary */}
               <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex justify-between items-center text-xs">
                 <div>
-                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Tổng chi phí thực tế</p>
-                  <p className="text-[10px] text-orange-600 font-bold mt-0.5">Tự động tính theo giờ công quyết toán</p>
+                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Tổng chi phí thực tế</p>
+                  <p className="text-[11px] text-orange-600 font-bold mt-0.5">Tự động tính theo giờ công quyết toán</p>
                 </div>
-                <p className="font-black text-xl text-orange-700">{(customAmount || 0).toLocaleString("vi-VN")} đ</p>
+                <p className="font-black text-2xl text-orange-600">{(customAmount || 0).toLocaleString("vi-VN")} đ</p>
               </div>
 
+              {/* Modal actions */}
               <div className="grid grid-cols-2 gap-3 mt-1">
-                <a href={`https://momo.vn/sandbox?amount=${customAmount}`} target="_blank" rel="noreferrer" className="h-11 bg-[#A50064] text-white rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:brightness-110 transition shadow-md">⚡ MoMo Sandbox Payout</a>
-                <button type="submit" disabled={submitting || !offlineConfirmed} className="h-11 bg-gradient-to-r from-orange-600 to-amber-500 disabled:from-slate-200 disabled:to-slate-300 hover:from-orange-700 hover:to-amber-600 text-white rounded-2xl font-black text-xs shadow-lg shadow-orange-600/10 transition flex items-center justify-center cursor-pointer">
+                <a
+                  href={`https://momo.vn/sandbox?amount=${customAmount}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="h-12 bg-[#A50064] text-white rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:brightness-110 transition shadow-md"
+                >
+                  ⚡ MoMo Sandbox Payout
+                </a>
+                <button
+                  type="submit"
+                  disabled={submitting || !offlineConfirmed}
+                  className="h-12 btn-premium disabled:from-slate-200 disabled:to-slate-300 text-white rounded-2xl font-extrabold text-xs shadow-lg transition flex items-center justify-center cursor-pointer"
+                >
                   {submitting ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" /> : "Duyệt & Chốt Chi Phí"}
                 </button>
               </div>

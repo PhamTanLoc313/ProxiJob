@@ -1,8 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @layer base {
   :root {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f8f5ef;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
@@ -19,4 +20,179 @@
       linear-gradient(180deg, #f8f5ef 0%, #f3efe8 48%, #eef2f5 100%);
     color: #0f172a;
   }
+}
+
+/* ========== Dashboard Animations ========== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(249, 115, 22, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.6);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* ========== Dashboard Utility Classes ========== */
+.dashboard-fade-in {
+  animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dashboard-fade-in-1 { animation-delay: 0.03s; }
+.dashboard-fade-in-2 { animation-delay: 0.07s; }
+.dashboard-fade-in-3 { animation-delay: 0.11s; }
+.dashboard-fade-in-4 { animation-delay: 0.15s; }
+.dashboard-fade-in-5 { animation-delay: 0.19s; }
+
+.glassmorphism {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.glassmorphism-light {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.card-hover-lift {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease-out;
+  will-change: transform;
+}
+.card-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.08);
+}
+.card-hover-lift:active {
+  transform: translateY(0) scale(0.99);
+  transition-duration: 0.08s;
+}
+
+.glow-border {
+  position: relative;
+}
+.glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #f97316, #f59e0b, #f97316, #ef4444);
+  background-size: 300% 300%;
+  animation: gradient-shift 3s ease infinite;
+  z-index: -1;
+  opacity: 0.8;
+}
+
+.badge-pulse {
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+.shimmer-bg {
+  background: linear-gradient(
+    110deg,
+    transparent 33%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 67%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.5s linear infinite;
+}
+
+.icon-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Stats card gradient backgrounds */
+.stat-card-orange {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%);
+  border: 1px solid rgba(251, 146, 60, 0.2);
+}
+.stat-card-emerald {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #a7f3d0 100%);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+.stat-card-purple {
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 50%, #e9d5ff 100%);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+}
+.stat-card-blue {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 50%, #bfdbfe 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* Package card current plan highlight */
+.plan-card-active {
+  background: linear-gradient(135deg, #fff7ed 0%, #fffbeb 100%);
+  border: 2px solid #f97316;
+  box-shadow:
+    0 0 0 4px rgba(249, 115, 22, 0.08),
+    0 8px 32px -8px rgba(249, 115, 22, 0.18);
+}
+
+.plan-card-popular {
+  background: linear-gradient(135deg, #fefce8 0%, #fff7ed 50%, #fef3c7 100%);
+}
+
+/* Premium button styles */
+.btn-premium {
+  background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #f59e0b 100%);
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease-out;
+  will-change: transform;
+}
+.btn-premium:hover {
+  box-shadow: 0 6px 20px -4px rgba(249, 115, 22, 0.35);
+  transform: translateY(-1px);
+}
+.btn-premium:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 0.06s;
+}
+
+/* Decorative dots pattern */
+.dots-pattern {
+  background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
 }

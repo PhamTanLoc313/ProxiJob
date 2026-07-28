@@ -1,24 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Calendar as CalendarIcon,
-  Clock,
-  Plus,
-  Trash2,
-  Pencil,
-  UserPlus,
-  Search,
-  X,
-  Sun,
-  CloudSun,
-  Moon,
-  Star,
-  Timer,
-  ChevronLeft,
-  ChevronRight,
-  Check,
-  AlertTriangle,
-  Users,
-  Zap
+  Calendar as CalendarIcon, Clock, Plus, Trash2, Pencil, UserPlus, Search, X,
+  Sun, CloudSun, Moon, Star, Timer, ChevronLeft, ChevronRight, Check,
+  AlertTriangle, Users, Zap, Wallet, Sparkles, UserCheck
 } from "lucide-react";
 import { getEmployees, getSchedules, createSchedule, deleteSchedule } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
@@ -60,11 +44,11 @@ const formatTime = (val) => {
 
 const SHIFT_ICONS = ["☀️", "⛅", "🌙", "⏰", "⭐"];
 const ICON_COLORS = {
-  "☀️": { bg: "#FFF9E6", fg: "#F59E0B" },
-  "⛅": { bg: "#FFF0EA", fg: "#FF6B00" },
-  "🌙": { bg: "#EEF2FF", fg: "#4F46E5" },
-  "⏰": { bg: "#F1F5F9", fg: "#64748B" },
-  "⭐": { bg: "#FEF3C7", fg: "#D97706" },
+  "☀️": { bg: "bg-gradient-to-br from-amber-400 to-orange-500", fg: "text-white", cardBg: "bg-amber-50/50 border-amber-100" },
+  "⛅": { bg: "bg-gradient-to-br from-orange-400 to-amber-500", fg: "text-white", cardBg: "bg-orange-50/50 border-orange-100" },
+  "🌙": { bg: "bg-gradient-to-br from-indigo-500 to-purple-600", fg: "text-white", cardBg: "bg-indigo-50/50 border-indigo-100" },
+  "⏰": { bg: "bg-gradient-to-br from-slate-600 to-slate-800", fg: "text-white", cardBg: "bg-slate-50 border-slate-200" },
+  "⭐": { bg: "bg-gradient-to-br from-amber-500 to-yellow-600", fg: "text-white", cardBg: "bg-yellow-50/50 border-yellow-100" },
 };
 
 const DEFAULT_SHIFTS = [
@@ -76,6 +60,13 @@ const DEFAULT_SHIFTS = [
 const removeAccents = (str) => {
   if (!str) return "";
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
+};
+
+const getInitials = (name) => {
+  if (!name) return "NV";
+  const words = name.trim().split(" ").filter(Boolean);
+  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 };
 
 /* ─── main component ─── */
@@ -120,7 +111,6 @@ export default function EmployerScheduling() {
   }, []);
 
   useEffect(() => {
-    // Load custom shift slots from localStorage
     try {
       const stored = localStorage.getItem(`proxijob_shift_slots_${user?.id || "default"}`);
       if (stored) setShiftSlots(JSON.parse(stored));
@@ -164,7 +154,6 @@ export default function EmployerScheduling() {
     const [year, month, day] = dateStr.split('-').map(Number);
     const [hours, minutes] = timeStr.split(':').map(Number);
     const dateObj = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
-    // Subtract 7 hours to convert from ICT (GMT+7) to UTC
     dateObj.setUTCHours(dateObj.getUTCHours() - 7);
     return dateObj.toISOString();
   };
@@ -174,10 +163,8 @@ export default function EmployerScheduling() {
     const targetSlot = shiftSlots.find((s) => s.id === assignModal.slotId);
     if (!targetSlot) return;
 
-    // Check if already assigned
     const existing = schedules.find((s) => s.note === assignModal.slotId && s.employeeId === staffId);
     if (existing) {
-      // Unassign (toggle off)
       try {
         await deleteSchedule(existing.id);
         setSchedules((prev) => prev.filter((s) => s.id !== existing.id));
@@ -187,7 +174,6 @@ export default function EmployerScheduling() {
       return;
     }
 
-    // Assign (toggle on)
     let startTime = "08:00";
     let endTime = "12:00";
     try {
@@ -210,7 +196,12 @@ export default function EmployerScheduling() {
       });
       await loadData();
     } catch (err) {
-      alert(err.message || "Lỗi xếp lịch. Trùng lặp ca làm phát hiện!");
+      const errMsg = err.message || "";
+      if (errMsg.includes("overlapping") || errMsg.includes("work schedule")) {
+        alert("⚠️ Nhân viên này đã có lịch làm việc trùng thời gian ở một ca khác trong ngày!");
+      } else {
+        alert(errMsg || "Lỗi xếp lịch. Không thể phân công ca làm.");
+      }
     }
   };
 
@@ -286,7 +277,7 @@ export default function EmployerScheduling() {
   /* ─── derived data ─── */
   const internalEmployees = employees.filter((e) => e.employeeType !== "External");
   const filteredStaffForModal = internalEmployees.filter((s) => {
-    const n = removeAccents((s.name || "").toLowerCase());
+    const n = removeAccents((s.name || s.Name || "").toLowerCase());
     const q = removeAccents(searchQuery.toLowerCase());
     return n.includes(q);
   });
@@ -305,50 +296,64 @@ export default function EmployerScheduling() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 flex flex-col gap-5 min-h-screen">
+    <div className="max-w-7xl mx-auto p-4 flex flex-col gap-6">
 
-      {/* ═══ WEEK TIMELINE HEADER ═══ */}
-      <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-5">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-              📋 Xếp Lịch Trực
-            </h1>
-            <p className="text-slate-400 text-[11px] mt-0.5">{getTimelineLabel()}</p>
+      {/* ==================== 1. PREMIUM HEADER BANNER ==================== */}
+      <div
+        className="dashboard-fade-in dashboard-fade-in-1 relative overflow-hidden rounded-3xl shadow-lg border border-orange-100/80 dots-pattern"
+        style={{ background: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fef3c7 100%)" }}
+      >
+        <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full opacity-40 blur-2xl" style={{ background: "radial-gradient(circle, #f97316, transparent)" }} />
+
+        <div className="relative z-10 p-6 md:p-7 flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-md shadow-orange-500/20 text-white">
+              <CalendarIcon size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
+                Xếp Lịch Trực (Scheduling)
+              </h1>
+              <p className="text-slate-600 text-xs font-medium mt-0.5">{getTimelineLabel()}</p>
+            </div>
           </div>
+
           {activeTab === "internal" && (
             <button
               onClick={openAddShiftModal}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white rounded-xl hover:shadow-lg transition-all"
-              style={{ background: "linear-gradient(135deg, #FF6B00, #F59E0B)" }}
+              className="btn-premium text-white px-5 py-3 rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg shrink-0 cursor-pointer"
             >
-              <Plus size={14} />
-              Thêm Ca Mới
+              <Plus size={16} /> Thêm Ca Mới
             </button>
           )}
         </div>
+      </div>
 
-        {/* Day selector pills */}
-        <div className="grid grid-cols-7 gap-3 w-full">
+      {/* ==================== 2. WEEK TIMELINE SELECTOR ==================== */}
+      <div className="dashboard-fade-in dashboard-fade-in-2 bg-white/80 backdrop-blur-sm border border-slate-100 shadow-md rounded-3xl p-5">
+        <div className="grid grid-cols-7 gap-2 sm:gap-3 w-full">
           {weekDays.map((day, idx) => {
             const isSelected = selectedDayIndex === idx;
             return (
               <button
                 key={idx}
                 onClick={() => setSelectedDayIndex(idx)}
-                className={`flex flex-col items-center w-full px-2.5 py-2.5 rounded-2xl transition-all font-bold text-xs border
-                  ${isSelected
-                    ? "text-white shadow-lg border-orange-400"
+                className={`relative flex flex-col items-center w-full px-2 py-3 rounded-2xl transition-all duration-300 font-bold text-xs border card-hover-lift ${
+                  isSelected
+                    ? "bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20 border-orange-400"
                     : day.isToday
                       ? "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100"
-                      : "bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100"
-                  }`}
-                style={isSelected ? { background: "linear-gradient(135deg, #FF6B00, #F59E0B)" } : {}}
+                      : "bg-slate-50 text-slate-600 border-slate-100 hover:bg-slate-100"
+                }`}
               >
-                <span className="text-[10px] font-semibold opacity-80">{day.name}</span>
-                <span className="text-base font-black mt-0.5">{day.date.split("/")[0]}</span>
+                <span className={`text-[10px] uppercase font-extrabold tracking-wider ${isSelected ? "text-white/90" : "text-slate-400"}`}>
+                  {day.name}
+                </span>
+                <span className="text-lg font-black mt-1 tracking-tight">
+                  {day.date.split("/")[0]}
+                </span>
                 {(isSelected || day.isToday) && (
-                  <div className={`w-1.5 h-1.5 rounded-full mt-1 ${isSelected ? "bg-white" : "bg-orange-400"}`} />
+                  <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${isSelected ? "bg-white animate-pulse" : "bg-orange-500"}`} />
                 )}
               </button>
             );
@@ -356,55 +361,61 @@ export default function EmployerScheduling() {
         </div>
       </div>
 
-      {/* ═══ DAY SUMMARY + TAB SELECTOR ═══ */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-black text-slate-800">{getDaySummaryTitle()}</h2>
+      {/* ==================== 3. DAY TITLE & TAB SWITCHER ==================== */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-lg font-black text-slate-800 tracking-tight">{getDaySummaryTitle()}</h2>
           {selectedDay?.isToday && (
-            <span className="px-2 py-0.5 text-[10px] font-bold text-orange-700 bg-orange-100 rounded-full">Hôm nay</span>
+            <span className="badge-pulse px-3 py-1 text-xs font-black text-orange-600 bg-orange-50 border border-orange-200 rounded-full">
+              Hôm nay
+            </span>
           )}
         </div>
 
-        <div className="flex bg-slate-100 rounded-2xl p-1 gap-1">
+        {/* Tab Switcher */}
+        <div className="flex gap-1 bg-slate-100 p-1.5 rounded-2xl">
           <button
             onClick={() => setActiveTab("internal")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5
-              ${activeTab === "internal" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            className={`text-xs font-bold px-4 py-2 rounded-xl transition-all duration-300 flex items-center gap-2 ${
+              activeTab === "internal"
+                ? "bg-white text-slate-800 shadow-sm"
+                : "text-slate-400 hover:text-slate-800"
+            }`}
           >
-            <Users size={13} /> Nhân Sự Nội Bộ
+            <Users size={14} /> Nhân Sự Nội Bộ
           </button>
           <button
             onClick={() => setActiveTab("external")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5
-              ${activeTab === "external" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            className={`text-xs font-bold px-4 py-2 rounded-xl transition-all duration-300 flex items-center gap-2 ${
+              activeTab === "external"
+                ? "bg-white text-slate-800 shadow-sm"
+                : "text-slate-400 hover:text-slate-800"
+            }`}
           >
-            <Zap size={13} /> Nhân Sự Vãng Lai
+            <Zap size={14} /> Nhân Sự Vãng Lai
           </button>
         </div>
       </div>
 
-      {/* ═══ MAIN CONTENT ═══ */}
+      {/* ==================== 4. TAB CONTENT ==================== */}
       {loading ? (
-        <div className="text-center p-12 text-slate-400 text-xs font-semibold">
-          <div className="animate-spin mx-auto mb-3 w-8 h-8 border-2 border-orange-200 border-t-orange-500 rounded-full" />
-          Đang tải lịch trực...
+        <div className="flex flex-col items-center justify-center p-16 bg-white/80 backdrop-blur-sm rounded-3xl border border-slate-100 shadow-md">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-600 border-t-transparent mb-4" />
+          <p className="text-slate-500 text-sm font-semibold">Đang tải lịch trực...</p>
         </div>
       ) : activeTab === "internal" ? (
-        /* ═══ INTERNAL TAB ═══ */
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm">📋</span>
-            <h3 className="text-sm font-black text-slate-700">Lịch trình chi tiết (Nội Bộ)</h3>
-          </div>
-
+        /* ===== INTERNAL SHIFTS TAB ===== */
+        <div className="dashboard-fade-in dashboard-fade-in-3 flex flex-col gap-4">
           {shiftSlots.length === 0 ? (
-            <div className="text-center p-12 border border-slate-100 rounded-3xl bg-slate-50/30">
-              <span className="text-3xl block mb-2">📅</span>
-              <p className="text-xs font-bold text-slate-500 mb-1">Chưa có ca làm nào</p>
-              <p className="text-[10px] text-slate-400">Nhấn "Thêm Ca Mới" ở góc trên để bắt đầu lập lịch trực.</p>
+            <div className="flex flex-col items-center justify-center p-16 bg-white/80 backdrop-blur-sm rounded-3xl border border-slate-100 text-center shadow-md">
+              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
+                <CalendarIcon size={32} className="text-slate-300" />
+              </div>
+              <p className="text-slate-800 font-bold text-base">Chưa có ca làm nào</p>
+              <p className="text-slate-400 text-sm mt-2 max-w-sm">Bấm nút "Thêm Ca Mới" góc trên để bắt đầu lập lịch trực.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {shiftSlots.map((slot) => {
                 const slotSchedules = schedules.filter((s) => s.note === slot.id && !s.jobShiftId);
                 const isAssigned = slotSchedules.length > 0;
@@ -413,105 +424,101 @@ export default function EmployerScheduling() {
                 return (
                   <div
                     key={slot.id}
-                    className={`border rounded-2xl p-4 transition-all flex flex-col min-h-[180px] ${
-                      isAssigned ? "bg-white border-slate-150 shadow-sm" : "bg-slate-50/50 border-dashed border-slate-200"
+                    className={`group relative rounded-3xl p-5 transition-all duration-300 flex flex-col justify-between card-hover-lift ${
+                      isAssigned
+                        ? "bg-white/90 backdrop-blur-sm border-2 border-slate-100 shadow-md hover:border-orange-200"
+                        : "bg-slate-50/60 border-2 border-dashed border-slate-200"
                     }`}
                   >
-                    {/* Slot Header */}
-                    <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 font-semibold"
-                          style={{ backgroundColor: colors.bg }}
-                        >
-                          {slot.icon}
+                    <div>
+                      {/* Slot Header */}
+                      <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-11 h-11 rounded-2xl ${colors.bg} flex items-center justify-center text-xl shadow-md ${colors.fg}`}>
+                            {slot.icon}
+                          </div>
+                          <div>
+                            <h4 className="text-base font-black text-slate-800">
+                              {slot.name}
+                            </h4>
+                            <p className="text-xs text-slate-400 font-semibold flex items-center gap-1.5 mt-0.5">
+                              <Clock size={12} className="text-slate-400" /> {slot.time}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-                            {slot.name}
-                          </h4>
-                          <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-0.5">
-                            <Clock size={9} /> {slot.time}
-                          </p>
+
+                        <div className="flex gap-1 items-center opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => openEditShiftModal(slot)}
+                            className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600 text-slate-400 transition"
+                            title="Sửa ca"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm({ open: true, slot })}
+                            className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-400 transition"
+                            title="Xóa ca"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </div>
 
-                      <div className="flex gap-1.5 items-center">
-                        <button
-                          onClick={() => openEditShiftModal(slot)}
-                          className="w-5 h-5 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition"
-                          title="Sửa ca"
-                        >
-                          <Pencil size={9} className="text-slate-500" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirm({ open: true, slot })}
-                          className="w-5 h-5 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition"
-                          title="Xóa ca"
-                        >
-                          <Trash2 size={9} className="text-slate-500" />
-                        </button>
-                        <button
-                          onClick={() => { setAssignModal({ open: true, slotId: slot.id }); setSearchQuery(""); }}
-                          className="w-5 h-5 flex items-center justify-center rounded-md bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white transition shadow-sm"
-                          title="Gán nhân sự"
-                        >
-                          <UserPlus size={9} />
-                        </button>
-                      </div>
-                    </div>
+                      {/* Assigned Staff List */}
+                      <div className="space-y-2.5 min-h-[90px]">
+                        {slotSchedules.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-white/40 border border-dashed border-slate-200 text-slate-400 text-xs font-semibold">
+                            <span>Chưa phân công nhân sự</span>
+                          </div>
+                        ) : (
+                          slotSchedules.map((sched) => {
+                            const emp = employees.find((e) => e.id === sched.employeeId);
+                            const empName = emp?.name || emp?.Name || sched.employeeName || "Nhân viên";
+                            const empRole = emp?.role || emp?.Role || "Phục vụ";
+                            const empSalary = emp?.salaryPerHour || emp?.SalaryPerHour || 0;
 
-                    {/* Assigned Staff */}
-                    <div className="flex-1 flex flex-col gap-2">
-                      {isAssigned ? (
-                        slotSchedules.map((schedule) => {
-                          const staff = employees.find((e) => e.id === schedule.employeeId);
-                          const staffName = staff ? staff.name : `Nhân viên #${schedule.employeeId}`;
-                          const role = staff?.role || "Nhân viên";
-                          let rate = "28.000 đ/h";
-                          if (staff?.salaryPerHour) {
-                            rate = `${Number(staff.salaryPerHour).toLocaleString("vi-VN")} đ/h`;
-                          }
-
-                          return (
-                            <div
-                              key={schedule.id}
-                              className="flex items-center gap-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-100 hover:border-orange-200 transition"
-                            >
-                              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-yellow-400 flex items-center justify-center text-white font-black text-xs shrink-0">
-                                {(staffName || "?")[0]}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 justify-between">
-                                  <span className="text-[11px] font-bold text-slate-800 truncate">{staffName}</span>
-                                  <span className="px-1.5 py-0.2 text-[8px] font-extrabold rounded-sm bg-orange-100 text-orange-600 shrink-0">
-                                    Nội bộ
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between mt-0.5 text-[9px] text-slate-400 font-semibold">
-                                  <span>{role}</span>
-                                  <span className="text-orange-600 font-bold">{rate}</span>
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => handleDeleteScheduleEntry(schedule.id)}
-                                className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
+                            return (
+                              <div
+                                key={sched.id}
+                                className="flex justify-between items-center bg-slate-50 border border-slate-100 hover:border-orange-200 p-3 rounded-2xl transition"
                               >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <button
-                          onClick={() => { setAssignModal({ open: true, slotId: slot.id }); setSearchQuery(""); }}
-                          className="w-full h-full py-8 border-2 border-dashed border-slate-200 rounded-xl text-[10px] font-bold text-slate-400 hover:border-orange-300 hover:text-orange-500 hover:bg-orange-50/30 transition-all flex flex-col items-center justify-center gap-1.5"
-                        >
-                          <UserPlus size={14} className="text-slate-300" />
-                          <span>Gán nhân sự</span>
-                        </button>
-                      )}
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center font-black text-xs text-white shadow-sm uppercase shrink-0">
+                                    {getInitials(empName)}
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-slate-800 text-xs">{empName}</p>
+                                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                                      {empRole} • {empSalary > 0 ? `${empSalary.toLocaleString()} đ/giờ` : "Lương ca"}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={() => handleDeleteScheduleEntry(sched.id)}
+                                  className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
+                                  title="Bỏ gán"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
+
+                    {/* Action Button: Gán nhân sự */}
+                    <button
+                      onClick={() => {
+                        setSearchQuery("");
+                        setAssignModal({ open: true, slotId: slot.id });
+                      }}
+                      className="w-full mt-4 h-11 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-600 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-xs"
+                    >
+                      <UserPlus size={14} /> Gán nhân sự
+                    </button>
                   </div>
                 );
               })}
@@ -519,275 +526,258 @@ export default function EmployerScheduling() {
           )}
         </div>
       ) : (
-        /* ═══ EXTERNAL TAB ═══ */
-        <div className="flex flex-col gap-4">
+        /* ===== EXTERNAL SHIFTS TAB ===== */
+        <div className="dashboard-fade-in dashboard-fade-in-3 flex flex-col gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm">⚡</span>
-            <h3 className="text-sm font-black text-slate-700">Lịch nhân sự vãng lai</h3>
+            <Zap size={16} className="text-amber-500" />
+            <h3 className="text-base font-black text-slate-800">Lịch làm việc vãng lai (Sinh viên ca lẻ)</h3>
           </div>
 
-          {externalSchedules.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {externalSchedules.map((schedule) => {
-                const staff = employees.find((e) => e.id === schedule.employeeId);
-                const staffName = staff ? staff.name : "Sinh viên vãng lai";
-                const role = staff?.role || "Nhân viên vãng lai";
-                let rate = "28.000 đ/h";
-                if (schedule.jobShiftSalary) {
-                  rate = `${Number(schedule.jobShiftSalary).toLocaleString("vi-VN")} đ/h`;
-                } else if (staff?.salaryPerHour) {
-                  rate = `${Number(staff.salaryPerHour).toLocaleString("vi-VN")} đ/h`;
-                }
+          {externalSchedules.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-16 bg-white/80 backdrop-blur-sm rounded-3xl border border-slate-100 text-center shadow-md">
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-4">
+                <Zap size={32} className="text-amber-500" />
+              </div>
+              <p className="text-slate-800 font-bold text-base">Chưa có ca vãng lai nào được phân công</p>
+              <p className="text-slate-400 text-sm mt-2 max-w-sm">Các ca làm vãng lai từ ứng viên được duyệt sẽ tự động cập nhật tại đây.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {externalSchedules.map((sched) => {
+                const emp = employees.find((e) => e.id === sched.employeeId);
+                const empName = emp?.name || emp?.Name || sched.employeeName || "Sinh viên";
 
                 return (
                   <div
-                    key={schedule.id}
-                    className="flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-purple-200 transition"
+                    key={sched.id}
+                    className="bg-white/80 backdrop-blur-sm border border-slate-100 hover:border-amber-300 p-5 rounded-3xl shadow-md hover:shadow-lg transition-all card-hover-lift flex justify-between items-center"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-sm shrink-0">
-                      {(staffName || "?")[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 justify-between">
-                        <span className="text-xs font-bold text-slate-800 truncate">{staffName}</span>
-                        <span className="px-1.5 py-0.2 text-[8px] font-bold rounded-sm bg-purple-100 text-purple-700 shrink-0">
-                          Vãng lai
-                        </span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-xl shadow-md">
+                        🎓
                       </div>
-                      <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Công việc: {role}</p>
-                      <p className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 mt-0.5">
-                        <Clock size={10} /> Giờ làm: {formatTime(schedule.startTime)} - {formatTime(schedule.endTime)}
-                      </p>
-                      <p className="text-[10px] text-orange-600 font-bold mt-0.5">Lương ca: {rate}</p>
+                      <div>
+                        <h4 className="font-black text-slate-800 text-sm">{empName}</h4>
+                        <p className="text-xs text-slate-400 font-semibold mt-0.5 flex items-center gap-1">
+                          <Clock size={12} /> {formatTime(sched.startTime)} - {formatTime(sched.endTime)}
+                        </p>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => handleDeleteScheduleEntry(schedule.id)}
-                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+
+                    <span className="text-[10px] uppercase font-extrabold px-3 py-1 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
+                      ⚡ Vãng lai
+                    </span>
                   </div>
                 );
               })}
-            </div>
-          ) : (
-            <div className="text-center p-12 border border-slate-100 rounded-2xl bg-slate-50/30">
-              <span className="text-3xl block mb-2">✨</span>
-              <p className="text-xs font-bold text-slate-500 mb-1">Không có nhân sự vãng lai</p>
-              <p className="text-[10px] text-slate-400 max-w-xs mx-auto">
-                Lịch làm việc của nhân sự vãng lai được tự động đồng bộ khi bạn phê duyệt đơn ứng tuyển của sinh viên.
-              </p>
             </div>
           )}
         </div>
       )}
 
-      {/* ═══ INFO CARD ═══ */}
-      <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-100 rounded-2xl p-4">
-        <p className="text-xs font-bold text-slate-700 mb-1">💡 Hướng dẫn xếp ca nhanh</p>
-        <p className="text-[11px] text-slate-500 leading-relaxed">
-          {activeTab === "internal"
-            ? "Nhấn nút '+ Thêm nhân sự' hoặc nút gán nhân sự trên bất kỳ ca làm nào để chọn danh sách nhân sự nội bộ và phân công."
-            : "Lịch làm việc của sinh viên vãng lai được cố định theo đúng ca đăng ký trong tin tuyển dụng và tự động đồng bộ khi được duyệt."
-          }
-        </p>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════
-          MODAL: Staff Assign Selector
-         ═══════════════════════════════════════════════════ */}
+      {/* ==================== 5. MODAL: ASSIGN STAFF ==================== */}
       {assignModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h3 className="text-sm font-black text-slate-800">
-                Gán nhân sự vào {shiftSlots.find((s) => s.id === assignModal.slotId)?.name || "ca làm"}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden" style={{ animation: "fadeInUp 0.3s ease-out" }}>
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-md">
+                  <UserPlus size={18} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-800">Gán nhân sự vào ca</h3>
+                  <p className="text-xs text-slate-400">Chọn nhân viên cố định để phân công</p>
+                </div>
+              </div>
               <button
                 onClick={() => setAssignModal({ open: false, slotId: null })}
-                className="p-1.5 hover:bg-slate-100 rounded-xl transition"
+                className="text-xs font-bold text-slate-400 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition"
               >
-                <X size={16} className="text-slate-400" />
+                Đóng
               </button>
             </div>
 
-            {/* Search */}
-            <div className="px-5 pt-4 pb-2">
-              <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
-                <Search size={14} className="text-slate-400" />
+            {/* Search Input */}
+            <div className="p-5 border-b border-slate-100 bg-slate-50">
+              <div className="relative">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Tìm tên nhân viên..."
-                  className="flex-1 bg-transparent text-xs outline-none text-slate-700 placeholder:text-slate-400"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Tìm nhân viên theo tên..."
+                  className="w-full h-11 pl-11 pr-4 bg-white border border-slate-200 rounded-2xl text-xs font-semibold focus:outline-none focus:border-orange-400"
                 />
               </div>
             </div>
 
             {/* Staff List */}
-            <div className="flex-1 overflow-y-auto px-5 py-2">
+            <div className="p-5 max-h-72 overflow-y-auto space-y-2.5">
               {filteredStaffForModal.length === 0 ? (
-                <p className="text-center text-xs text-slate-400 py-8">Không tìm thấy nhân viên nội bộ nào.</p>
+                <div className="text-center p-8 text-slate-400 text-xs font-semibold">
+                  Không tìm thấy nhân viên phù hợp.
+                </div>
               ) : (
                 filteredStaffForModal.map((staff) => {
-                  const isSelected = schedules.some(
-                    (s) => s.note === assignModal.slotId && s.employeeId === staff.id
-                  );
+                  const empName = staff.name || staff.Name || "Nhân viên";
+                  const empRole = staff.role || staff.Role || "Phục vụ";
+                  const isAssigned = schedules.some((s) => s.note === assignModal.slotId && s.employeeId === staff.id);
+
                   return (
-                    <button
+                    <div
                       key={staff.id}
                       onClick={() => handleAssignStaff(staff.id)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl mb-2 border transition-all text-left
-                        ${isSelected
-                          ? "bg-orange-50 border-orange-300 shadow-sm"
-                          : "bg-white border-slate-100 hover:border-orange-200 hover:bg-orange-50/30"
-                        }`}
+                      className={`p-3.5 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                        isAssigned
+                          ? "bg-orange-50 border-orange-300 shadow-xs"
+                          : "bg-white border-slate-100 hover:border-orange-200"
+                      }`}
                     >
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-400 to-yellow-400 flex items-center justify-center text-white font-black text-sm shrink-0">
-                        {(staff.name || "?")[0]}
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center font-black text-xs text-white uppercase shadow-xs">
+                          {getInitials(empName)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 text-xs">{empName}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold">{empRole}</p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-xs font-bold text-slate-800 block truncate">{staff.name}</span>
-                        <span className="text-[10px] text-slate-400 font-semibold">Vị trí: {staff.role || "Nhân viên"}</span>
+
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center border text-xs ${
+                        isAssigned ? "bg-orange-500 border-orange-500 text-white" : "border-slate-300 text-transparent"
+                      }`}>
+                        ✓
                       </div>
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition
-                          ${isSelected ? "border-orange-500 bg-orange-500" : "border-slate-300"}`}
-                      >
-                        {isSelected && <Check size={12} className="text-white" />}
-                      </div>
-                    </button>
+                    </div>
                   );
                 })
               )}
             </div>
 
-            {/* Unassign All Action */}
-            <div className="p-4 border-t border-slate-100">
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
               <button
                 onClick={handleUnassignAllInSlot}
-                className="w-full py-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-600 hover:bg-red-100 transition flex items-center justify-center gap-1.5"
+                className="text-xs font-bold text-red-500 hover:underline"
               >
-                <AlertTriangle size={13} /> Bỏ trống ca làm này
+                Bỏ gán tất cả
+              </button>
+              <button
+                onClick={() => setAssignModal({ open: false, slotId: null })}
+                className="btn-premium text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md"
+              >
+                Xác nhận
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════
-          MODAL: Add/Edit Shift
-         ═══════════════════════════════════════════════════ */}
+      {/* ==================== 6. MODAL: ADD / EDIT SHIFT ==================== */}
       {shiftModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-7 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                📅 {shiftModal.editId ? "Chỉnh sửa Ca làm việc" : "Thêm Ca làm việc mới"}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden p-6" style={{ animation: "fadeInUp 0.3s ease-out" }}>
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
+              <h3 className="font-black text-base text-slate-800">
+                {shiftModal.editId ? "Sửa Ca Làm Việc" : "Tạo Ca Làm Việc Mới"}
               </h3>
               <button
                 onClick={() => setShiftModal({ open: false, editId: null })}
-                className="p-1.5 hover:bg-slate-100 rounded-xl transition"
+                className="text-xs font-bold text-slate-400 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition"
               >
-                <X size={16} className="text-slate-400" />
+                Đóng
               </button>
             </div>
 
-            <div className="flex flex-col gap-4">
-              {/* Name */}
-              <div>
-                <label className="text-[11px] font-bold text-slate-500 block mb-1.5 uppercase tracking-wider">Tên ca làm việc</label>
+            <div className="space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700">Tên ca làm</label>
                 <input
                   type="text"
-                  placeholder="Ví dụ: Ca Giữa Trưa, Ca Gãy..."
-                  className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50/30 rounded-xl text-xs outline-none focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition"
                   value={shiftForm.name}
                   onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
+                  placeholder="Ví dụ: Ca Sáng, Ca Gấp..."
+                  className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400"
                 />
-                {shiftErrors.name && <p className="text-[10px] text-red-500 mt-1 font-semibold">{shiftErrors.name}</p>}
+                {shiftErrors.name && <p className="text-[10px] text-red-500 font-bold">{shiftErrors.name}</p>}
               </div>
 
-              {/* Time inputs */}
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1.5 uppercase tracking-wider">Giờ bắt đầu</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700">Giờ vào</label>
                   <input
-                    type="time"
-                    className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50/30 rounded-xl text-xs outline-none focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition"
+                    type="text"
                     value={shiftForm.start}
                     onChange={(e) => setShiftForm({ ...shiftForm, start: e.target.value })}
+                    placeholder="08:00"
+                    className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-center focus:outline-none focus:border-orange-400"
                   />
-                  {shiftErrors.start && <p className="text-[10px] text-red-500 mt-1 font-semibold">{shiftErrors.start}</p>}
+                  {shiftErrors.start && <p className="text-[10px] text-red-500 font-bold">{shiftErrors.start}</p>}
                 </div>
-                <div className="flex-1">
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1.5 uppercase tracking-wider">Giờ kết thúc</label>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700">Giờ ra</label>
                   <input
-                    type="time"
-                    className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50/30 rounded-xl text-xs outline-none focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-400/10 transition"
+                    type="text"
                     value={shiftForm.end}
                     onChange={(e) => setShiftForm({ ...shiftForm, end: e.target.value })}
+                    placeholder="12:00"
+                    className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-center focus:outline-none focus:border-orange-400"
                   />
-                  {shiftErrors.end && <p className="text-[10px] text-red-500 mt-1 font-semibold">{shiftErrors.end}</p>}
+                  {shiftErrors.end && <p className="text-[10px] text-red-500 font-bold">{shiftErrors.end}</p>}
                 </div>
               </div>
 
-              {/* Icon selector */}
-              <div>
-                <label className="text-[11px] font-bold text-slate-500 block mb-2 uppercase tracking-wider">Biểu tượng ca làm</label>
-                <div className="flex gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700">Biểu tượng ca</label>
+                <div className="flex gap-2">
                   {SHIFT_ICONS.map((icon) => (
                     <button
                       key={icon}
                       type="button"
                       onClick={() => setShiftForm({ ...shiftForm, icon })}
-                      className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl border-2 transition-all duration-200
-                        ${shiftForm.icon === icon 
-                          ? "border-orange-500 bg-orange-50 shadow-md shadow-orange-500/10 scale-105" 
-                          : "border-slate-100 bg-slate-50/50 hover:border-slate-200 hover:bg-slate-50"}`}
+                      className={`w-11 h-11 rounded-2xl text-lg flex items-center justify-center border transition-all ${
+                        shiftForm.icon === icon
+                          ? "bg-orange-50 border-orange-400 shadow-md scale-110"
+                          : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                      }`}
                     >
                       {icon}
                     </button>
                   ))}
                 </div>
               </div>
-            </div>
 
-            {/* Submit */}
-            <button
-              onClick={handleShiftFormSubmit}
-              className="w-full mt-6 py-3 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-600/10 hover:shadow-lg hover:shadow-orange-600/20 active:scale-98"
-            >
-              {shiftModal.editId ? "Cập nhật Ca làm việc" : "Tạo Ca làm việc"}
-            </button>
+              <button
+                onClick={handleShiftFormSubmit}
+                className="w-full h-12 btn-premium text-white rounded-2xl font-extrabold text-xs shadow-lg transition-all mt-2"
+              >
+                {shiftModal.editId ? "Cập nhật Ca làm việc" : "Tạo Ca làm việc"}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════
-          MODAL: Delete Shift Confirmation
-         ═══════════════════════════════════════════════════ */}
+      {/* ==================== 7. MODAL: DELETE SHIFT CONFIRMATION ==================== */}
       {deleteConfirm.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xs p-6 text-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xs p-6 text-center" style={{ animation: "fadeInUp 0.3s ease-out" }}>
             <div className="w-14 h-14 mx-auto mb-4 bg-red-50 rounded-2xl flex items-center justify-center">
               <AlertTriangle size={28} className="text-red-500" />
             </div>
-            <h3 className="text-sm font-black text-slate-800 mb-1">Xóa ca làm?</h3>
-            <p className="text-[11px] text-slate-500 mb-5">
-              Bạn có chắc chắn muốn xóa ca <strong>"{deleteConfirm.slot?.name}"</strong>? Hành động này không thể hoàn tác.
+            <h3 className="text-base font-black text-slate-800 mb-1">Xóa ca làm?</h3>
+            <p className="text-xs text-slate-500 mb-5">
+              Bạn có chắc chắn muốn xóa ca <strong>"{deleteConfirm.slot?.name}"</strong>?
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteConfirm({ open: false, slot: null })}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                className="flex-1 py-3 rounded-2xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
               >
                 Hủy
               </button>
               <button
                 onClick={handleConfirmDeleteSlot}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 text-xs font-bold text-white hover:bg-red-600 transition"
+                className="flex-1 py-3 rounded-2xl bg-red-500 text-xs font-bold text-white hover:bg-red-600 transition shadow-md"
               >
                 Xóa
               </button>
