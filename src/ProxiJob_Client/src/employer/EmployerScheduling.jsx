@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { getEmployees, getSchedules, createSchedule, deleteSchedule } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../admin/ToastContext";
+import CustomTimePicker from "./CustomTimePicker";
 
 /* ─── helpers ─── */
 function getCurrentWeekDays() {
@@ -72,6 +74,7 @@ const getInitials = (name) => {
 /* ─── main component ─── */
 export default function EmployerScheduling() {
   const { user } = useAuth();
+  const toast = useToast();
 
   // Week & date state
   const [weekDays, setWeekDays] = useState([]);
@@ -168,8 +171,9 @@ export default function EmployerScheduling() {
       try {
         await deleteSchedule(existing.id);
         setSchedules((prev) => prev.filter((s) => s.id !== existing.id));
+        toast.success("Đã bỏ gán nhân sự thành công!");
       } catch (err) {
-        alert(err.message || "Không thể bỏ gán nhân viên.");
+        toast.error(err.message || "Không thể bỏ gán nhân viên.");
       }
       return;
     }
@@ -195,12 +199,13 @@ export default function EmployerScheduling() {
         note: assignModal.slotId,
       });
       await loadData();
+      toast.success("Gán nhân sự vào ca thành công! 🎉");
     } catch (err) {
       const errMsg = err.message || "";
       if (errMsg.includes("overlapping") || errMsg.includes("work schedule")) {
-        alert("⚠️ Nhân viên này đã có lịch làm việc trùng thời gian ở một ca khác trong ngày!");
+        toast.warning("⚠️ Nhân viên này đã có lịch làm việc trùng thời gian ở một ca khác trong ngày!");
       } else {
-        alert(errMsg || "Lỗi xếp lịch. Không thể phân công ca làm.");
+        toast.error(errMsg || "Lỗi xếp lịch. Không thể phân công ca làm.");
       }
     }
   };
@@ -210,8 +215,9 @@ export default function EmployerScheduling() {
     try {
       await deleteSchedule(schedId);
       setSchedules((prev) => prev.filter((s) => s.id !== schedId));
+      toast.success("Đã bỏ gán nhân viên thành công!");
     } catch (err) {
-      alert(err.message || "Không thể xóa lịch làm việc.");
+      toast.error(err.message || "Không thể xóa lịch làm việc.");
     }
   };
 
@@ -260,9 +266,11 @@ export default function EmployerScheduling() {
     if (shiftModal.editId) {
       const updated = shiftSlots.map((s) => s.id === shiftModal.editId ? { ...s, name: shiftForm.name.trim(), time: `${shiftForm.start} - ${shiftForm.end}`, icon: shiftForm.icon } : s);
       saveShiftSlots(updated);
+      toast.success("Cập nhật ca làm việc thành công! ✨");
     } else {
       const newSlot = { id: `custom_${Date.now()}`, name: shiftForm.name.trim(), time: `${shiftForm.start} - ${shiftForm.end}`, icon: shiftForm.icon };
       saveShiftSlots([...shiftSlots, newSlot]);
+      toast.success("Tạo ca làm việc mới thành công! ✨");
     }
     setShiftModal({ open: false, editId: null });
   };
@@ -271,6 +279,7 @@ export default function EmployerScheduling() {
     if (!deleteConfirm.slot) return;
     const updated = shiftSlots.filter((s) => s.id !== deleteConfirm.slot.id);
     saveShiftSlots(updated);
+    toast.success("Xóa ca làm việc thành công!");
     setDeleteConfirm({ open: false, slot: null });
   };
 
@@ -675,7 +684,7 @@ export default function EmployerScheduling() {
       {/* ==================== 6. MODAL: ADD / EDIT SHIFT ==================== */}
       {shiftModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden p-6" style={{ animation: "fadeInUp 0.3s ease-out" }}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6" style={{ animation: "fadeInUp 0.3s ease-out" }}>
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
               <h3 className="font-black text-base text-slate-800">
                 {shiftModal.editId ? "Sửa Ca Làm Việc" : "Tạo Ca Làm Việc Mới"}
@@ -704,23 +713,17 @@ export default function EmployerScheduling() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-slate-700">Giờ vào</label>
-                  <input
-                    type="text"
+                  <CustomTimePicker
                     value={shiftForm.start}
-                    onChange={(e) => setShiftForm({ ...shiftForm, start: e.target.value })}
-                    placeholder="08:00"
-                    className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-center focus:outline-none focus:border-orange-400"
+                    onChange={(val) => setShiftForm({ ...shiftForm, start: val })}
                   />
                   {shiftErrors.start && <p className="text-[10px] text-red-500 font-bold">{shiftErrors.start}</p>}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-slate-700">Giờ ra</label>
-                  <input
-                    type="text"
+                  <CustomTimePicker
                     value={shiftForm.end}
-                    onChange={(e) => setShiftForm({ ...shiftForm, end: e.target.value })}
-                    placeholder="12:00"
-                    className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-center focus:outline-none focus:border-orange-400"
+                    onChange={(val) => setShiftForm({ ...shiftForm, end: val })}
                   />
                   {shiftErrors.end && <p className="text-[10px] text-red-500 font-bold">{shiftErrors.end}</p>}
                 </div>

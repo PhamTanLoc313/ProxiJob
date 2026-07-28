@@ -1,55 +1,248 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Calendar, Clock, Check, X, FileText, Briefcase, RefreshCw, Star, UserCheck, AlertTriangle, Wallet, Zap } from "lucide-react";
+import { Plus, Trash2, Calendar, Clock, Check, X, FileText, Briefcase, RefreshCw, Star, UserCheck, AlertTriangle, Wallet, Zap, Search, ChevronDown, MapPin, DollarSign, Award, ArrowLeft } from "lucide-react";
 import { getJobPostsByBusiness, createJobPost, createJobShift, getJobPostShifts, deleteJobPostApi, getApplicationsByShift, approveApplication, rejectApplication, publishJobPost } from "../api/jobs";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../admin/ToastContext";
+import CustomTimePicker from "./CustomTimePicker";
+import CustomDatePicker from "./CustomDatePicker";
+import { getBusinessProfileApi } from "../api/businessApi";
 
 const checkIsEmergency = (title, desc) => {
   const t = (title || "").toLowerCase();
   const d = (desc || "").toLowerCase();
   return (
+    t.includes("khần cấp") ||
+    t.includes("khẩn cấp") ||
+    t.includes("khấn cấp") ||
     t.includes("tuyển gấp") ||
     t.includes("gấp") ||
+    d.includes("khần cấp") ||
+    d.includes("khẩn cấp") ||
+    d.includes("khấn cấp") ||
     d.includes("tuyển gấp") ||
     d.includes("gấp")
   );
 };
 
+const getCategoryInitials = (categoryName) => {
+  if (!categoryName) return 'PJ';
+  const removeAccents = (str) => {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D');
+  };
+  const clean = removeAccents(categoryName).trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  return 'PJ';
+};
+
+const formatTimeVN = (dateInput) => {
+  if (!dateInput) return '';
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return '';
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  } catch (e) {
+    return '';
+  }
+};
+
+const formatDateVN = (dateInput) => {
+  if (!dateInput) return '';
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return '';
+    const weekdays = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+    const weekday = weekdays[date.getDay()];
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    return `${weekday}, ${day} tháng ${month}, ${year}`;
+  } catch (e) {
+    return '';
+  }
+};
+
+const getShopBgColor = (shopName) => {
+  if (!shopName || shopName.includes("Cửa hàng tuyển dụng")) return '#EFF6FF';
+  const charCode = shopName.charCodeAt(0) || 0;
+  const colors = ['#FFE4E6', '#FEF3C7', '#ECFDF5', '#EFF6FF', '#F5F3FF', '#FFF7ED'];
+  return colors[charCode % colors.length];
+};
+
+const getShopTextColor = (shopName) => {
+  if (!shopName || shopName.includes("Cửa hàng tuyển dụng")) return '#2563EB';
+  const charCode = shopName.charCodeAt(0) || 0;
+  const colors = ['#E11D48', '#D97706', '#059669', '#2563EB', '#7C3AED', '#EA580C'];
+  return colors[charCode % colors.length];
+};
+
+const formatShiftTimeText = (shift) => {
+  if (!shift) return "";
+  const start = shift.startTime || "";
+  const end = shift.endTime || "";
+  if (start.includes("T") || start.includes("-")) {
+    const sTime = formatTimeVN(start);
+    const eTime = formatTimeVN(end);
+    return `${sTime} - ${eTime}`;
+  }
+  return `${start.slice(0, 5)} - ${end.slice(0, 5)}`;
+};
+
+const formatShiftDateText = (shift) => {
+  if (!shift) return "";
+  const dateVal = shift.date || shift.startTime || "";
+  if (dateVal.includes("T") || dateVal.includes("-")) {
+    return formatDateVN(dateVal);
+  }
+  return dateVal ? new Date(dateVal).toLocaleDateString("vi-VN") : "Hôm nay";
+};
+
+const FILTER_CATEGORIES = [
+  { id: "", name: "Tất cả", icon: "💼" },
+  { id: "Giao hàng", name: "Giao hàng", icon: "🛵" },
+  { id: "Thú cưng", name: "Dịch vụ thú cưng", icon: "🐾" },
+  { id: "Gia sư", name: "Gia sư", icon: "📚" },
+  { id: "Sửa chữa", name: "Sửa chữa", icon: "🔧" },
+  { id: "Phục vụ", name: "Phục vụ", icon: "🍽️" },
+  { id: "Khác", name: "Khác", icon: "🏷️" }
+];
+
 const getCategoryTheme = (categoryName) => {
-  const cat = (categoryName || "").toLowerCase();
-  if (cat.includes("phục vụ") || cat.includes("bồi bàn")) {
-    return { bg: "bg-orange-50", text: "text-orange-600", border: "border-orange-200", accent: "#ea580c" };
+  const name = (categoryName || "").toLowerCase();
+
+  if (name.includes("giao hàng") || name.includes("delivery") || name.includes("shipper")) {
+    return {
+      bg: "bg-red-100",
+      text: "text-red-700",
+      border: "border-red-300",
+      accent: "#EF4444",
+      accentBg: "#FFE4E6",
+      borderLight: "#F87171"
+    };
   }
-  if (cat.includes("pha chế") || cat.includes("bar")) {
-    return { bg: "bg-amber-50", text: "text-amber-600", border: "border-amber-200", accent: "#d97706" };
+  if (name.includes("gia sư") || name.includes("tutor") || name.includes("dạy") || name.includes("học")) {
+    return {
+      bg: "bg-blue-100",
+      text: "text-blue-700",
+      border: "border-blue-300",
+      accent: "#2563EB",
+      accentBg: "#DBEAFE",
+      borderLight: "#60A5FA"
+    };
   }
-  if (cat.includes("thu ngân") || cat.includes("tiền")) {
-    return { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-200", accent: "#059669" };
+  if (name.includes("sửa chữa") || name.includes("repair") || name.includes("bảo trì") || name.includes("kỹ thuật")) {
+    return {
+      bg: "bg-amber-100",
+      text: "text-amber-700",
+      border: "border-amber-300",
+      accent: "#F59E0B",
+      accentBg: "#FEF3C7",
+      borderLight: "#FBBF24"
+    };
   }
-  if (cat.includes("giao hàng") || cat.includes("shipper")) {
-    return { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-200", accent: "#2563eb" };
+  if (name.includes("phục vụ") || name.includes("waiter") || name.includes("chạy bàn") || name.includes("phụ vụ") || name.includes("cafe") || name.includes("cà phê")) {
+    return {
+      bg: "bg-purple-100",
+      text: "text-purple-700",
+      border: "border-purple-300",
+      accent: "#8B5CF6",
+      accentBg: "#F3E8FF",
+      borderLight: "#C084FC"
+    };
   }
-  if (cat.includes("bếp") || cat.includes("nấu")) {
-    return { bg: "bg-rose-50", text: "text-rose-600", border: "border-rose-200", accent: "#e11d48" };
+  if (name.includes("thú cưng") || name.includes("pet")) {
+    return {
+      bg: "bg-pink-100",
+      text: "text-pink-700",
+      border: "border-pink-300",
+      accent: "#EC4899",
+      accentBg: "#FCE7F3",
+      borderLight: "#F472B6"
+    };
   }
-  return { bg: "bg-purple-50", text: "text-purple-600", border: "border-purple-200", accent: "#7c3aea" };
+  return {
+    bg: "bg-teal-100",
+    text: "text-teal-700",
+    border: "border-teal-300",
+    accent: "#0D9488",
+    accentBg: "#CCFBF1",
+    borderLight: "#2DD4BF"
+  };
 };
 
 export default function JobManagement() {
   const { user } = useAuth();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState("posts"); // posts | approvals
   const [jobs, setJobs] = useState([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [minSalary, setMinSalary] = useState(0);
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  const [salaryDropdownOpen, setSalaryDropdownOpen] = useState(false);
+
+  const filteredJobs = jobs.filter((job) => {
+    // 1. Search term check
+    const matchSearch =
+      !searchTerm.trim() ||
+      job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.description?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // 2. Salary check
+    const salaryVal = job.salary || 0;
+    const matchSalary = salaryVal >= minSalary;
+
+    // 3. Category check
+    if (!selectedCategory) return matchSearch && matchSalary;
+
+    const name = (job.categoryName || "").toLowerCase();
+    let matchCat = false;
+    if (selectedCategory === "Phục vụ") {
+      matchCat = (name.includes("phục vụ") || name.includes("waiter") || name.includes("chạy bàn") || name.includes("phụ vụ") || name.includes("cafe") || name.includes("cà phê"));
+    } else if (selectedCategory === "Gia sư") {
+      matchCat = (name.includes("gia sư") || name.includes("tutor") || name.includes("dạy") || name.includes("học"));
+    } else if (selectedCategory === "Giao hàng") {
+      matchCat = (name.includes("giao hàng") || name.includes("delivery") || name.includes("shipper"));
+    } else if (selectedCategory === "Sửa chữa") {
+      matchCat = (name.includes("sửa chữa") || name.includes("repair") || name.includes("bảo trì") || name.includes("kỹ thuật"));
+    } else if (selectedCategory === "Thú cưng") {
+      matchCat = (name.includes("thú cưng") || name.includes("pet") || name.includes("dịch vụ thú cưng"));
+    } else if (selectedCategory === "Khác") {
+      const isKnown =
+        name.includes("phục vụ") || name.includes("waiter") || name.includes("chạy bàn") || name.includes("phụ vụ") || name.includes("cafe") || name.includes("cà phê") ||
+        name.includes("gia sư") || name.includes("tutor") || name.includes("dạy") || name.includes("học") ||
+        name.includes("giao hàng") || name.includes("delivery") || name.includes("shipper") ||
+        name.includes("sửa chữa") || name.includes("repair") || name.includes("bảo trì") || name.includes("kỹ thuật") ||
+        name.includes("thú cưng") || name.includes("pet") || name.includes("dịch vụ thú cưng");
+      matchCat = !isKnown;
+    }
+
+    return matchSearch && matchSalary && matchCat;
+  });
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [currentApprovalsPage, setCurrentApprovalsPage] = useState(1);
-  const jobsPerPage = 5;
+  const jobsPerPage = 6;
 
   // Wizard Post State
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState(1);
+  const [isOpenCategory, setIsOpenCategory] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
   const [salary, setSalary] = useState(25000);
   const [description, setDescription] = useState("");
@@ -64,6 +257,8 @@ export default function JobManagement() {
   const [longitude, setLongitude] = useState(106.801522);
   const [loadingGps, setLoadingGps] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
+  const [businessAddress, setBusinessAddress] = useState("");
+  const [businessCoords, setBusinessCoords] = useState({ lat: 10.857461, lng: 106.801522 });
 
   const handleOpenWizard = () => {
     setTitle("");
@@ -72,14 +267,14 @@ export default function JobManagement() {
     setSalary(25000);
     setDescription("");
     setRequirements("");
-    setAddress("");
+    setAddress(businessAddress);
     setSelectedSkills([]);
     setCustomSkill("");
     setShowCustomSkillInput(false);
     setIsEmergency(false);
     setShiftsInput([{ date: "", startTime: "08:00", endTime: "12:00", slotsRequired: 1 }]);
-    setLatitude(Number(user?.currentLatitude || 10.857461));
-    setLongitude(Number(user?.currentLongitude || 106.801522));
+    setLatitude(Number(businessCoords.lat || user?.currentLatitude || 10.857461));
+    setLongitude(Number(businessCoords.lng || user?.currentLongitude || 106.801522));
     setLoadingGps(false);
     setShowMapModal(false);
     setWizardStep(1);
@@ -92,6 +287,9 @@ export default function JobManagement() {
   const [selectedShiftForApprovals, setSelectedShiftForApprovals] = useState(null);
   const [applicants, setApplicants] = useState([]);
   const [loadingApplicants, setLoadingApplicants] = useState(false);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [loadingLeaves, setLoadingLeaves] = useState(false);
+  const pendingLeavesCount = leaveRequests.filter(r => r.status === 'pending').length;
 
   const fetchJobs = async () => {
     if (!user) return;
@@ -99,7 +297,7 @@ export default function JobManagement() {
     try {
       const data = await getJobPostsByBusiness(user.id);
       const list = data?.items || (Array.isArray(data) ? data : []);
-      
+
       const enrichedJobs = await Promise.all(
         list.map(async (job) => {
           try {
@@ -109,7 +307,7 @@ export default function JobManagement() {
               : (shiftsRes && Array.isArray(shiftsRes.data))
                 ? shiftsRes.data
                 : (shiftsRes?.items || shiftsRes?.Items || []);
-            
+
             const salary = shifts.length > 0 ? (shifts[0].salary !== undefined ? shifts[0].salary : (shifts[0].Salary || 0)) : 0;
             return { ...job, salary, shifts };
           } catch (e) {
@@ -118,7 +316,7 @@ export default function JobManagement() {
           }
         })
       );
-      
+
       setJobs(enrichedJobs);
       setCurrentPage(1);
       setCurrentApprovalsPage(1);
@@ -129,8 +327,149 @@ export default function JobManagement() {
     }
   };
 
+  const fetchLeaveRequests = async () => {
+    if (!user) return;
+    setLoadingLeaves(true);
+    try {
+      const data = await getJobPostsByBusiness(user.id);
+      const list = data?.items || (Array.isArray(data) ? data : []);
+      const dbLeaveRequests = [];
+
+      await Promise.all(
+        list.map(async (job) => {
+          try {
+            const shiftsRes = await getJobPostShifts(job.id);
+            const shifts = Array.isArray(shiftsRes)
+              ? shiftsRes
+              : (shiftsRes && Array.isArray(shiftsRes.data))
+                ? shiftsRes.data
+                : (shiftsRes?.items || []);
+
+            await Promise.all(
+              shifts.map(async (s) => {
+                try {
+                  const appsRes = await getApplicationsByShift(s.id, user.id);
+                  const appsList = Array.isArray(appsRes)
+                    ? appsRes
+                    : (appsRes && Array.isArray(appsRes.data))
+                      ? appsRes.data
+                      : (appsRes?.items || []);
+
+                  const cancelledApps = appsList.filter(
+                    (a) =>
+                      a.status === "Cancelled" ||
+                      a.status === "CancelledApproved" ||
+                      a.status === "CancelledRejected"
+                  );
+
+                  cancelledApps.forEach((a) => {
+                    const staffName = a.studentName || `Sinh viên #${a.studentId}`;
+                    const position = a.studentSchool || "Nhân viên";
+                    const reason = a.cancelNote || a.introduction || "Yêu cầu hủy ca làm việc / xin nghỉ phép";
+                    const isSwap =
+                      reason.toLowerCase().includes("đổi") ||
+                      reason.toLowerCase().includes("chuyển") ||
+                      reason.toLowerCase().includes("sang") ||
+                      reason.toLowerCase().includes("ca");
+                    const requestType = isSwap ? "swap" : "leave";
+
+                    const shiftTime = formatShiftTimeText(s);
+                    const shiftDate = formatShiftDateText(s);
+
+                    let localStatus = "pending";
+                    if (a.status === "CancelledApproved") {
+                      localStatus = "approved";
+                    } else if (a.status === "CancelledRejected") {
+                      localStatus = "rejected";
+                    }
+
+                    dbLeaveRequests.push({
+                      id: a.id,
+                      staffName,
+                      position,
+                      type: requestType,
+                      shiftDate,
+                      shiftTime,
+                      jobTitle: job.title,
+                      reason,
+                      status: localStatus
+                    });
+                  });
+                } catch (err) {
+                  console.log(`Error loading applications for shift ${s.id}:`, err);
+                }
+              })
+            );
+          } catch (err) {
+            console.log(`Error loading shifts for job ${job.id}:`, err);
+          }
+        })
+      );
+
+      const sortedLeaves = dbLeaveRequests.sort((a, b) => {
+        if (a.status === "pending" && b.status !== "pending") return -1;
+        if (a.status !== "pending" && b.status === "pending") return 1;
+        return 0;
+      });
+
+      setLeaveRequests(sortedLeaves);
+      setLoadingLeaves(false);
+    } catch (error) {
+      console.log("Failed to load leave requests:", error);
+      setLoadingLeaves(false);
+    }
+  };
+
+  const handleActionLeaveRequest = async (requestId, status) => {
+    try {
+      if (status === 'approved') {
+        await approveApplication(requestId, user.id, user.name);
+        toast.success("Đã chấp thuận yêu cầu xin nghỉ!");
+      } else {
+        await rejectApplication(requestId, user.id, user.name);
+        toast.success("Đã từ chối yêu cầu xin nghỉ!");
+      }
+      fetchLeaveRequests();
+      fetchJobs();
+    } catch (err) {
+      toast.error(err.message || "Xử lý yêu cầu thất bại.");
+    }
+  };
+
   useEffect(() => {
     fetchJobs();
+    fetchLeaveRequests();
+
+    // Pre-fetch business profile address and coordinates for defaults
+    getBusinessProfileApi()
+      .then((data) => {
+        if (data && data.address) {
+          setBusinessAddress(data.address);
+          
+          // Geocode address to get default lat/lng
+          const queryStr = `${data.address} ${data.city || "TP. Hồ Chí Minh"}`;
+          fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}&limit=1`,
+            { headers: { "User-Agent": "ProxiJob-Web" } }
+          )
+            .then((res) => {
+              if (res.ok) return res.json();
+              return [];
+            })
+            .then((geoData) => {
+              if (geoData && geoData.length > 0) {
+                setBusinessCoords({
+                  lat: parseFloat(geoData[0].lat),
+                  lng: parseFloat(geoData[0].lon)
+                });
+              }
+            })
+            .catch((err) => console.log("Geocoding business address failed:", err));
+        }
+      })
+      .catch((err) => {
+        console.log("Failed to load business profile address:", err);
+      });
   }, [user]);
 
   const parseDateTimeToUTC = (dateStr, timeStr) => {
@@ -144,7 +483,7 @@ export default function JobManagement() {
 
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
-      alert("Trình duyệt của bạn không hỗ trợ định vị GPS.");
+      toast.error("Trình duyệt của bạn không hỗ trợ định vị GPS.");
       return;
     }
     setLoadingGps(true);
@@ -154,7 +493,7 @@ export default function JobManagement() {
         const lng = position.coords.longitude;
         setLatitude(lat);
         setLongitude(lng);
-        
+
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
             headers: { "User-Agent": "ProxiJobClient/1.0" }
@@ -172,13 +511,13 @@ export default function JobManagement() {
         } catch (e) {
           setAddress(`Tọa độ: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
         }
-        
+
         setLoadingGps(false);
-        alert(`Đã định vị GPS thành công: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        toast.success(`Đã định vị GPS thành công: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
       },
       (error) => {
         setLoadingGps(false);
-        alert("Lấy vị trí thất bại: " + error.message);
+        toast.error("Lấy vị trí thất bại: " + error.message);
       }
     );
   };
@@ -191,7 +530,7 @@ export default function JobManagement() {
       setLatitude(selectedLat);
       setLongitude(selectedLng);
       setShowMapModal(false);
-      
+
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${selectedLat}&lon=${selectedLng}&format=json`, {
           headers: { "User-Agent": "ProxiJobClient/1.0" }
@@ -209,8 +548,8 @@ export default function JobManagement() {
       } catch (e) {
         setAddress(`Tọa độ: ${selectedLat.toFixed(6)}, ${selectedLng.toFixed(6)}`);
       }
-      
-      alert(`Đã xác nhận tọa độ bản đồ: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`);
+
+      toast.success(`Đã xác nhận tọa độ bản đồ: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`);
     }
   };
 
@@ -289,11 +628,11 @@ export default function JobManagement() {
 
     for (const shift of shiftsInput) {
       if (!shift.date || !shift.startTime || !shift.endTime) {
-        alert("Vui lòng điền đầy đủ ngày làm việc và giờ của các ca làm.");
+        toast.warning("Vui lòng điền đầy đủ ngày làm việc và giờ của các ca làm.");
         return;
       }
     }
-    
+
     try {
       // Map custom category safely to other category code if selected
       let finalCategoryId = categoryId;
@@ -318,7 +657,7 @@ export default function JobManagement() {
       }
 
       // Add emergency prefix/suffix and multiply salary if isEmergency is active
-      const finalSalary = isEmergency 
+      const finalSalary = isEmergency
         ? Math.round(Number(salary) * 1.3)
         : Number(salary);
 
@@ -371,7 +710,7 @@ export default function JobManagement() {
       // Automatically publish the post
       await publishJobPost(jobPostId, Number(user.id), user.fullName || user.email || "Business Owner");
 
-      alert("Đăng tin tuyển dụng thành công và đã xuất bản lên radar!");
+      toast.success("Đăng tin tuyển dụng thành công và đã xuất bản lên radar! 🚀");
       setShowWizard(false);
       // Reset inputs
       setTitle("");
@@ -380,7 +719,7 @@ export default function JobManagement() {
       setShiftsInput([{ date: "", startTime: "08:00", endTime: "12:00", slotsRequired: 1 }]);
       fetchJobs();
     } catch (err) {
-      alert("Đăng ca làm thất bại: " + (err.message || err));
+      toast.error("Đăng ca làm thất bại: " + (err.message || err));
     }
   };
 
@@ -390,8 +729,9 @@ export default function JobManagement() {
       await deleteJobPostApi(jobId, user.id);
       fetchJobs();
       setSelectedJob(null);
+      toast.success("Xóa tin tuyển dụng thành công!");
     } catch (err) {
-      alert(err.message || "Xóa tin tuyển dụng thất bại.");
+      toast.error(err.message || "Xóa tin tuyển dụng thất bại.");
     }
   };
 
@@ -424,29 +764,62 @@ export default function JobManagement() {
   const handleApprove = async (appId) => {
     try {
       await approveApplication(appId, user.id);
-      alert("Đã duyệt ứng viên thành công!");
+      toast.success("Đã duyệt ứng viên thành công! 🎉");
       if (selectedShiftForApprovals) {
         handleSelectShiftForApprovals(selectedShiftForApprovals);
       }
     } catch (err) {
-      alert(err.message || "Lỗi duyệt đơn.");
+      toast.error(err.message || "Lỗi duyệt đơn.");
     }
   };
 
   const handleReject = async (appId) => {
     try {
       await rejectApplication(appId, user.id);
-      alert("Đã từ chối đơn ứng cử.");
+      toast.success("Đã từ chối đơn ứng cử.");
       if (selectedShiftForApprovals) {
         handleSelectShiftForApprovals(selectedShiftForApprovals);
       }
     } catch (err) {
-      alert(err.message || "Lỗi từ chối đơn.");
+      toast.error(err.message || "Lỗi từ chối đơn.");
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto p-4 flex flex-col gap-6">
+      <style>{`
+        @keyframes urgentPulse {
+          0%, 100% {
+            background-color: #ffffff;
+            border-color: #f1f5f9;
+          }
+          50% {
+            background-color: var(--urgent-bg);
+            border-color: var(--urgent-border);
+            box-shadow: 0 0 12px var(--urgent-glow);
+          }
+        }
+        .urgent-flashing-card {
+          animation: urgentPulse 1.8s infinite ease-in-out;
+        }
+        @keyframes badgePulse {
+          0%, 100% { transform: scale(1); opacity: 0.9; }
+          50% { transform: scale(1.05); opacity: 1; }
+        }
+        .urgent-badge-pulse {
+          animation: badgePulse 1.2s infinite ease-in-out;
+        }
+        .custom-date-input::-webkit-calendar-picker-indicator {
+          opacity: 0;
+          width: 100%;
+          height: 100%;
+          position: absolute;
+          top: 0;
+          left: 0;
+          cursor: pointer;
+          z-index: 20;
+        }
+      `}</style>
 
       {/* ==================== 1. PREMIUM HEADER BANNER ==================== */}
       <div
@@ -470,400 +843,652 @@ export default function JobManagement() {
           <div className="flex gap-1.5 bg-white/80 backdrop-blur-sm p-1.5 rounded-2xl border border-orange-200/60 shadow-xs">
             <button
               onClick={() => setActiveTab("posts")}
-              className={`text-xs font-extrabold px-5 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 ${
-                activeTab === "posts"
-                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-slate-600 hover:text-orange-600 hover:bg-orange-50"
-              }`}
+              className={`text-xs font-extrabold px-5 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 ${activeTab === "posts"
+                ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20"
+                : "text-slate-600 hover:text-orange-600 hover:bg-orange-50"
+                }`}
             >
               <Briefcase size={15} /> Tin Đăng Tuyển
             </button>
             <button
-              onClick={() => setActiveTab("approvals")}
-              className={`text-xs font-extrabold px-5 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 ${
-                activeTab === "approvals"
+              onClick={() => setActiveTab("leaves")}
+              className={"text-xs font-extrabold px-5 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 " + (
+                activeTab === "leaves"
                   ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20"
                   : "text-slate-600 hover:text-orange-600 hover:bg-orange-50"
-              }`}
+              )}
             >
-              <UserCheck size={15} /> Duyệt Đơn ({applicants.length})
+              <Calendar size={15} /> Xin Nghỉ / Đổi Ca ({pendingLeavesCount})
             </button>
           </div>
         </div>
       </div>
 
-      {/* ==================== 2. TAB VIEWS ==================== */}
       {activeTab === "posts" ? (
-        <div className="dashboard-fade-in dashboard-fade-in-2 grid gap-6 lg:grid-cols-12">
+        <div className="dashboard-fade-in dashboard-fade-in-2 flex flex-col gap-6 w-full">
+          {selectedJob ? (
+            <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full" style={{ animation: "fadeInUp 0.3s ease-out" }}>
+              {/* Back Button */}
+              <div className="flex items-center">
+                <button
+                  onClick={() => {
+                    setSelectedJob(null);
+                    setJobShifts([]);
+                  }}
+                  className="flex items-center gap-2 text-xs font-bold text-slate-650 bg-white border border-slate-200 px-4 py-2.5 rounded-2xl hover:bg-slate-50 transition cursor-pointer shadow-xs"
+                >
+                  <ArrowLeft size={15} /> Quay lại danh sách
+                </button>
+              </div>
 
-          {/* ===== LEFT: Job List ===== */}
-          <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <div>
-                <h2 className="font-black text-slate-800 text-lg flex items-center gap-2">
-                  <FileText size={18} className="text-orange-500" />
-                  Tin tuyển dụng đang chạy
-                </h2>
-                <p className="text-slate-400 text-xs mt-0.5">{jobs.length} tin đăng tuyển</p>
-              </div>
-              <button
-                onClick={handleOpenWizard}
-                className="btn-premium text-white px-5 py-3 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg"
-              >
-                <Plus size={16} /> Đăng ca làm mới
-              </button>
-            </div>
-
-            {loadingJobs ? (
-              <div className="flex flex-col items-center justify-center p-16 bg-white/80 backdrop-blur-sm rounded-3xl border border-slate-100 shadow-md">
-                <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-600 border-t-transparent mb-4" />
-                <p className="text-slate-500 text-sm font-semibold">Đang tải danh sách ca tuyển dụng...</p>
-              </div>
-            ) : jobs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-16 bg-white/80 backdrop-blur-sm rounded-3xl border border-slate-100 text-center shadow-md">
-                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
-                  <Briefcase className="text-slate-300" size={28} />
-                </div>
-                <p className="text-slate-800 font-bold text-base">Chưa đăng ca làm việc nào</p>
-                <p className="text-slate-400 text-sm mt-2 max-w-sm">Bấm nút "Đăng ca làm mới" phía trên để tạo tin tuyển dụng phục vụ, pha chế đầu tiên.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {jobs.slice((currentPage - 1) * jobsPerPage, currentPage * jobsPerPage).map((job) => {
-                  const isSelected = selectedJob?.id === job.id;
-                  const theme = getCategoryTheme(job.categoryName);
-                  const isUrgent = checkIsEmergency(job.title, job.description);
-                  return (
-                    <article
-                      key={job.id}
-                      onClick={() => handleSelectJob(job)}
-                      className={`group relative p-5 bg-white/80 backdrop-blur-sm border-2 rounded-2xl cursor-pointer card-hover-lift transition-all duration-300 ${
-                        isSelected
-                          ? "border-orange-400 shadow-lg shadow-orange-500/10 bg-gradient-to-r from-orange-50/50 to-amber-50/30"
-                          : "border-slate-100 hover:border-orange-200"
-                      }`}
-                    >
-                      {/* Color accent bar */}
+              {/* Main Layout Grid */}
+              <div className="grid gap-6 md:grid-cols-12">
+                {/* Left Side: Job Header and details */}
+                <div className="md:col-span-8 flex flex-col gap-6">
+                  {/* 1. Job Overview Card (Student Style) */}
+                  <div className="bg-white border border-slate-100 shadow-lg shadow-slate-900/5 rounded-3xl p-6">
+                    <div className="flex items-start gap-4">
+                      {/* Category Avatar */}
                       <div
-                        className="absolute left-0 top-3 bottom-3 w-1 rounded-full"
-                        style={{ background: theme.accent }}
-                      />
+                        style={{
+                          backgroundColor: getShopBgColor(selectedJob.companyName || selectedJob.company || "Doanh nghiệp"),
+                          color: getShopTextColor(selectedJob.companyName || selectedJob.company || "Doanh nghiệp")
+                        }}
+                        className="font-extrabold flex items-center justify-center rounded-2xl w-14 h-14 shrink-0 border border-slate-200/50 text-lg shadow-sm"
+                      >
+                        {getCategoryInitials(selectedJob.categoryName)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={"text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border " + getCategoryTheme(selectedJob.categoryName).bg + " " + getCategoryTheme(selectedJob.categoryName).text + " " + getCategoryTheme(selectedJob.categoryName).border}>
+                            {selectedJob.categoryName || "Part-time"}
+                          </span>
+                          {checkIsEmergency(selectedJob.title, selectedJob.description) && (
+                            <span className="text-[10px] font-black tracking-wide uppercase text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full urgent-badge-pulse flex items-center gap-0.5 animate-pulse">
+                              🔥 TUYỂN GẤP
+                            </span>
+                          )}
+                        </div>
+                        <h1 className="text-2xl font-black mt-2 text-slate-800 tracking-tight leading-tight">
+                          {selectedJob.title}
+                        </h1>
+                        <p className="text-xs text-slate-400 font-semibold mt-0.5">{selectedJob.companyName || selectedJob.company || "Doanh nghiệp của bạn"}</p>
+                      </div>
+                    </div>
 
-                      <div className="flex justify-between items-start gap-4 pl-3">
-                        <div className="flex-1 min-w-0">
-                          {/* Badges */}
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${theme.bg} ${theme.text} border ${theme.border}`}>
-                              {job.categoryName || "Đăng tin"}
+                    <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                      <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl">
+                        <MapPin className="text-slate-500 shrink-0" size={20} />
+                        <div>
+                          <p className="text-xs text-slate-400 font-semibold uppercase">Địa chỉ</p>
+                          <p className="text-xs text-slate-700 font-bold mt-0.5 line-clamp-1">{selectedJob.address || "Tại cửa hàng"}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl">
+                        <DollarSign className="text-emerald-500 shrink-0" size={20} />
+                        <div>
+                          <p className="text-xs text-slate-400 font-semibold uppercase">Lương cơ bản</p>
+                          <p className="text-xs text-emerald-600 font-black mt-0.5">
+                            {selectedJob.salary && selectedJob.salary > 0
+                              ? selectedJob.salary.toLocaleString("vi-VN") + " đ / giờ"
+                              : "Lương thỏa thuận"
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Job Detail Description Card */}
+                  <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-6">
+                    <h2 className="font-extrabold text-slate-800 text-lg mb-3">Mô tả công việc</h2>
+                    <div className="text-sm text-slate-605 leading-relaxed whitespace-pre-line">
+                      {selectedJob.description || "Chưa có mô tả chi tiết từ nhà tuyển dụng."}
+                    </div>
+
+                    <h2 className="font-extrabold text-slate-800 text-lg mt-6 mb-3">Yêu cầu công việc</h2>
+                    <div className="text-sm text-slate-605 leading-relaxed whitespace-pre-line">
+                      {selectedJob.requirements || "Làm việc nghiêm túc, đúng giờ, có trách nhiệm."}
+                    </div>
+
+                    {selectedJob.skills && selectedJob.skills.length > 0 && (
+                      <>
+                        <h2 className="font-extrabold text-slate-800 text-lg mt-6 mb-3">Kỹ năng yêu cầu</h2>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedJob.skills.map((skill, index) => (
+                            <span
+                              key={index}
+                              className="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl"
+                            >
+                              🛠️ {skill.name || skill}
                             </span>
-                            <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
-                              job.status === "Published"
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : job.status === "Draft"
-                                  ? "bg-slate-50 text-slate-500 border-slate-200"
-                                  : "bg-red-50 text-red-700 border-red-200"
-                            }`}>
-                              {job.status === "Published" ? "Công khai" : job.status === "Draft" ? "Bản nháp" : "Đã đóng"}
-                            </span>
-                            {isUrgent && (
-                              <span className="text-[10px] font-black uppercase text-white bg-gradient-to-r from-red-500 to-rose-500 px-2.5 py-1 rounded-full shadow-sm">
-                                🔥 Gấp
-                              </span>
-                            )}
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Side: Shifts & Actions */}
+                <div className="md:col-span-4 flex flex-col gap-6">
+                  {/* 3. Shifts & Applications Card */}
+                  <div className="bg-white border border-slate-100 shadow-xl rounded-3xl p-6">
+                    {!selectedShiftForApprovals ? (
+                      <>
+                        <h4 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
+                          <Calendar size={16} className="text-purple-500" />
+                          Các ca làm việc ({jobShifts.length})
+                        </h4>
+
+                        {jobShifts.length === 0 ? (
+                          <p className="text-slate-400 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">Chưa có ca làm nào được thiết lập.</p>
+                        ) : (
+                          <div className="flex flex-col gap-3">
+                            {jobShifts.map((shift) => {
+                              const filled = shift.slotsFilled || 0;
+                              const req = shift.slotsRequired || 1;
+                              const isFull = filled >= req;
+                              return (
+                                <div
+                                  key={shift.id}
+                                  className="border border-slate-100 bg-slate-50/50 p-4 rounded-2xl flex flex-col gap-3 transition-all hover:border-purple-200"
+                                >
+                                  <div className="space-y-1 p-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-black text-slate-850 flex items-center gap-1">
+                                        <Clock size={13} className="text-purple-500" /> {formatShiftTimeText(shift)}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
+                                      <Calendar size={13} className="text-slate-400" /> {formatShiftDateText(shift)}
+                                    </p>
+                                    <div className="mt-1">
+                                      <span className={"text-[9px] uppercase font-black px-2 py-0.5 rounded-full border " + (isFull ? 'bg-red-50 text-red-650 border-red-200' : 'bg-green-50 text-green-650 border-green-200')}>
+                                        {isFull ? "Đầy ca" : "Còn " + (req - filled) + "/" + req + " Slot"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    onClick={() => handleSelectShiftForApprovals(shift)}
+                                    className="w-full h-9 bg-purple-600 hover:bg-purple-750 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-1 shadow-md shadow-purple-600/10 cursor-pointer"
+                                  >
+                                    <UserCheck size={13} /> Duyệt ứng viên
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
-
-                          <h4 className="font-black text-slate-800 text-base line-clamp-1 group-hover:text-orange-600 transition-colors">
-                            {job.title}
-                          </h4>
-                          <p className="text-sm text-slate-400 font-medium line-clamp-1 mt-1">{job.address || "Tại cửa hàng"}</p>
-
-                          <div className="flex flex-wrap items-center gap-4 mt-3">
-                            <span className="flex items-center gap-1.5 text-sm text-slate-500 font-semibold">
-                              <Calendar size={14} className="text-orange-400" />
-                              Ca làm: <strong className="text-slate-700">{job.shiftCount || 0} ca</strong>
-                            </span>
-                            <span className="flex items-center gap-1.5 text-sm font-bold text-emerald-600">
-                              <Wallet size={14} />
-                              {job.salary && job.salary > 0 ? `${job.salary.toLocaleString()}đ/h` : "Lương ca"}
-                            </span>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex flex-col gap-4">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                          <div>
+                            <span className="text-[9px] uppercase font-bold text-purple-600 tracking-wider">Đơn ứng cử</span>
+                            <h4 className="font-black text-slate-800 text-xs mt-0.5">
+                              {formatShiftTimeText(selectedShiftForApprovals)} | {formatShiftDateText(selectedShiftForApprovals)}
+                            </h4>
                           </div>
+                          <button
+                            onClick={() => setSelectedShiftForApprovals(null)}
+                            className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                          >
+                            ← Quay lại
+                          </button>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteJob(job.id);
-                          }}
-                          className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 shrink-0 self-start opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
+                        {loadingApplicants ? (
+                          <div className="flex flex-col items-center py-6">
+                            <div className="animate-spin rounded-full h-6 w-6 border-2 border-orange-600 border-t-transparent mb-2" />
+                            <p className="text-[10px] text-slate-400 font-semibold">Đang tải...</p>
+                          </div>
+                        ) : applicants.length === 0 ? (
+                          <p className="text-center text-xs text-slate-400 font-bold py-6">Chưa có ai ứng tuyển.</p>
+                        ) : (
+                          <div className="flex flex-col gap-3">
+                            {applicants.map((app) => {
+                              const status = (app.status || "").toLowerCase();
+                              const isPending = status === "pending";
+                              return (
+                                <div
+                                  key={app.id}
+                                  className="border border-slate-100 p-3 rounded-xl flex flex-col gap-2.5 transition-all"
+                                >
+                                  <div className="flex justify-between items-start gap-2">
+                                    <div>
+                                      <h5 className="font-black text-slate-800 text-xs">{app.studentName || "Sinh viên"}</h5>
+                                      <p className="text-[9px] text-slate-400">{app.studentSchool || "Đại học FPT"}</p>
+                                    </div>
+                                    <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-500 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full shrink-0">
+                                      ★ {app.studentReputationScore || "4.8"}
+                                    </span>
+                                  </div>
 
-                {/* Pagination */}
-                {jobs.length > jobsPerPage && (
-                  <div className="flex items-center justify-center gap-3 mt-4 bg-white/60 backdrop-blur-sm p-3 rounded-2xl border border-slate-100">
+                                  {app.introduction && (
+                                    <p className="bg-slate-50 p-2 rounded-lg border text-[10px] text-slate-500 italic">
+                                      "{app.introduction}"
+                                    </p>
+                                  )}
+
+                                  <div className="flex justify-between items-center border-t border-slate-50 pt-2">
+                                    <span className={"text-[8px] uppercase font-black px-2 py-0.5 rounded-full border " + (
+                                      status === "approved" ? "bg-green-50 text-green-600 border-green-200" :
+                                        status === "rejected" ? "bg-red-50 text-red-505 border-red-200" :
+                                          "bg-amber-50 text-amber-600 border-amber-200"
+                                    )}>
+                                      {app.status || "Chờ"}
+                                    </span>
+
+                                    {isPending && (
+                                      <div className="flex gap-1.5">
+                                        <button
+                                          onClick={() => handleReject(app.id)}
+                                          className="h-7 px-2 bg-red-50 border border-red-200 text-red-650 rounded-lg text-[10px] font-bold cursor-pointer"
+                                        >
+                                          Từ chối
+                                        </button>
+                                        <button
+                                          onClick={() => handleApprove(app.id)}
+                                          className="h-7 px-2.5 bg-green-600 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+                                        >
+                                          Nhận
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Store Profile Card (Student style) */}
+                  <div className="bg-white border border-slate-100 shadow-md rounded-3xl p-6 text-center">
+                    <div className="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center mx-auto text-xl border border-orange-100">
+                      🏪
+                    </div>
+                    <h3 className="font-extrabold text-slate-800 text-sm mt-3 line-clamp-1">{selectedJob.companyName || selectedJob.company || "Doanh nghiệp của bạn"}</h3>
+                    <p className="text-xs text-slate-400 font-semibold">{selectedJob.address || "Tại cửa hàng"}</p>
+
+                    <div className="mt-4 border-t border-slate-50 pt-3.5 grid grid-cols-2 gap-4">
+                      <div className="text-center">
+                        <p className="text-[10px] text-slate-400 font-medium">Đánh giá quán</p>
+                        <div className="flex items-center justify-center gap-1 mt-0.5 text-xs font-bold text-amber-500">
+                          ★ 4.8
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] text-slate-400 font-medium">Thanh toán</p>
+                        <p className="text-xs font-bold text-emerald-600 mt-0.5">98%</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ===== PAGE WIDE: Job Posts Search & Grid View ===== */
+            <>
+              {/* Unified Search, Action & Filter Card */}
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-900/4 p-5 flex flex-col gap-4 w-full">
+                <div className="grid gap-3 md:grid-cols-12 items-center">
+                  {/* Search box */}
+                  <div className="relative md:col-span-5">
+                    <Search className="absolute left-4 top-3.5 text-slate-400" size={18} />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      placeholder="Tìm kiếm theo tiêu đề công việc hoặc tên quán..."
+                      className="w-full h-11 pl-11 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 text-sm focus:outline-none focus:border-purple-500 focus:bg-white transition"
+                    />
+                  </div>
+
+                  {/* Category Dropdown */}
+                  <div className="relative md:col-span-3">
                     <button
                       type="button"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage((prev) => prev - 1)}
-                      className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                      onClick={() => {
+                        setCatDropdownOpen(!catDropdownOpen);
+                        setSalaryDropdownOpen(false);
+                      }}
+                      className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-sm font-semibold flex items-center justify-between hover:bg-white hover:border-purple-400 transition cursor-pointer"
                     >
-                      ← Trước
+                      <span>{FILTER_CATEGORIES.find(c => c.id === selectedCategory)?.name || "Tất cả ngành nghề"}</span>
+                      <ChevronDown size={14} className={"text-slate-400 transition-transform duration-200 " + (catDropdownOpen ? "rotate-180" : "")} />
                     </button>
-                    <span className="text-sm font-extrabold text-slate-500">
-                      {currentPage} / {Math.ceil(jobs.length / jobsPerPage)}
-                    </span>
+
+                    {catDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setCatDropdownOpen(false)} />
+                        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200/80 rounded-2xl shadow-xl p-1.5 space-y-0.5 max-h-60 overflow-y-auto">
+                          {FILTER_CATEGORIES.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedCategory(c.id);
+                                setCatDropdownOpen(false);
+                                setCurrentPage(1);
+                              }}
+                              className={"w-full text-left px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer " + (selectedCategory === c.id ? "bg-purple-600 text-white" : "text-slate-700 hover:bg-purple-50 hover:text-purple-650")}
+                            >
+                              {c.name === "Tất cả" ? "Tất cả ngành nghề" : c.name}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Salary Dropdown */}
+                  <div className="relative md:col-span-2">
                     <button
                       type="button"
-                      disabled={currentPage === Math.ceil(jobs.length / jobsPerPage)}
-                      onClick={() => setCurrentPage((prev) => prev + 1)}
-                      className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                      onClick={() => {
+                        setSalaryDropdownOpen(!salaryDropdownOpen);
+                        setCatDropdownOpen(false);
+                      }}
+                      className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-sm font-semibold flex items-center justify-between hover:bg-white hover:border-purple-400 transition cursor-pointer"
                     >
-                      Sau →
+                      <span>{minSalary === 0 ? "Tất cả mức lương" : "Từ " + minSalary.toLocaleString("vi-VN") + "đ/h"}</span>
+                      <ChevronDown size={14} className={"text-slate-400 transition-transform duration-200 " + (salaryDropdownOpen ? "rotate-180" : "")} />
+                    </button>
+
+                    {salaryDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setSalaryDropdownOpen(false)} />
+                        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200/80 rounded-2xl shadow-xl p-1.5 space-y-0.5">
+                          {[
+                            { val: 0, lbl: "Tất cả mức lương" },
+                            { val: 20000, lbl: "Từ 20.000đ/h" },
+                            { val: 25000, lbl: "Từ 25.000đ/h" },
+                            { val: 30000, lbl: "Từ 30.000đ/h" },
+                            { val: 35000, lbl: "Từ 35.000đ/h" }
+                          ].map((opt) => (
+                            <button
+                              key={opt.val}
+                              type="button"
+                              onClick={() => {
+                                setMinSalary(opt.val);
+                                setSalaryDropdownOpen(false);
+                                setCurrentPage(1);
+                              }}
+                              className={"w-full text-left px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer " + (minSalary === opt.val ? "bg-purple-600 text-white" : "text-slate-700 hover:bg-purple-50 hover:text-purple-650")}
+                            >
+                              {opt.lbl}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Create shift button */}
+                  <div className="md:col-span-2">
+                    <button
+                      onClick={handleOpenWizard}
+                      className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-purple-600/10 transition cursor-pointer"
+                    >
+                      <Plus size={15} /> Đăng ca làm mới
                     </button>
                   </div>
-                )}
+                </div>
+
+                {/* Horizontal Category pills */}
+                <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4 mt-1">
+                  {FILTER_CATEGORIES.map((cat) => {
+                    const isSelected = selectedCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory(cat.id);
+                          setCurrentPage(1);
+                        }}
+                        className={"px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200 whitespace-nowrap border cursor-pointer flex items-center gap-1.5 " + (isSelected ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/15" : "bg-white text-slate-650 border-slate-200 hover:bg-slate-50")}
+                      >
+                        <span>{cat.icon}</span>
+                        <span>{cat.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* ===== RIGHT: Job Detail Panel ===== */}
-          <div className="lg:col-span-5 xl:col-span-4 bg-white/80 backdrop-blur-sm border border-slate-100 shadow-lg rounded-3xl p-6 flex flex-col gap-5 lg:sticky lg:top-4 lg:self-start">
-            {!selectedJob ? (
-              <div className="flex-1 flex flex-col justify-center items-center text-center p-12 min-h-[350px]">
-                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-4">
-                  <FileText size={32} className="text-slate-300" />
-                </div>
-                <h3 className="font-black text-slate-700 text-base">Chưa chọn tin tuyển dụng</h3>
-                <p className="text-sm text-slate-400 max-w-xs mt-2">Bấm chọn một tin tuyển dụng bên trái để xem các ca làm việc và danh sách chi tiết.</p>
-              </div>
-            ) : (
-              <>
-                <div className="border-b border-slate-100 pb-4">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Chi tiết tin tuyển dụng</span>
-                  <h3 className="font-black text-slate-800 text-lg mt-1">{selectedJob.title}</h3>
-                  <p className="text-sm text-slate-400 mt-1">ID: #{selectedJob.id}</p>
-                </div>
-
-                {/* Description */}
-                <div className="text-sm text-slate-500 leading-relaxed bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                  <p className="font-bold text-slate-700 mb-2 text-xs uppercase tracking-wider">Mô tả công việc</p>
-                  <p className="text-sm">{selectedJob.description || "Không có mô tả."}</p>
-                  <p className="font-bold text-slate-700 mt-4 mb-2 text-xs uppercase tracking-wider">Yêu cầu</p>
-                  <p className="text-sm">{selectedJob.requirements || "Làm việc nghiêm túc, trách nhiệm."}</p>
-                </div>
-
-                {/* Shifts */}
-                <div>
-                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Calendar size={14} className="text-orange-500" />
-                    Các ca làm việc trực thuộc
-                  </h4>
-                  {jobShifts.length === 0 ? (
-                    <p className="text-slate-400 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">Chưa cấu hình ca làm.</p>
-                  ) : (
-                    <div className="flex flex-col gap-3">
-                      {jobShifts.map((shift) => {
-                        const dateStr = shift.date ? new Date(shift.date).toLocaleDateString() : "Hôm nay";
+              {/* Jobs Grid (Spacious Full-Width Display) */}
+              <div className="w-full mt-2">
+                {loadingJobs ? (
+                  <div className="flex flex-col items-center justify-center p-16 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-purple-600 border-t-transparent mb-4" />
+                    <p className="text-slate-550 text-sm font-semibold">Đang tải danh sách ca tuyển dụng...</p>
+                  </div>
+                ) : filteredJobs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center p-16 bg-white rounded-3xl border border-slate-100 text-center shadow-sm">
+                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
+                      <Briefcase className="text-slate-300" size={28} />
+                    </div>
+                    <p className="text-slate-800 font-bold text-base">Không tìm thấy ca làm phù hợp</p>
+                    <p className="text-slate-400 text-sm mt-2 max-w-sm">Hãy thay đổi bộ lọc hoặc từ khóa tìm kiếm để quét rộng hơn nhé.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                      {filteredJobs.slice((currentPage - 1) * jobsPerPage, currentPage * jobsPerPage).map((job) => {
+                        const theme = getCategoryTheme(job.categoryName);
+                        const isUrgent = checkIsEmergency(job.title, job.description);
                         return (
-                          <div
-                            key={shift.id}
-                            className="border border-slate-100 hover:border-orange-200 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all card-hover-lift"
+                          <article
+                            key={job.id}
+                            onClick={() => handleSelectJob(job)}
+                            style={{
+                              borderLeft: "6px solid " + theme.accent,
+                              "--urgent-bg": theme.accentBg,
+                              "--urgent-border": theme.borderLight,
+                              "--urgent-glow": theme.accent + "26"
+                            }}
+                            className={"group relative p-5 bg-white border border-slate-100/90 rounded-2xl cursor-pointer card-hover-lift transition-all duration-300 shadow-xs hover:shadow-md " + (isUrgent ? "urgent-flashing-card" : "")}
                           >
-                            <div className="flex flex-col gap-1.5">
-                              <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
-                                <Calendar size={14} className="text-orange-500" /> {dateStr}
-                              </span>
-                              <span className="text-sm text-slate-500 flex items-center gap-1.5 font-medium">
-                                <Clock size={14} className="text-slate-400" /> {shift.startTime?.slice(0, 5)} - {shift.endTime?.slice(0, 5)}
-                              </span>
-                              <span className="text-xs text-slate-400 font-semibold mt-0.5">
-                                Slots: {shift.slotsFilled || 0}/{shift.slotsRequired}
-                              </span>
+                            <div className="flex justify-between items-start gap-4 pl-1">
+                              <div className="flex-1 min-w-0">
+                                {/* Badges */}
+                                <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+                                  <span className={"text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border " + theme.bg + " " + theme.text + " " + theme.border}>
+                                    {job.categoryName || "Đăng tin"}
+                                  </span>
+                                  <span className={"text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border " + (
+                                    job.status === "Published"
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-255"
+                                      : job.status === "Draft"
+                                        ? "bg-slate-50 text-slate-500 border-slate-200"
+                                        : "bg-red-50 text-red-700 border-red-200"
+                                  )}>
+                                    {job.status === "Published" ? "Công khai" : job.status === "Draft" ? "Bản nháp" : "Đã đóng"}
+                                  </span>
+                                  {isUrgent && (
+                                    <span className="text-[10px] font-black uppercase text-white bg-gradient-to-r from-red-500 to-rose-500 px-2.5 py-0.5 rounded-full shadow-xs">
+                                      🔥 Gấp
+                                    </span>
+                                  )}
+                                </div>
+
+                                <h4 className="font-black text-slate-800 text-sm line-clamp-1 group-hover:text-purple-600 transition-colors">
+                                  {job.title}
+                                </h4>
+                                <p className="text-xs text-slate-400 font-semibold line-clamp-1 mt-1">{job.address || "Tại cửa hàng"}</p>
+
+                                <div className="flex flex-wrap items-center gap-4 mt-4 border-t border-slate-50 pt-3">
+                                  <span className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
+                                    <Calendar size={13} className="text-purple-500" />
+                                    Ca làm: <strong className="text-slate-700">{job.shiftCount || 0} ca</strong>
+                                  </span>
+                                  <span className="flex items-center gap-1.5 text-xs font-black text-emerald-600">
+                                    <Wallet size={13} />
+                                    {job.salary && job.salary > 0 ? job.salary.toLocaleString("vi-VN") + "đ/h" : "Lương ca"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteJob(job.id);
+                                }}
+                                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 shrink-0 self-start opacity-0 group-hover:opacity-100"
+                              >
+                                <Trash2 size={15} />
+                              </button>
                             </div>
-                            <button
-                              onClick={() => {
-                                handleSelectShiftForApprovals(shift);
-                                setActiveTab("approvals");
-                              }}
-                              className="px-4 py-2.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-600 rounded-xl font-bold text-xs uppercase transition whitespace-nowrap"
-                            >
-                              Xem Đơn Ứng Tuyển
-                            </button>
-                          </div>
+                          </article>
                         );
                       })}
                     </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+
+                    {/* Pagination */}
+                    {filteredJobs.length > jobsPerPage && (
+                      <div className="flex items-center justify-center gap-3 mt-6 bg-white/60 backdrop-blur-sm p-3 rounded-2xl border border-slate-100 max-w-xs mx-auto">
+                        <button
+                          type="button"
+                          disabled={currentPage === 1}
+                          onClick={() => setCurrentPage((prev) => prev - 1)}
+                          className="px-4 py-2 bg-white border border-slate-200 text-xs font-bold text-slate-650 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                        >
+                          ← Trước
+                        </button>
+                        <span className="text-xs font-extrabold text-slate-500">
+                          {currentPage} / {Math.ceil(filteredJobs.length / jobsPerPage)}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={currentPage === Math.ceil(filteredJobs.length / jobsPerPage)}
+                          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, Math.ceil(filteredJobs.length / jobsPerPage)))}
+                          className="px-4 py-2 bg-white border border-slate-200 text-xs font-bold text-slate-650 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                        >
+                          Sau →
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
       ) : (
-        /* ==================== TAB: DUYỆT ĐƠN ==================== */
-        <div className="dashboard-fade-in dashboard-fade-in-2 grid gap-6 lg:grid-cols-12">
-
-          {/* LEFT: Shifts list */}
-          <div className="lg:col-span-5 flex flex-col gap-4">
-            <h2 className="font-black text-slate-800 text-lg flex items-center gap-2">
-              <UserCheck size={18} className="text-orange-500" />
-              Chọn ca làm đối soát đơn
-            </h2>
-            {jobs.length === 0 ? (
-              <p className="text-slate-400 text-sm bg-white/80 p-6 rounded-2xl border border-slate-100 text-center">Chưa có tin tuyển dụng.</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {jobs.slice((currentApprovalsPage - 1) * jobsPerPage, currentApprovalsPage * jobsPerPage).map((job) => (
-                  <div key={job.id} className="border border-slate-100 bg-white/80 backdrop-blur-sm rounded-2xl p-5 space-y-3 card-hover-lift">
-                    <h4 className="font-black text-slate-800 text-base truncate">{job.title}</h4>
-                    <div className="border-t pt-3 border-slate-100">
-                      <button
-                        onClick={async () => {
-                          const data = await getJobPostShifts(job.id);
-                          if (data && data.length > 0) {
-                            handleSelectShiftForApprovals(data[0]);
-                          } else {
-                            alert("Tin tuyển dụng chưa có ca làm!");
-                          }
-                        }}
-                        className="w-full text-left p-3 bg-slate-50 hover:bg-orange-50 border border-slate-100 hover:border-orange-200 rounded-xl text-sm font-bold text-slate-600 hover:text-orange-600 transition-all flex items-center gap-2"
-                      >
-                        <FileText size={14} /> Xem ca làm tuyển dụng
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Pagination */}
-                {jobs.length > jobsPerPage && (
-                  <div className="flex items-center justify-center gap-3 mt-4 bg-white/60 backdrop-blur-sm p-3 rounded-2xl border border-slate-100">
-                    <button
-                      type="button"
-                      disabled={currentApprovalsPage === 1}
-                      onClick={() => setCurrentApprovalsPage((prev) => prev - 1)}
-                      className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                    >
-                      ← Trước
-                    </button>
-                    <span className="text-sm font-extrabold text-slate-500">
-                      {currentApprovalsPage} / {Math.ceil(jobs.length / jobsPerPage)}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={currentApprovalsPage === Math.ceil(jobs.length / jobsPerPage)}
-                      onClick={() => setCurrentApprovalsPage((prev) => prev + 1)}
-                      className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                    >
-                      Sau →
-                    </button>
-                  </div>
-                )}
+        /* ==================== TAB: XIN NGHỈ / ĐỔI CA ==================== */
+        <div className="dashboard-fade-in dashboard-fade-in-2 flex flex-col gap-5 w-full">
+          <div className="bg-white/80 backdrop-blur-sm border border-slate-100 shadow-md rounded-3xl p-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                  🏖️ Danh sách Yêu Cầu Xin Nghỉ / Đổi Ca
+                </h2>
+                <p className="text-slate-505 text-xs font-semibold mt-1">
+                  Duyệt hoặc từ chối các yêu cầu xin nghỉ phép hoặc đổi ca từ sinh viên.
+                </p>
               </div>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={fetchLeaveRequests}
+                className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl transition cursor-pointer"
+                title="Làm mới danh sách"
+              >
+                <RefreshCw size={15} />
+              </button>
+            </div>
 
-          {/* RIGHT: Candidate list */}
-          <div className="lg:col-span-7 bg-white/80 backdrop-blur-sm border border-slate-100 shadow-lg rounded-3xl p-6 flex flex-col gap-5 lg:sticky lg:top-4 lg:self-start">
-            {!selectedShiftForApprovals ? (
-              <div className="flex-1 flex flex-col justify-center items-center text-center p-12 min-h-[350px]">
-                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-4">
-                  <UserCheck size={32} className="text-slate-300" />
-                </div>
-                <h3 className="font-black text-slate-700 text-base">Chưa chọn ca làm duyệt đơn</h3>
-                <p className="text-sm text-slate-400 max-w-xs mt-2">Vui lòng chọn ca làm bên trái để hiển thị danh sách hồ sơ xin việc.</p>
+            {loadingLeaves ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-500 border-t-transparent mb-4" />
+                <p className="text-slate-500 text-sm font-semibold">Đang tải danh sách yêu cầu...</p>
+              </div>
+            ) : leaveRequests.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <span className="text-5xl mb-4">🏖️</span>
+                <p className="text-slate-800 font-bold text-base">Mọi người đều đi làm đầy đủ!</p>
+                <p className="text-slate-400 text-xs mt-1">Không có yêu cầu xin nghỉ hoặc đổi ca nào cần xử lý.</p>
               </div>
             ) : (
-              <>
-                <div className="border-b border-slate-100 pb-4">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Đơn ứng cử</span>
-                  <h3 className="font-black text-slate-800 text-lg mt-1">Ca: #{selectedShiftForApprovals.id}</h3>
-                  <p className="text-sm text-slate-400 mt-1">
-                    ⏰ {selectedShiftForApprovals.startTime?.slice(0, 5)} - {selectedShiftForApprovals.endTime?.slice(0, 5)} | Slots: {selectedShiftForApprovals.slotsFilled || 0}/{selectedShiftForApprovals.slotsRequired}
-                  </p>
-                </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {leaveRequests.map((request) => {
+                  const isPending = request.status === 'pending';
+                  const isSwap = request.type === 'swap';
+                  const isApproved = request.status === 'approved';
+                  const isRejected = request.status === 'rejected';
 
-                {loadingApplicants ? (
-                  <div className="flex flex-col items-center p-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-orange-600 border-t-transparent mb-3" />
-                    <p className="text-sm text-slate-400">Đang tìm hồ sơ ứng tuyển...</p>
-                  </div>
-                ) : applicants.length === 0 ? (
-                  <div className="text-center p-12">
-                    <UserCheck size={40} className="text-slate-200 mb-3 mx-auto" />
-                    <p className="font-bold text-sm text-slate-500">Chưa có sinh viên nào nộp đơn ứng tuyển ca này.</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    {applicants.map((app) => {
-                      const status = (app.status || "").toLowerCase();
-                      const isPending = status === "pending";
-                      return (
-                        <div
-                          key={app.id}
-                          className="border border-slate-100 hover:border-orange-200 p-5 rounded-2xl flex flex-col gap-3 transition-all card-hover-lift"
+                  return (
+                    <div
+                      key={request.id}
+                      className={"relative bg-white border rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300 shadow-sm hover:shadow-md " + 
+                        (isPending ? "border-orange-100 hover:border-orange-300" : "border-slate-100 opacity-75")}
+                    >
+                      {/* Request Type tag */}
+                      <div className="flex justify-between items-center">
+                        <span className={"text-[10px] uppercase font-black px-2.5 py-1 rounded-full border " + 
+                          (isApproved ? "bg-green-50 text-green-600 border-green-200" : 
+                           isRejected ? "bg-red-50 text-red-500 border-red-200" : 
+                           isSwap ? "bg-purple-50 text-purple-650 border-purple-200" : "bg-rose-50 text-rose-600 border-rose-200")}
                         >
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-amber-100 rounded-2xl flex items-center justify-center font-bold text-lg border border-orange-200 shrink-0">
-                                👨‍🎓
-                              </div>
-                              <div>
-                                <h4 className="font-black text-slate-800 text-sm">{app.studentName || "Sinh viên"}</h4>
-                                <p className="text-xs text-slate-400 mt-0.5">{app.studentSchool || "Đại học FPT"}</p>
-                              </div>
-                            </div>
+                          {isApproved ? "✅ ĐÃ CHẤP THUẬN" : 
+                           isRejected ? "❌ ĐÃ TỪ CHỐI" : 
+                           isSwap ? "🔄 ĐỔI CA" : "❌ XIN NGHỈ"}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">Mã số: #{request.id}</span>
+                      </div>
 
-                            <span className="flex items-center gap-1 text-sm font-bold text-amber-500 bg-amber-50 border border-amber-100 px-3 py-1 rounded-full shrink-0">
-                              <Star size={13} fill="currentColor" /> {app.studentReputationScore || "4.8"}
-                            </span>
-                          </div>
-
-                          {/* Introduction */}
-                          {app.introduction && (
-                            <div className="bg-slate-50 p-4 rounded-xl border text-sm text-slate-500 leading-relaxed italic">
-                              "{app.introduction}"
-                            </div>
-                          )}
-
-                          {/* Actions */}
-                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-t border-slate-100 pt-3">
-                            <span className={`text-[10px] uppercase font-extrabold px-3 py-1 rounded-full border ${
-                              status === "approved" ? "bg-green-50 text-green-600 border-green-200" :
-                              status === "rejected" ? "bg-red-50 text-red-500 border-red-200" :
-                              "bg-amber-50 text-amber-600 border-amber-200"
-                            }`}>
-                              {app.status || "Chờ Duyệt"}
-                            </span>
-
-                            {isPending && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleReject(app.id)}
-                                  className="h-9 px-3 bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-xl flex items-center justify-center gap-1.5 transition text-xs font-bold"
-                                >
-                                  <X size={14} /> Từ chối
-                                </button>
-                                <button
-                                  onClick={() => handleApprove(app.id)}
-                                  className="h-9 px-4 btn-premium text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-md"
-                                >
-                                  <Check size={14} /> Duyệt ứng viên
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                      {/* Employee Info Row */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 bg-orange-50 rounded-2xl flex items-center justify-center font-extrabold text-orange-600 text-sm border border-orange-100">
+                          {request.staffName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
+                        <div>
+                          <h4 className="font-black text-slate-800 text-sm">{request.staffName}</h4>
+                          <p className="text-xs text-slate-400 mt-0.5">{request.position}</p>
+                        </div>
+                      </div>
+
+                      {/* Shift details box */}
+                      <div className="bg-slate-50 border-l-4 border-orange-400 p-4 rounded-r-xl text-xs space-y-1.5">
+                        <p className="font-extrabold text-slate-700">Công việc: {request.jobTitle}</p>
+                        <p className="text-slate-500 font-bold">📅 Ca làm: {request.shiftTime} | {request.shiftDate}</p>
+                        <p className="text-slate-500 italic mt-1 bg-white p-2.5 rounded-lg border border-slate-100">
+                          "Lý do: {request.reason}"
+                        </p>
+                      </div>
+
+                      {/* Actions row */}
+                      {isPending && (
+                        <div className="flex gap-2.5 border-t border-slate-100 pt-3.5">
+                          <button
+                            type="button"
+                            onClick={() => handleActionLeaveRequest(request.id, 'rejected')}
+                            className="flex-1 h-9 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-650 rounded-xl font-bold text-xs transition cursor-pointer"
+                          >
+                            Từ chối
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleActionLeaveRequest(request.id, 'approved')}
+                            className="flex-1 h-9 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-extrabold text-xs transition shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            Duyệt {isSwap ? "Đổi ⚡" : "Nghỉ ⚡"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -891,22 +1516,22 @@ export default function JobManagement() {
                   {[1, 2, 3].map((num) => (
                     <div key={num} className="flex items-center gap-1.5">
                       <div
-                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300 ${
+                        className={"w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300 " + (
                           wizardStep >= num
                             ? "bg-gradient-to-r from-orange-600 to-amber-500 text-white shadow-sm scale-110"
                             : "bg-slate-200 text-slate-500"
-                        }`}
+                        )}
                       >
                         {num}
                       </div>
                       <span
-                        className={`text-[10px] font-bold uppercase tracking-wider hidden sm:inline ${
+                        className={"text-[10px] font-bold uppercase tracking-wider hidden sm:inline " + (
                           wizardStep >= num ? "text-slate-800" : "text-slate-400"
-                        }`}
+                        )}
                       >
                         Bước {num}
                       </span>
-                      {num < 3 && <div className={`w-4 h-0.5 ${wizardStep > num ? "bg-orange-400" : "bg-slate-200"} transition-colors`} />}
+                      {num < 3 && <div className={"w-4 h-0.5 transition-colors " + (wizardStep > num ? "bg-orange-400" : "bg-slate-200")} />}
                     </div>
                   ))}
                 </div>
@@ -921,7 +1546,7 @@ export default function JobManagement() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm font-bold text-slate-700">Tiêu đề công việc</label>
+                      <label className="text-sm font-bold text-slate-700">Tiêu đề công việc <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         required
@@ -931,25 +1556,55 @@ export default function JobManagement() {
                         className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white focus:shadow-md focus:shadow-orange-500/5 transition-all"
                       />
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-sm font-bold text-slate-700">Ngành nghề</label>
-                      <select
-                        value={categoryId}
-                        onChange={(e) => setCategoryId(Number(e.target.value))}
-                        className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white focus:shadow-md transition-all appearance-none cursor-pointer font-bold"
+                    <div className="flex flex-col gap-2 relative">
+                      <label className="text-sm font-bold text-slate-700">Ngành nghề <span className="text-red-500">*</span></label>
+                      <button
+                        type="button"
+                        onClick={() => setIsOpenCategory(!isOpenCategory)}
+                        className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white focus:shadow-md transition-all flex items-center justify-between cursor-pointer font-bold text-slate-700"
                       >
-                        <option value={1}>Phục vụ ăn uống</option>
-                        <option value={2}>Pha chế</option>
-                        <option value={3}>Kho vận / Xếp dỡ</option>
-                        <option value={4}>Shipper / Giao hàng</option>
-                        <option value={9999}>Khác...</option>
-                      </select>
+                        <span>{
+                          categoryId === 1 ? "Phục vụ ăn uống" :
+                          categoryId === 2 ? "Pha chế" :
+                          categoryId === 3 ? "Kho vận / Xếp dỡ" :
+                          categoryId === 4 ? "Shipper / Giao hàng" : "Khác..."
+                        }</span>
+                        <ChevronDown size={16} className={"text-slate-450 transition-transform duration-250 " + (isOpenCategory ? "rotate-180" : "")} />
+                      </button>
+
+                      {isOpenCategory && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setIsOpenCategory(false)} />
+                          <div className="absolute top-[82px] left-0 w-full bg-white border border-slate-200 shadow-xl rounded-2xl z-50 p-1.5 space-y-1" style={{ animation: "fadeInUp 0.15s ease-out" }}>
+                            {[
+                              { value: 1, label: "Phục vụ ăn uống" },
+                              { value: 2, label: "Pha chế" },
+                              { value: 3, label: "Kho vận / Xếp dỡ" },
+                              { value: 4, label: "Shipper / Giao hàng" },
+                              { value: 9999, label: "Khác..." }
+                            ].map((opt) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => {
+                                  setCategoryId(opt.value);
+                                  setIsOpenCategory(false);
+                                }}
+                                className={"w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between " + (categoryId === opt.value ? "bg-orange-500 text-white" : "text-slate-700 hover:bg-orange-50 hover:text-orange-600")}
+                              >
+                                <span>{opt.label}</span>
+                                {categoryId === opt.value && <Check size={14} className="text-white" />}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   {Number(categoryId) === 9999 && (
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm font-bold text-slate-700">Tên ngành nghề khác tự chọn</label>
+                      <label className="text-sm font-bold text-slate-700">Tên ngành nghề khác tự chọn <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         required
@@ -963,7 +1618,7 @@ export default function JobManagement() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm font-bold text-slate-700">Mô tả chi tiết</label>
+                      <label className="text-sm font-bold text-slate-700">Mô tả chi tiết <span className="text-red-500">*</span></label>
                       <textarea
                         rows={4}
                         required
@@ -974,7 +1629,7 @@ export default function JobManagement() {
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm font-bold text-slate-700">Yêu cầu đối với ứng viên</label>
+                      <label className="text-sm font-bold text-slate-700">Yêu cầu đối với ứng viên <span className="text-red-500">*</span></label>
                       <textarea
                         rows={4}
                         required
@@ -1017,7 +1672,7 @@ export default function JobManagement() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-bold text-slate-700">Mức lương đề xuất (VND/giờ)</label>
+                    <label className="text-sm font-bold text-slate-700">Mức lương đề xuất (VND/giờ) <span className="text-red-500">*</span></label>
                     <div className="relative">
                       <input
                         type="number"
@@ -1065,11 +1720,7 @@ export default function JobManagement() {
                                 setSelectedSkills([...selectedSkills, skillName]);
                               }
                             }}
-                            className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all border ${
-                              isSelected
-                                ? "bg-orange-500 text-white border-orange-600 shadow-sm"
-                                : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
-                            }`}
+                            className={"px-3.5 py-2 rounded-xl text-sm font-bold transition-all border " + (isSelected ? "bg-orange-500 text-white border-orange-600 shadow-sm" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-slate-300")}
                           >
                             {isSelected ? '✓ ' : ''}{skillName}
                           </button>
@@ -1078,11 +1729,7 @@ export default function JobManagement() {
                       <button
                         type="button"
                         onClick={() => setShowCustomSkillInput(!showCustomSkillInput)}
-                        className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all border ${
-                          showCustomSkillInput
-                            ? "bg-amber-500 text-white border-amber-600 shadow-sm"
-                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
+                        className={"px-3.5 py-2 rounded-xl text-sm font-bold transition-all border " + (showCustomSkillInput ? "bg-amber-500 text-white border-amber-600 shadow-sm" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100")}
                       >
                         {showCustomSkillInput ? '✓ ' : ''}Khác...
                       </button>
@@ -1113,7 +1760,7 @@ export default function JobManagement() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="flex flex-col gap-2 sm:col-span-2">
-                      <label className="text-sm font-bold text-slate-700">Địa chỉ ca làm</label>
+                      <label className="text-sm font-bold text-slate-700">Địa chỉ ca làm <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         value={address}
@@ -1168,53 +1815,47 @@ export default function JobManagement() {
                       </button>
                     </div>
 
-                    <div className="space-y-3 max-h-48 overflow-y-auto p-1 bg-slate-50/50 rounded-2xl">
+                    <div className="space-y-3 p-1 bg-slate-50/50 rounded-2xl overflow-visible">
                       {shiftsInput.map((shift, idx) => (
                         <div key={idx} className="bg-white border p-4 rounded-xl flex flex-wrap gap-3 items-end">
-                          <div className="flex-1 min-w-[120px]">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Ngày làm việc</p>
-                            <input
-                              type="date"
-                              required
+                          <div className="flex-1 min-w-[130px] relative">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Ngày làm việc <span className="text-red-500">*</span></p>
+                            <CustomDatePicker
                               value={shift.date}
-                              onChange={(e) => {
+                              onChange={(val) => {
                                 const newShifts = [...shiftsInput];
-                                newShifts[idx].date = e.target.value;
+                                newShifts[idx].date = val;
                                 setShiftsInput(newShifts);
                               }}
-                              className="w-full h-10 border border-slate-200 rounded-lg text-sm px-3 focus:outline-none focus:border-orange-400"
+                              inputHeightClass="h-10"
                             />
                           </div>
-                          <div className="w-24">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Giờ vào</p>
-                            <input
-                              type="text"
-                              required
+                          <div className="w-28">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Giờ vào <span className="text-red-500">*</span></p>
+                            <CustomTimePicker
                               value={shift.startTime}
-                              onChange={(e) => {
+                              onChange={(val) => {
                                 const newShifts = [...shiftsInput];
-                                newShifts[idx].startTime = e.target.value;
+                                newShifts[idx].startTime = val;
                                 setShiftsInput(newShifts);
                               }}
-                              className="w-full h-10 border border-slate-200 rounded-lg text-sm text-center focus:outline-none focus:border-orange-400"
+                              inputHeightClass="h-10"
                             />
                           </div>
-                          <div className="w-24">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Giờ ra</p>
-                            <input
-                              type="text"
-                              required
+                          <div className="w-28">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Giờ ra <span className="text-red-500">*</span></p>
+                            <CustomTimePicker
                               value={shift.endTime}
-                              onChange={(e) => {
+                              onChange={(val) => {
                                 const newShifts = [...shiftsInput];
-                                newShifts[idx].endTime = e.target.value;
+                                newShifts[idx].endTime = val;
                                 setShiftsInput(newShifts);
                               }}
-                              className="w-full h-10 border border-slate-200 rounded-lg text-sm text-center focus:outline-none focus:border-orange-400"
+                              inputHeightClass="h-10"
                             />
                           </div>
                           <div className="w-20">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Slots</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Slots <span className="text-red-500">*</span></p>
                             <input
                               type="number"
                               required
@@ -1274,16 +1915,16 @@ export default function JobManagement() {
                     onClick={() => {
                       if (wizardStep === 1) {
                         if (!title.trim() || !description.trim() || !requirements.trim()) {
-                          alert("Vui lòng điền đầy đủ tiêu đề, mô tả và yêu cầu ứng viên.");
+                          toast.warning("Vui lòng điền đầy đủ tiêu đề, mô tả và yêu cầu ứng viên.");
                           return;
                         }
                         if (Number(categoryId) === 9999 && !customCategory.trim()) {
-                          alert("Vui lòng nhập tên ngành nghề khác.");
+                          toast.warning("Vui lòng nhập tên ngành nghề khác.");
                           return;
                         }
                       } else if (wizardStep === 2) {
                         if (!salary || Number(salary) <= 0) {
-                          alert("Vui lòng nhập mức lương hợp lệ.");
+                          toast.warning("Vui lòng nhập mức lương hợp lệ.");
                           return;
                         }
                       }
@@ -1346,3 +1987,5 @@ export default function JobManagement() {
     </div>
   );
 }
+
+

@@ -53,17 +53,20 @@ export default function EmployerChat() {
       if (response.ok) {
         const data = await response.json();
         const list = Array.isArray(data) ? data : [];
-        const mapped = list.map(c => ({
-          id: c.userId || c.id,
-          name: c.name,
-          email: c.email,
-          avatar: c.avatar,
-          phone: c.phone,
-          lastMessage: c.lastMessage,
-          time: c.time,
-          unread: c.unread,
-          gender: c.gender || "Male"
-        }));
+        const mapped = list.map(c => {
+          const cid = (c.userId || c.UserId || c.id)?.toString();
+          return {
+            id: cid,
+            name: c.name || c.Name || "Sinh viên",
+            email: c.email || c.Email,
+            avatar: c.avatar || c.Avatar || c.avatarUrl || c.AvatarUrl || "",
+            phone: c.phone || c.Phone,
+            lastMessage: c.lastMessage || c.LastMessage || "",
+            time: c.time || c.Time || "",
+            unread: c.unread !== undefined ? c.unread : (c.Unread !== undefined ? c.Unread : 0),
+            gender: c.gender || c.Gender || "Male"
+          };
+        });
         setConversations(mapped);
       }
     } catch (err) {
@@ -92,12 +95,23 @@ export default function EmployerChat() {
       const response = await fetch(`${IDENTITY_API_BASE_URL}/messages/${partnerId}`, { headers });
       if (response.ok) {
         const data = await response.json();
-        const mapped = data.map((m) => ({
-          id: m.id || Math.random(),
-          sender: m.senderId === partnerId ? "student" : "employer",
-          text: m.content,
-          time: new Date(m.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
-        }));
+        const rawList = Array.isArray(data) ? data : [];
+        const mapped = rawList.map((m) => {
+          const senderId = m.senderId !== undefined ? m.senderId : m.SenderId;
+          const content = m.content || m.Content || "";
+          const createdAt = m.createdAt || m.CreatedAt;
+
+          const isPartnerSender = senderId?.toString().toLowerCase() === partnerId?.toString().toLowerCase();
+
+          return {
+            id: m.id || m.Id || Math.random(),
+            sender: isPartnerSender ? "student" : "employer",
+            text: content,
+            time: createdAt 
+              ? new Date(createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) 
+              : ""
+          };
+        });
         setMessages(mapped);
       }
     } catch (err) {
@@ -196,6 +210,15 @@ export default function EmployerChat() {
     const n = (s.name || s.Name || "").toLowerCase();
     const p = (s.phone || s.Phone || "");
     return n.includes(searchQuery.toLowerCase()) || p.includes(searchQuery);
+  });
+
+  // Create a lookup map for student avatars from active conversations
+  const avatarMap = {};
+  conversations.forEach((c) => {
+    const key = c.id?.toString().toLowerCase();
+    if (key && c.avatar) {
+      avatarMap[key] = c.avatar;
+    }
   });
 
   return (
@@ -301,9 +324,21 @@ export default function EmployerChat() {
                           : "bg-white border-slate-100 hover:border-orange-200"
                       }`}
                     >
-                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center font-black text-xs text-white uppercase shadow-sm shrink-0">
-                        {getInitials(name)}
-                      </div>
+                      {c.avatar ? (
+                        <img
+                          src={c.avatar}
+                          alt={name}
+                          className="w-11 h-11 rounded-2xl object-cover shrink-0 border border-slate-200"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120";
+                          }}
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center font-black text-xs text-white uppercase shadow-sm shrink-0">
+                          {getInitials(name)}
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline">
                           <h4 className="font-black text-slate-800 text-xs truncate">{name}</h4>
@@ -332,28 +367,43 @@ export default function EmployerChat() {
                   const empName = staff.name || staff.Name || "Nhân viên";
                   const empRole = staff.role || staff.Role || "Phục vụ";
                   const empPhone = staff.phone || staff.Phone || "";
+                  const empUserId = (staff.userId || staff.UserId || staff.id)?.toString();
+                  const empAvatar = staff.avatar || staff.Avatar || staff.avatarUrl || staff.AvatarUrl || avatarMap[empUserId?.toLowerCase()] || "";
                   const isInternal = (staff.employeeType || staff.EmployeeType || "Internal").toLowerCase() === "internal";
 
                   return (
                     <div
                       key={staff.id}
                       onClick={() => handleSelectChat({
-                        id: staff.id,
+                        id: empUserId,
                         name: empName,
                         phone: empPhone,
-                        role: empRole
+                        role: empRole,
+                        avatar: empAvatar
                       })}
                       className="p-3.5 rounded-2xl bg-white border border-slate-100 hover:border-orange-300 cursor-pointer transition-all duration-200 flex items-center gap-3 card-hover-lift"
                     >
-                      <div
-                        className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-xs text-white uppercase shadow-sm shrink-0 ${
-                          isInternal
-                            ? "bg-gradient-to-br from-indigo-500 to-blue-600 shadow-indigo-500/20"
-                            : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20"
-                        }`}
-                      >
-                        {getInitials(empName)}
-                      </div>
+                      {empAvatar ? (
+                        <img
+                          src={empAvatar}
+                          alt={empName}
+                          className="w-11 h-11 rounded-2xl object-cover shrink-0 border border-slate-200"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120";
+                          }}
+                        />
+                      ) : (
+                        <div
+                          className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-xs text-white uppercase shadow-sm shrink-0 ${
+                            isInternal
+                              ? "bg-gradient-to-br from-indigo-500 to-blue-600 shadow-indigo-500/20"
+                              : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20"
+                          }`}
+                        >
+                          {getInitials(empName)}
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center">
                           <h4 className="font-black text-slate-800 text-xs truncate">{empName}</h4>
@@ -396,9 +446,21 @@ export default function EmployerChat() {
                   >
                     <ChevronLeft size={16} />
                   </button>
-                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center font-black text-xs text-white uppercase shadow-sm">
-                    {getInitials(activeChat.name)}
-                  </div>
+                  {activeChat.avatar ? (
+                    <img
+                      src={activeChat.avatar}
+                      alt={activeChat.name}
+                      className="w-11 h-11 rounded-2xl object-cover shrink-0 border border-slate-200"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center font-black text-xs text-white uppercase shadow-sm">
+                      {getInitials(activeChat.name)}
+                    </div>
+                  )}
                   <div>
                     <h3 className="font-black text-slate-800 text-sm tracking-tight">{activeChat.name}</h3>
                     <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
@@ -434,9 +496,21 @@ export default function EmployerChat() {
                         className={`flex items-end gap-2 ${isEmployer ? "justify-end" : "justify-start"}`}
                       >
                         {!isEmployer && (
-                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center font-black text-[10px] text-white uppercase shrink-0 mb-1">
-                            {getInitials(activeChat.name)}
-                          </div>
+                          activeChat.avatar ? (
+                            <img
+                              src={activeChat.avatar}
+                              alt={activeChat.name}
+                              className="w-7 h-7 rounded-lg object-cover shrink-0 border border-slate-200 mb-1"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120";
+                              }}
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center font-black text-[10px] text-white uppercase shrink-0 mb-1">
+                              {getInitials(activeChat.name)}
+                            </div>
+                          )
                         )}
                         <div
                           className={`max-w-sm p-4 rounded-2xl text-xs leading-relaxed relative ${

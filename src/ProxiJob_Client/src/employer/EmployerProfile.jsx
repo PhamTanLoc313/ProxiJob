@@ -137,7 +137,7 @@ export default function EmployerProfile() {
       }).addTo(profileMap.current);
 
       markerRef.current = L.marker([latitude, longitude], {
-        draggable: true,
+        draggable: false,
         icon: L.divIcon({
           html: `<div class="relative flex items-center justify-center">
                   <span class="absolute inline-flex h-9 w-9 animate-ping rounded-full bg-red-400 opacity-30"></span>
@@ -148,23 +148,6 @@ export default function EmployerProfile() {
           iconAnchor: [20, 20]
         })
       }).addTo(profileMap.current);
-
-      // Handle marker drag
-      markerRef.current.on("dragend", (e) => {
-        const position = markerRef.current.getLatLng();
-        setLatitude(position.lat);
-        setLongitude(position.lng);
-        reverseGeocodeCoords(position.lat, position.lng);
-      });
-
-      // Handle map click
-      profileMap.current.on("click", (e) => {
-        const coords = e.latlng;
-        markerRef.current.setLatLng(coords);
-        setLatitude(coords.lat);
-        setLongitude(coords.lng);
-        reverseGeocodeCoords(coords.lat, coords.lng);
-      });
 
       setTimeout(() => {
         if (profileMap.current) {
@@ -202,18 +185,10 @@ export default function EmployerProfile() {
       // 2. Sync coordinates to QR Code Geofencing Center
       await updateQrLocation(Number(latitude), Number(longitude));
 
-      if (toast && toast.success) {
-        toast.success("Cập nhật thông tin cửa hàng thành công! ✨");
-      } else {
-        alert("Cập nhật thông tin cửa hàng thành công! ✨");
-      }
+      toast.success("Cập nhật thông tin cửa hàng thành công! ✨");
       fetchProfile(false);
     } catch (err) {
-      if (toast && toast.error) {
-        toast.error(err.message || "Cập nhật hồ sơ cửa hàng thất bại.");
-      } else {
-        alert(err.message || "Cập nhật hồ sơ cửa hàng thất bại.");
-      }
+      toast.error(err.message || "Cập nhật hồ sơ cửa hàng thất bại.");
     } finally {
       setSaving(false);
     }
@@ -331,9 +306,9 @@ export default function EmployerProfile() {
                 type="number"
                 step="0.000001"
                 required
+                readOnly
                 value={latitude}
-                onChange={(e) => setLatitude(Number(e.target.value))}
-                className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-orange-400 focus:bg-white transition-all shadow-xs"
+                className="w-full h-12 px-4 bg-slate-100 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-400 cursor-not-allowed select-none shadow-none focus:outline-none"
               />
             </div>
 
@@ -345,9 +320,9 @@ export default function EmployerProfile() {
                 type="number"
                 step="0.000001"
                 required
+                readOnly
                 value={longitude}
-                onChange={(e) => setLongitude(Number(e.target.value))}
-                className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-orange-400 focus:bg-white transition-all shadow-xs"
+                className="w-full h-12 px-4 bg-slate-100 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-400 cursor-not-allowed select-none shadow-none focus:outline-none"
               />
             </div>
           </div>
@@ -399,7 +374,7 @@ export default function EmployerProfile() {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
             <p className="text-[11px] font-extrabold text-slate-800">
-              📡 Bấm chuột hoặc kéo ghim đỏ 🏪 để tự động lấy địa chỉ & tọa độ Geofence.
+              📡 Ghim vị trí định vị GPS của cửa hàng trên bản đồ (Cố định).
             </p>
           </div>
 

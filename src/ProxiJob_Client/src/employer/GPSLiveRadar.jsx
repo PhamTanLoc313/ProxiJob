@@ -4,6 +4,7 @@ import {
   QrCode, Radio, UserCheck, ShieldCheck, AlertTriangle
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../admin/ToastContext";
 import { getQrCode, generateQrCode, updateQrRadius, getTimekeepingLogs } from "../api/management";
 import { getBusinessProfileApi } from "../api/businessApi";
 import L from "leaflet";
@@ -18,6 +19,7 @@ const getInitials = (name) => {
 
 export default function GPSLiveRadar() {
   const { user } = useAuth();
+  const toast = useToast();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -180,9 +182,9 @@ export default function GPSLiveRadar() {
     try {
       const data = await generateQrCode();
       setQrCodeData(data);
-      alert("Đã tái tạo mã QR điểm danh động thành công!");
+      toast.success("Đã tái tạo mã QR điểm danh động thành công! ✨");
     } catch (err) {
-      alert("Không thể tái tạo mã QR: " + err.message);
+      toast.error("Không thể tái tạo mã QR: " + err.message);
     } finally {
       setGeneratingQr(false);
     }
@@ -193,9 +195,9 @@ export default function GPSLiveRadar() {
       await updateQrRadius(radius);
       setSelectedRadius(radius);
       loadQr();
-      alert(`Đã cập nhật bán kính Geofence chấm công: ${radius}m`);
+      toast.success(`Đã cập nhật bán kính Geofence chấm công: ${radius}m`);
     } catch (err) {
-      alert("Cập nhật bán kính thất bại: " + err.message);
+      toast.error("Cập nhật bán kính thất bại: " + err.message);
     }
   };
 

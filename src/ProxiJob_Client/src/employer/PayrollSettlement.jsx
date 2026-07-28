@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { getPayrolls, approveInterimPayroll, getPayrollAnalytics, getTimekeepingLogs } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../admin/ToastContext";
 
 const getInitials = (name) => {
   if (!name) return "SV";
@@ -15,6 +16,7 @@ const getInitials = (name) => {
 
 export default function PayrollSettlement() {
   const { user } = useAuth();
+  const toast = useToast();
   const [payrolls, setPayrolls] = useState([]);
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -128,12 +130,12 @@ export default function PayrollSettlement() {
       };
 
       await approveInterimPayroll(selectedPayroll.id, payload);
-      alert("Chốt chi phí và gửi đánh giá thành công! ⚡");
+      toast.success("Chốt chi phí và gửi đánh giá thành công! ⚡");
       setSelectedPayroll(null);
       loadDashboardData();
     } catch (err) {
       console.log(err);
-      alert("Đã chốt chi phí thành công (Demo Mode).");
+      toast.info("Đã chốt chi phí thành công (Demo Mode).");
       setSelectedPayroll(null);
       loadDashboardData();
     } finally {
@@ -358,9 +360,9 @@ export default function PayrollSettlement() {
       {/* ==================== 2. QUICK METRICS ROW ==================== */}
       <div className="dashboard-fade-in dashboard-fade-in-2 grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Card 1: Total Disbursed */}
-        <div className="relative overflow-hidden rounded-3xl p-6 text-white shadow-lg card-hover-lift dots-pattern" style={{ background: "linear-gradient(135deg, #ea580c 0%, #f97316 50%, #f59e0b 100%)" }}>
-          <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 opacity-20 pointer-events-none text-white">
-            <DollarSign size={150} />
+        <div className="relative overflow-hidden rounded-3xl p-6 text-white shadow-lg card-hover-lift dots-pattern transition-all duration-300 hover:shadow-orange-500/20" style={{ background: "linear-gradient(135deg, #ea580c 0%, #f97316 50%, #f59e0b 100%)" }}>
+          <div className="absolute right-[-10px] bottom-[-20px] opacity-15 pointer-events-none text-white">
+            <DollarSign size={130} />
           </div>
           <div className="relative z-10 flex flex-col justify-between h-full min-h-[110px]">
             <div>
@@ -376,29 +378,39 @@ export default function PayrollSettlement() {
         </div>
 
         {/* Card 2: Pending Approval */}
-        <div className="stat-card-orange rounded-3xl p-6 border shadow-md flex flex-col justify-between min-h-[110px] card-hover-lift">
-          <div>
-            <span className="text-[10px] uppercase font-extrabold text-orange-700 tracking-wider">Quỹ lương chờ chốt</span>
-            <h2 className="text-3xl font-black mt-1.5 tracking-tight text-orange-950">
-              {(localPendingAmount || 0).toLocaleString("vi-VN")} đ
-            </h2>
+        <div className="relative overflow-hidden rounded-3xl p-6 text-white shadow-lg card-hover-lift dots-pattern transition-all duration-300 hover:shadow-indigo-500/20" style={{ background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%)" }}>
+          <div className="absolute right-[-10px] bottom-[-20px] opacity-15 pointer-events-none text-white">
+            <Clock size={130} />
           </div>
-          <p className="text-xs text-orange-700 font-bold flex items-center gap-1.5 mt-4">
-            <Clock size={14} /> Cần duyệt chi trả sớm
-          </p>
+          <div className="relative z-10 flex flex-col justify-between h-full min-h-[110px]">
+            <div>
+              <span className="text-[10px] uppercase font-extrabold text-indigo-100 tracking-wider">Quỹ lương chờ chốt</span>
+              <h2 className="text-3xl font-black mt-1.5 tracking-tight text-white">
+                {(localPendingAmount || 0).toLocaleString("vi-VN")} đ
+              </h2>
+            </div>
+            <p className="text-xs text-white/95 font-bold flex items-center gap-1.5 mt-4">
+              <Clock size={14} /> Cần duyệt chi trả sớm
+            </p>
+          </div>
         </div>
 
         {/* Card 3: Active Employees */}
-        <div className="stat-card-emerald rounded-3xl p-6 border shadow-md flex flex-col justify-between min-h-[110px] card-hover-lift">
-          <div>
-            <span className="text-[10px] uppercase font-extrabold text-emerald-700 tracking-wider">Nhân sự làm việc</span>
-            <h2 className="text-3xl font-black mt-1.5 tracking-tight text-emerald-950">
-              {analytics.activeEmployees || 0} sinh viên
-            </h2>
+        <div className="relative overflow-hidden rounded-3xl p-6 text-white shadow-lg card-hover-lift dots-pattern transition-all duration-300 hover:shadow-emerald-500/20" style={{ background: "linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)" }}>
+          <div className="absolute right-[-10px] bottom-[-20px] opacity-15 pointer-events-none text-white">
+            <Users size={130} />
           </div>
-          <p className="text-xs text-emerald-700 font-bold flex items-center gap-1.5 mt-4">
-            <Users size={14} /> Ghi nhận đi làm thực tế
-          </p>
+          <div className="relative z-10 flex flex-col justify-between h-full min-h-[110px]">
+            <div>
+              <span className="text-[10px] uppercase font-extrabold text-emerald-100 tracking-wider">Nhân sự làm việc</span>
+              <h2 className="text-3xl font-black mt-1.5 tracking-tight text-white">
+                {analytics.activeEmployees || 0} sinh viên
+              </h2>
+            </div>
+            <p className="text-xs text-white/95 font-bold flex items-center gap-1.5 mt-4">
+              <Users size={14} /> Ghi nhận đi làm thực tế
+            </p>
+          </div>
         </div>
       </div>
 

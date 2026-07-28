@@ -4,6 +4,7 @@ import { Calendar, Clock, DollarSign, MapPin, AlertCircle, RefreshCw, XCircle, C
 import { getMyApplications, cancelApplicationApi, getPublishedJobs } from "../api/jobs";
 import { getStudentPayrolls } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../admin/ToastContext";
 
 const getWeekDaysForDate = (referenceDate) => {
   const today = new Date();
@@ -52,6 +53,7 @@ const isSameDate = (shiftDateInput, apiDateStr) => {
 
 export default function StudentCalendar({ onSelectJob }) {
   const { user } = useAuth();
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
@@ -161,8 +163,9 @@ export default function StudentCalendar({ onSelectJob }) {
       setSelectedApp(null);
       setCancelReason("");
       queryClient.invalidateQueries({ queryKey: ["myApplications", user?.id] });
+      toast.success("Hủy lịch làm việc thành công! ✨");
     } catch (err) {
-      alert(err.message || "Không thể hủy lịch làm việc. Vui lòng liên hệ chủ quán.");
+      toast.error(err.message || "Không thể hủy lịch làm việc. Vui lòng liên hệ chủ quán.");
     } finally {
       setSubmittingCancel(false);
     }

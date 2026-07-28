@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import {
   Plus, Trash2, Edit2, Phone, Briefcase, RefreshCw, UserCheck, ShieldAlert,
-  Sparkles, Users, Zap, Wallet, Building2, UserPlus, Check, X, ShieldCheck
+  Sparkles, Users, Zap, Wallet, Building2, UserPlus, Check, X, ShieldCheck,
+  ChevronDown
 } from "lucide-react";
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../admin/ToastContext";
 
 export default function EmployerHRM() {
   const { user } = useAuth();
+  const toast = useToast();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState("all"); // all | internal | student
@@ -24,6 +27,7 @@ export default function EmployerHRM() {
   const [employeeType, setEmployeeType] = useState("Internal"); // Internal (cố định) | External (ca lẻ)
   const [salaryPerHour, setSalaryPerHour] = useState(25000);
   const [status, setStatus] = useState("Active");
+  const [isOpenStatus, setIsOpenStatus] = useState(false);
 
   const fetchStaff = () => {
     if (!user) return;
@@ -67,9 +71,9 @@ export default function EmployerHRM() {
       setModalOpen(false);
       resetForm();
       fetchStaff();
-      alert(isEditing ? "Đã cập nhật thông tin nhân viên!" : "Đã thêm nhân viên thành công!");
+      toast.success(isEditing ? "Đã cập nhật thông tin nhân viên! ✨" : "Đã thêm nhân viên thành công! ✨");
     } catch (err) {
-      alert("Lỗi lưu thông tin nhân viên: " + err.message);
+      toast.error("Lỗi lưu thông tin nhân viên: " + err.message);
     }
   };
 
@@ -90,8 +94,9 @@ export default function EmployerHRM() {
     try {
       await deleteEmployee(empId);
       fetchStaff();
+      toast.success("Đã thôi việc nhân viên thành công!");
     } catch (err) {
-      alert(err.message || "Lỗi xóa nhân viên.");
+      toast.error(err.message || "Lỗi xóa nhân viên.");
     }
   };
 
@@ -448,16 +453,41 @@ export default function EmployerHRM() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 relative">
                   <label className="text-xs font-bold text-slate-700">Trạng thái</label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 font-bold transition-all cursor-pointer appearance-none"
+                  <button
+                    type="button"
+                    onClick={() => setIsOpenStatus(!isOpenStatus)}
+                    className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white focus:shadow-md transition-all flex items-center justify-between cursor-pointer font-bold text-slate-700"
                   >
-                    <option value="Active">🟢 Đang làm</option>
-                    <option value="Inactive">🔴 Thôi việc</option>
-                  </select>
+                    <span>{status === "Active" ? "🟢 Đang làm" : "🔴 Thôi việc"}</span>
+                    <ChevronDown size={14} className={"text-slate-450 transition-transform duration-250 " + (isOpenStatus ? "rotate-180" : "")} />
+                  </button>
+
+                  {isOpenStatus && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsOpenStatus(false)} />
+                      <div className="absolute top-[68px] left-0 w-full bg-white border border-slate-200 shadow-xl rounded-2xl z-50 p-1.5 space-y-1" style={{ animation: "fadeInUp 0.15s ease-out" }}>
+                        {[
+                          { value: "Active", label: "🟢 Đang làm" },
+                          { value: "Inactive", label: "🔴 Thôi việc" }
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setStatus(opt.value);
+                              setIsOpenStatus(false);
+                            }}
+                            className={"w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between " + (status === opt.value ? "bg-orange-500 text-white" : "text-slate-700 hover:bg-orange-50 hover:text-orange-600")}
+                          >
+                            <span>{opt.label}</span>
+                            {status === opt.value && <Check size={14} className="text-white" />}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

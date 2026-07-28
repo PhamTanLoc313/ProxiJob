@@ -196,3 +196,12 @@
   background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px);
   background-size: 20px 20px;
 }
+
+/* Hide scrollbar for Chrome, Safari, Opera, IE, Edge and Firefox */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
