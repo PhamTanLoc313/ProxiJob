@@ -81,6 +81,9 @@ export default function StudentLayout() {
               setJobDetailBackTab("calendar");
               setActiveTab("job-detail");
             }}
+            onNavigateToCheckIn={() => {
+              setActiveTab("checkin");
+            }}
           />
         );
       case "checkin":

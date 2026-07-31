@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, DollarSign, MapPin, AlertCircle, RefreshCw, XCircle, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { getMyApplications, cancelApplicationApi, getPublishedJobs } from "../api/jobs";
-import { getStudentPayrolls } from "../api/management";
+import { getStudentPayrolls, getMySchedules } from "../api/management";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../admin/ToastContext";
 
@@ -51,7 +51,7 @@ const isSameDate = (shiftDateInput, apiDateStr) => {
   }
 };
 
-export default function StudentCalendar({ onSelectJob }) {
+export default function StudentCalendar({ onSelectJob, onNavigateToCheckIn }) {
   const { user } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -65,15 +65,30 @@ export default function StudentCalendar({ onSelectJob }) {
   const [activeTab, setActiveTab] = useState("upcoming"); // upcoming | completed
   const [referenceDate, setReferenceDate] = useState(new Date());
 
-  // 1. Fetch applications and resolve job IDs via TanStack useQuery
+  // 1. Fetch applications AND employer-assigned schedules (matching Mobile app!)
   const { data: applications = [], isLoading: loading } = useQuery({
     queryKey: ["myApplications", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
       if (!user?.id) return [];
-      const [appsRes, jobsRes] = await Promise.all([
+
+      const today = new Date();
+      const fromDateObj = new Date(today);
+      fromDateObj.setDate(today.getDate() - 30);
+      const toDateObj = new Date(today);
+      toDateObj.setDate(today.getDate() + 90);
+
+      const formatDateStr = (d) => {
+        return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+      };
+
+      const fromDate = formatDateStr(fromDateObj);
+      const toDate = formatDateStr(toDateObj);
+
+      const [appsRes, jobsRes, schedsRes] = await Promise.all([
         getMyApplications(user.id).catch(() => []),
-        getPublishedJobs(null, 1, 200).catch(() => [])
+        getPublishedJobs(null, 1, 200).catch(() => []),
+        getMySchedules(fromDate, toDate).catch(() => [])
       ]);
 
       const rawApps = Array.isArray(appsRes)
@@ -94,17 +109,108 @@ export default function StudentCalendar({ onSelectJob }) {
         ? jobsRes.data.items
         : [];
 
+      const schedsList = Array.isArray(schedsRes)
+        ? schedsRes
+        : (schedsRes && Array.isArray(schedsRes.data))
+        ? schedsRes.data
+        : (schedsRes && Array.isArray(schedsRes.items))
+        ? schedsRes.items
+        : [];
+
       const firstJobId = jobsList[0] ? jobsList[0].id : 1;
 
-      return rawApps.map(app => {
+      const appShifts = rawApps.map(app => {
         const matchingJob = jobsList.find(j => 
           Array.isArray(j.shifts) && j.shifts.some(s => s.id === app.shiftId)
-        );
+        ) || jobsList.find(j => j.id === app.jobId || j.title === app.jobTitle);
+
+        const startTime = app.startTime || app.StartTime || app.shiftStartTime || app.shiftDate;
+        const endTime = app.endTime || app.EndTime || app.shiftEndTime || startTime;
+
+        let status = (app.status || app.Status || "applied").toLowerCase();
+        if (status === "approved") status = "approved";
+
         return {
           ...app,
-          jobId: matchingJob ? matchingJob.id : firstJobId
+          jobId: matchingJob ? matchingJob.id : firstJobId,
+          shiftDate: startTime,
+          shiftStartTime: startTime ? (typeof startTime === 'string' && startTime.includes('T') ? startTime.slice(11, 16) : startTime) : "08:00",
+          shiftEndTime: endTime ? (typeof endTime === 'string' && endTime.includes('T') ? endTime.slice(11, 16) : endTime) : "12:00",
+          jobTitle: app.jobTitle || (matchingJob ? matchingJob.title : "Ca làm việc"),
+          companyName: app.companyName || app.company || (matchingJob ? matchingJob.categoryName : "Cửa hàng"),
+          shiftSalary: app.shiftSalary || app.Salary || (matchingJob ? matchingJob.salary : 25000),
+          status
         };
       });
+
+      // Map manual/custom schedules assigned by employer
+      const schedShifts = schedsList.map(sched => {
+        const sId = sched.id !== undefined ? sched.id : sched.Id;
+        const sJobShiftId = sched.jobShiftId !== undefined ? sched.jobShiftId : sched.JobShiftId;
+        const sStartTime = sched.startTime !== undefined ? sched.startTime : sched.StartTime;
+        const sEndTime = sched.endTime !== undefined ? sched.endTime : sched.EndTime;
+        const sNote = sched.note !== undefined ? sched.note : sched.Note;
+        const sSalary = sched.jobShiftSalary !== undefined ? sched.jobShiftSalary : (sched.JobShiftSalary || 28000);
+        const sBusinessId = sched.businessId !== undefined ? sched.businessId : sched.BusinessId;
+        const sActualCheckIn = sched.actualCheckInTime || sched.ActualCheckInTime;
+        const sActualCheckOut = sched.actualCheckOutTime || sched.ActualCheckOutTime;
+
+        let slotName = "Ca làm việc";
+        if (sNote === "morning") slotName = "Ca Sáng";
+        else if (sNote === "afternoon") slotName = "Ca Chiều";
+        else if (sNote === "evening") slotName = "Ca Tối";
+        else if (sNote && sNote.startsWith("custom_")) slotName = "Ca Tự Chọn";
+        else if (sNote) slotName = sNote;
+
+        const matchingJob = jobsList.find(j => Number(j.businessId) === Number(sBusinessId));
+        const title = matchingJob ? matchingJob.title : `Lịch phân công: ${slotName}`;
+        const companyName = matchingJob ? (matchingJob.categoryName || matchingJob.title || "Cửa hàng") : "Cửa hàng đối tác";
+
+        let status = "approved";
+        if (sActualCheckOut) status = "completed";
+        else if (sActualCheckIn) status = "checkin_active";
+
+        const startHourStr = sStartTime && typeof sStartTime === 'string' && sStartTime.includes('T')
+          ? new Date(sStartTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          : "08:00";
+        const endHourStr = sEndTime && typeof sEndTime === 'string' && sEndTime.includes('T')
+          ? new Date(sEndTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          : "12:00";
+
+        return {
+          id: `sched_${sId}`,
+          scheduleId: sId,
+          jobShiftId: sJobShiftId,
+          jobId: matchingJob ? matchingJob.id : firstJobId,
+          shiftId: sJobShiftId || sId,
+          jobTitle: title,
+          companyName,
+          shiftDate: sStartTime,
+          shiftStartTime: startHourStr,
+          shiftEndTime: endHourStr,
+          shiftSalary: sSalary,
+          status,
+          isSchedule: true
+        };
+      });
+
+      const combined = [...appShifts];
+      schedShifts.forEach(sched => {
+        const existingIdx = combined.findIndex(a => a.shiftId && Number(a.shiftId) === Number(sched.jobShiftId));
+        if (existingIdx >= 0) {
+          combined[existingIdx] = {
+            ...combined[existingIdx],
+            shiftDate: sched.shiftDate,
+            shiftStartTime: sched.shiftStartTime,
+            shiftEndTime: sched.shiftEndTime,
+            status: sched.status
+          };
+        } else {
+          combined.push(sched);
+        }
+      });
+
+      return combined;
     }
   });
 
@@ -200,7 +306,7 @@ export default function StudentCalendar({ onSelectJob }) {
 
     const status = (app.status || "").toLowerCase();
     if (activeTab === "upcoming") {
-      return status === "approved" || status === "pending" || status === "applied";
+      return status === "approved" || status === "pending" || status === "applied" || status === "checkin_active";
     } else {
       return status === "completed" || status === "rejected" || status === "cancelled" || status === "canceled";
     }
@@ -409,15 +515,18 @@ export default function StudentCalendar({ onSelectJob }) {
                 const weekday = dateObj.toLocaleDateString("vi-VN", { weekday: 'long' });
                 const dayStr = dateObj.toLocaleDateString("vi-VN", { day: 'numeric', month: 'numeric' });
                 
-                const isApproved = (app.status || "").toLowerCase() === "approved";
+                const isApproved = (app.status || "").toLowerCase() === "approved" || (app.status || "").toLowerCase() === "checkin_active";
+                const isCompleted = (app.status || "").toLowerCase() === "completed";
                 const companyName = app.companyName || app.company || "Cửa hàng";
+                const hrs = getShiftHours(app);
+                const estimatedSalary = Math.round((app.shiftSalary || 25000) * hrs);
 
                 return (
                   <article
                     key={app.id}
-                    className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 hover:border-orange-100 hover:shadow-lg transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4 duration-200"
+                    className="bg-white border border-slate-100 shadow-md rounded-3xl p-5 hover:border-orange-200 hover:shadow-lg transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4 duration-200"
                   >
-                    {/* Left Side: Date Calendar Icon and Info (Clickable for detail) */}
+                    {/* Left Side: Date Calendar Sheet & Details */}
                     <div 
                       onClick={() => onSelectJob && onSelectJob(app.jobId || 1, app.shiftId || 1)}
                       className="flex items-center gap-4 w-full md:w-auto cursor-pointer group flex-1"
@@ -430,42 +539,70 @@ export default function StudentCalendar({ onSelectJob }) {
 
                       {/* Core details */}
                       <div className="flex flex-col gap-0.5">
-                        <h3 className="font-extrabold text-slate-800 text-base group-hover:text-orange-600 transition-colors">{app.jobTitle || "Ca làm việc"}</h3>
+                        <h3 className="font-extrabold text-slate-800 text-base group-hover:text-orange-600 transition-colors">
+                          {app.jobTitle || "Ca làm việc"}
+                          {(app.isUrgent || app.isEmergency) && (
+                            <span className="text-orange-600 font-extrabold text-xs ml-1.5">(KHẨN CẤP)</span>
+                          )}
+                        </h3>
                         <p className="text-xs text-slate-400 font-semibold">{companyName}</p>
+                        {app.address && (
+                          <p className="text-[11px] text-slate-400 font-medium line-clamp-1 mt-0.5 flex items-center gap-1">
+                            <MapPin size={12} className="text-slate-400 shrink-0" />
+                            <span>{app.address}</span>
+                          </p>
+                        )}
 
                         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-slate-500 text-xs">
                           <span className="flex items-center gap-1">
                             <Clock size={13} className="text-slate-400" />
                             <span>{app.shiftStartTime?.slice(0, 5)} - {app.shiftEndTime?.slice(0, 5)}</span>
                           </span>
-                          <span className="flex items-center gap-1 font-bold text-slate-650">
+                          <span className="flex items-center gap-1 font-bold text-slate-700">
                             <DollarSign size={13} className="text-emerald-500" />
-                            <span>{app.shiftSalary?.toLocaleString()} đ/giờ</span>
+                            <span>{app.shiftSalary?.toLocaleString()} đ/giờ ({estimatedSalary.toLocaleString("vi-VN")}đ)</span>
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Right Side: Badges & Actions */}
-                    <div className="flex flex-row items-center gap-4 shrink-0 w-full md:w-auto justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0">
+                    {/* Right Side: Badges & Action Buttons */}
+                    <div className="flex flex-row md:flex-col items-end gap-3 shrink-0 w-full md:w-auto justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0">
                       <div className="flex flex-col items-end gap-1.5 justify-center">
                         {getStatusBadge(app.status)}
-                        {app.appliedDate && (
-                          <span className="text-[10px] text-slate-400 font-semibold">Đăng ký: {new Date(app.appliedDate).toLocaleDateString()}</span>
-                        )}
                       </div>
 
-                      {isApproved && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCancelClick(app);
-                          }}
-                          className="px-4.5 h-9 bg-rose-50 border border-rose-205 text-rose-600 hover:bg-rose-100 hover:border-rose-350 hover:shadow-sm rounded-2xl font-black text-xs transition flex items-center gap-1.5 shrink-0 cursor-pointer"
-                        >
-                          <XCircle size={14} className="stroke-[2.5]" />
-                          <span>Xin Nghỉ Ca</span>
-                        </button>
+                      {isApproved && !isCompleted && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNavigateToCheckIn && onNavigateToCheckIn(app);
+                            }}
+                            className="px-4 py-2.5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl font-black text-xs shadow-md shadow-orange-500/20 hover:shadow-orange-500/35 transition-all duration-200 flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                          >
+                            <MapPin size={14} className="fill-white/20" />
+                            <span>Điểm Danh</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCancelClick(app);
+                            }}
+                            className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 hover:border-rose-300 font-bold text-xs rounded-2xl shadow-xs hover:shadow-sm transition-all duration-200 flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                            title="Xin nghỉ ca"
+                          >
+                            <XCircle size={14} />
+                            <span>Xin Nghỉ Ca</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {isCompleted && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                          <CheckCircle2 size={13} /> Đã điểm danh
+                        </span>
                       )}
                     </div>
                   </article>
