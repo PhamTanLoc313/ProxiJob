@@ -38,14 +38,40 @@ export default function SubscriptionManagement() {
   const { data: subscriptions = [], isLoading, error } = useQuery({
     queryKey: ["subscriptions"],
     queryFn: async () => {
-      const res = await fetch(`${IDENTITY_API_URL}/plans/admin`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        throw new Error("Lỗi kết nối hoặc tài khoản không có quyền Admin.");
+      try {
+        const res = await fetch(`${IDENTITY_API_URL}/plans/admin`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          throw new Error("Lỗi kết nối hoặc tài khoản không có quyền Admin.");
+        }
+        const data = await res.json();
+        return data.data || data.Data || (Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.warn("plans/admin failed, fetching real public database API /plans:", err);
+        const publicRes = await fetch(`${IDENTITY_API_URL}/plans`);
+        if (publicRes.ok) {
+          const publicData = await publicRes.json();
+          const rawPlans = publicData.data || publicData.Data || (Array.isArray(publicData) ? publicData : []);
+          return rawPlans.map(plan => ({
+            id: plan.id ?? plan.Id,
+            name: plan.name ?? plan.Name ?? plan.planName ?? plan.PlanName,
+            description: plan.description ?? plan.Description ?? "",
+            price: plan.price ?? plan.Price ?? 0,
+            variableCost: plan.variableCost ?? plan.VariableCost ?? 0,
+            billingType: plan.billingType ?? plan.BillingType ?? "Monthly",
+            jobPostLimit: plan.jobPostLimit ?? plan.JobPostLimit ?? 0,
+            durationDays: plan.durationDays ?? plan.DurationDays ?? 30,
+            hasPriorityDisplay: plan.hasPriorityDisplay ?? plan.HasPriorityDisplay ?? false,
+            hasHrManagement: plan.hasHrManagement ?? plan.HasHrManagement ?? false,
+            activeUsers: plan.activeUsers ?? plan.ActiveUsers ?? 0,
+            maxEmployees: plan.maxEmployees ?? plan.MaxEmployees ?? 0,
+            maxActiveQrs: plan.maxActiveQrs ?? plan.MaxActiveQrs ?? 0,
+            maxSearchRadius: plan.maxSearchRadius ?? plan.MaxSearchRadius ?? 10
+          }));
+        }
+        return [];
       }
-      const data = await res.json();
-      return data.data || [];
     },
     enabled: !!token
   });

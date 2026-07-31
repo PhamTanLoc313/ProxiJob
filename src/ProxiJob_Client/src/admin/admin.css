@@ -12,7 +12,7 @@
   --admin-border-light: #e2e8f0;
   --admin-primary: #ff6b00;
   --admin-primary-hover: #ff8533;
-  --admin-primary-glow: rgba(255, 107, 0, 0.2);
+  --admin-primary-glow: rgba(255, 107, 0, 0.08);
   --admin-success: #10b981;
   --admin-success-bg: rgba(16, 185, 129, 0.1);
   --admin-warning: #f59e0b;
@@ -65,20 +65,21 @@
   align-items: center;
   gap: 12px;
   border-bottom: 1px solid var(--admin-border);
+  background: linear-gradient(to right, rgba(255, 107, 0, 0.03) 0%, rgba(245, 158, 11, 0.01) 100%);
 }
 
 .admin-sidebar-logo-icon {
   width: 42px;
   height: 42px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+  background: linear-gradient(135deg, #ff6b00, #ff8533, #f59e0b);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 900;
   font-size: 18px;
   color: #fff;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 16px rgba(255, 107, 0, 0.25);
   flex-shrink: 0;
 }
 
@@ -89,15 +90,21 @@
 
 .admin-sidebar-logo-title {
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 900;
   color: #0f172a;
   letter-spacing: -0.3px;
 }
 
 .admin-sidebar-logo-sub {
-  font-size: 11px;
-  color: var(--admin-text-muted);
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--admin-primary);
+  background: rgba(255, 107, 0, 0.08);
+  padding: 2px 6px;
+  border-radius: 6px;
+  width: fit-content;
+  margin-top: 2px;
 }
 
 .admin-sidebar-nav {
@@ -122,10 +129,10 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 14px;
-  border-radius: var(--admin-radius-sm);
+  padding: 12px 16px;
+  border-radius: 16px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 700;
   color: var(--admin-text-secondary);
   cursor: pointer;
   border: none;
@@ -138,19 +145,32 @@
 }
 
 .admin-nav-item:hover {
-  background: rgba(99, 102, 241, 0.08);
-  color: var(--admin-text);
+  background: rgba(255, 107, 0, 0.05);
+  color: var(--admin-primary);
+  transform: translateX(4px);
 }
 
 .admin-nav-item.active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
-  color: var(--admin-primary);
-  font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.2);
+  background: linear-gradient(135deg, #ff6b00 0%, #f59e0b 100%);
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: 0 8px 20px -6px rgba(255, 107, 0, 0.35);
+  transform: translateX(4px);
+}
+
+.admin-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  background: #fef08a; /* Amber 200 indicator */
+  border-radius: 0 4px 4px 0;
 }
 
 .admin-nav-item.active .admin-nav-icon {
-  color: var(--admin-primary);
+  color: #ffffff;
 }
 
 .admin-nav-icon {
@@ -338,20 +358,20 @@
 }
 
 .admin-stat-card {
-  background: #ffffff;
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius);
-  padding: 24px;
-  transition: all var(--admin-transition);
+  background: linear-gradient(to bottom, #ffffff, #fbfcfd);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 24px;
+  padding: 26px;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
-  box-shadow: var(--admin-shadow);
+  box-shadow: 0 10px 30px -15px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.02);
 }
 
 .admin-stat-card:hover {
-  border-color: var(--admin-primary);
-  transform: translateY(-4px);
-  box-shadow: 0 12px 30px -8px rgba(255, 107, 0, 0.12), var(--admin-shadow-lg);
+  border-color: rgba(255, 107, 0, 0.25);
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px -15px rgba(255, 107, 0, 0.15), 0 1px 3px rgba(255, 107, 0, 0.02);
 }
 
 .admin-card-inner {
@@ -1425,10 +1445,25 @@ textarea.admin-form-input {
 
 /* ---------- Chart Placeholder ---------- */
 .admin-chart-container {
-  background: var(--admin-card);
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius);
-  padding: 22px;
+  background: linear-gradient(to bottom, #ffffff, #fbfcfd);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 24px;
+  padding: 26px;
+  box-shadow: 0 10px 30px -15px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.02);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-card {
+  background: linear-gradient(to bottom, #ffffff, #fbfcfd);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 24px;
+  padding: 26px;
+  box-shadow: 0 10px 30px -15px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.02);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-chart-container:hover, .admin-card:hover {
+  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.08);
 }
 
 .admin-chart-title {
@@ -1448,16 +1483,16 @@ textarea.admin-form-input {
 
 .admin-chart-bar {
   flex: 1;
-  border-radius: 6px 6px 0 0;
-  background: linear-gradient(180deg, var(--admin-primary), rgba(99, 102, 241, 0.3));
-  transition: all 0.4s ease;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(180deg, var(--admin-primary), rgba(255, 107, 0, 0.15));
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   min-height: 8px;
   position: relative;
 }
 
 .admin-chart-bar:hover {
-  background: linear-gradient(180deg, var(--admin-primary-hover), rgba(99, 102, 241, 0.5));
-  box-shadow: 0 0 12px var(--admin-primary-glow);
+  background: linear-gradient(180deg, var(--admin-primary-hover), rgba(255, 107, 0, 0.3));
+  box-shadow: 0 8px 16px -4px rgba(255, 107, 0, 0.3);
 }
 
 .admin-chart-bar-label {
@@ -1831,8 +1866,8 @@ textarea.admin-form-input {
   gap: 12px;
   width: 100%;
   padding: 12px 14px;
-  background: rgba(99, 102, 241, 0.04);
-  border: 1px solid rgba(99, 102, 241, 0.1);
+  background: rgba(255, 107, 0, 0.04);
+  border: 1px solid rgba(255, 107, 0, 0.1);
   border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
@@ -1842,7 +1877,7 @@ textarea.admin-form-input {
 }
 
 .admin-quick-action-btn:hover {
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(255, 107, 0, 0.08);
   border-color: var(--admin-primary);
   color: var(--admin-primary);
   transform: translateY(-1px);
@@ -1855,7 +1890,7 @@ textarea.admin-form-input {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(255, 107, 0, 0.1);
   color: var(--admin-primary);
 }
 

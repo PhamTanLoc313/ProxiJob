@@ -139,39 +139,29 @@ export default function AdminLayout() {
         </div>
 
         {/* User profile footer info */}
-        <div style={{ padding: 16, borderTop: "1px solid var(--admin-border)", display: "flex", flexDirection: "column", gap: 12, background: "#ffffff" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--admin-primary-glow)", color: "var(--admin-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "16px" }}>
-              🛠️
+        <div className="p-4 border-t border-slate-100 flex flex-col gap-3 shrink-0 bg-gradient-to-b from-transparent to-slate-50/50">
+          <div className="bg-gradient-to-b from-white to-slate-50/80 border border-slate-200/60 rounded-2xl p-3 flex flex-col gap-3 shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-all">
+            <div className="flex items-center gap-3 px-0.5">
+              <div className="relative">
+                <div className="absolute -inset-0.5 bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-500 rounded-full blur-xs opacity-75 animate-pulse" />
+                <div className="relative w-8 h-8 bg-gradient-to-br from-orange-400 to-amber-500 rounded-full flex items-center justify-center font-bold text-xs border border-white text-white shrink-0">
+                  🛠️
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="font-black text-slate-800 text-xs truncate">Quản trị viên</h4>
+                <p className="text-[10px] text-slate-400 font-bold truncate mt-0.5">{session?.email || "admin@proxijob.test"}</p>
+              </div>
             </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ margin: 0, fontWeight: "bold", fontSize: 13, color: "var(--admin-text)" }}>Admin</p>
-              <p style={{ margin: 0, fontSize: 11, color: "var(--admin-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {session?.email || "admin@proxijob.test"}
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(true)}
+              className="w-full h-9 bg-slate-100 hover:bg-slate-200/80 text-slate-650 rounded-xl font-black text-xs transition duration-300 flex items-center justify-center gap-2 cursor-pointer border border-slate-200/10"
+            >
+              <LogOut size={14} />
+              <span>Đăng xuất</span>
+            </button>
           </div>
-          <button
-            onClick={() => setShowLogoutConfirm(true)}
-            style={{ 
-              width: "100%", 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center", 
-              gap: 6, 
-              background: "var(--admin-border)", 
-              border: "1px solid var(--admin-border)", 
-              padding: "9px 16px", 
-              borderRadius: 12, 
-              fontSize: 13, 
-              fontWeight: 700, 
-              color: "var(--admin-text)", 
-              cursor: "pointer"
-            }}
-          >
-            <LogOut size={14} />
-            <span>Đăng xuất</span>
-          </button>
         </div>
       </aside>
 
