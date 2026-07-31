@@ -259,6 +259,54 @@ export default function JobManagement() {
   const [showMapModal, setShowMapModal] = useState(false);
   const [businessAddress, setBusinessAddress] = useState("");
   const [businessCoords, setBusinessCoords] = useState({ lat: 10.857461, lng: 106.801522 });
+  const [isCreating, setIsCreating] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [jobIdToDelete, setJobIdToDelete] = useState(null);
+
+  // Address autocomplete states
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSelectingSuggestion, setIsSelectingSuggestion] = useState(false);
+
+  useEffect(() => {
+    if (isSelectingSuggestion) {
+      setIsSelectingSuggestion(false);
+      return;
+    }
+
+    if (!address.trim() || address.length < 3) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=5&addressdetails=1`, {
+          headers: { "User-Agent": "ProxiJobClient/1.0" }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAddressSuggestions(data || []);
+          setShowSuggestions(true);
+        }
+      } catch (err) {
+        console.log("Failed to fetch autocomplete suggestions:", err);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [address]);
+
+  const handleSelectSuggestion = (item) => {
+    setIsSelectingSuggestion(true);
+    setAddress(item.display_name);
+    setLatitude(Number(item.lat));
+    setLongitude(Number(item.lon));
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
+    toast.success("Đã chọn vị trí từ gợi ý thành công! 📍");
+  };
 
   const handleOpenWizard = () => {
     setTitle("");
@@ -277,6 +325,9 @@ export default function JobManagement() {
     setLongitude(Number(businessCoords.lng || user?.currentLongitude || 106.801522));
     setLoadingGps(false);
     setShowMapModal(false);
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
+    setIsSelectingSuggestion(false);
     setWizardStep(1);
     setShowWizard(true);
   };
@@ -624,7 +675,7 @@ export default function JobManagement() {
 
   const handleCreateJob = async (e) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || isCreating) return;
 
     for (const shift of shiftsInput) {
       if (!shift.date || !shift.startTime || !shift.endTime) {
@@ -634,6 +685,7 @@ export default function JobManagement() {
     }
 
     try {
+      setIsCreating(true);
       // Map custom category safely to other category code if selected
       let finalCategoryId = categoryId;
       if (Number(categoryId) === 9999) {
@@ -720,18 +772,28 @@ export default function JobManagement() {
       fetchJobs();
     } catch (err) {
       toast.error("Đăng ca làm thất bại: " + (err.message || err));
+    } finally {
+      setIsCreating(false);
     }
   };
 
-  const handleDeleteJob = async (jobId) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa tin tuyển dụng này? Ca làm liên kết cũng sẽ bị hủy.")) return;
+  const handleDeleteJob = (jobId) => {
+    setJobIdToDelete(jobId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteJob = async () => {
+    if (!jobIdToDelete) return;
     try {
-      await deleteJobPostApi(jobId, user.id);
+      await deleteJobPostApi(jobIdToDelete, user.id);
       fetchJobs();
       setSelectedJob(null);
       toast.success("Xóa tin tuyển dụng thành công!");
     } catch (err) {
       toast.error(err.message || "Xóa tin tuyển dụng thất bại.");
+    } finally {
+      setDeleteConfirmOpen(false);
+      setJobIdToDelete(null);
     }
   };
 
@@ -1498,7 +1560,32 @@ export default function JobManagement() {
       {showWizard && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden" style={{ animation: "fadeInUp 0.3s ease-out" }}>
-            <form onSubmit={handleCreateJob} className="p-6 md:p-8 flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (wizardStep < 3) {
+                  if (wizardStep === 1) {
+                    if (!title.trim() || !description.trim() || !requirements.trim()) {
+                      toast.warning("Vui lòng điền đầy đủ tiêu đề, mô tả và yêu cầu ứng viên.");
+                      return;
+                    }
+                    if (Number(categoryId) === 9999 && !customCategory.trim()) {
+                      toast.warning("Vui lòng nhập tên ngành nghề khác.");
+                      return;
+                    }
+                  } else if (wizardStep === 2) {
+                    if (!salary || Number(salary) <= 0) {
+                      toast.warning("Vui lòng nhập mức lương hợp lệ.");
+                      return;
+                    }
+                  }
+                  setWizardStep(wizardStep + 1);
+                  return;
+                }
+                handleCreateJob(e);
+              }}
+              className="p-6 md:p-8 flex flex-col gap-5 max-h-[90vh] overflow-y-auto"
+            >
 
               {/* Wizard Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
@@ -1759,15 +1846,35 @@ export default function JobManagement() {
                   </h4>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-2 sm:col-span-2">
+                    <div className="flex flex-col gap-2 sm:col-span-2 relative">
                       <label className="text-sm font-bold text-slate-700">Địa chỉ ca làm <span className="text-red-500">*</span></label>
-                      <input
-                        type="text"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        placeholder="Nhập địa chỉ ca làm việc..."
-                        className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white transition-all"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Nhập địa chỉ ca làm việc..."
+                          className="w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-orange-400 focus:bg-white transition-all font-semibold"
+                        />
+                        {showSuggestions && addressSuggestions.length > 0 && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setShowSuggestions(false)} />
+                            <div className="absolute top-14 left-0 right-0 bg-white border border-slate-200/80 shadow-2xl rounded-2xl p-1.5 z-50 max-h-60 overflow-y-auto space-y-0.5" style={{ animation: "fadeInUp 0.15s ease-out" }}>
+                              {addressSuggestions.map((item, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => handleSelectSuggestion(item)}
+                                  className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-orange-50 hover:text-orange-600 transition-all flex items-start gap-2 cursor-pointer"
+                                >
+                                  <span className="text-slate-400 mt-0.5">📍</span>
+                                  <span>{item.display_name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-2 sm:col-span-2">
@@ -1894,16 +2001,18 @@ export default function JobManagement() {
                 {wizardStep > 1 ? (
                   <button
                     type="button"
+                    disabled={isCreating}
                     onClick={() => setWizardStep(wizardStep - 1)}
-                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition"
+                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 rounded-xl text-sm font-bold transition cursor-pointer"
                   >
                     ← Quay lại
                   </button>
                 ) : (
                   <button
                     type="button"
+                    disabled={isCreating}
                     onClick={() => setShowWizard(false)}
-                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition"
+                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 rounded-xl text-sm font-bold transition cursor-pointer"
                   >
                     Hủy bỏ
                   </button>
@@ -1911,7 +2020,9 @@ export default function JobManagement() {
 
                 {wizardStep < 3 ? (
                   <button
+                    key="wizard-next-btn"
                     type="button"
+                    disabled={isCreating}
                     onClick={() => {
                       if (wizardStep === 1) {
                         if (!title.trim() || !description.trim() || !requirements.trim()) {
@@ -1930,16 +2041,26 @@ export default function JobManagement() {
                       }
                       setWizardStep(wizardStep + 1);
                     }}
-                    className="px-6 py-3 btn-premium text-white rounded-xl text-sm font-bold shadow-lg"
+                    className="px-6 py-3 btn-premium disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer"
                   >
                     Tiếp theo →
                   </button>
                 ) : (
                   <button
+                    key="wizard-submit-btn"
                     type="submit"
-                    className="px-6 py-3 btn-premium text-white rounded-xl text-sm font-bold shadow-lg flex items-center gap-2"
+                    disabled={isCreating}
+                    className="px-6 py-3 btn-premium disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold shadow-lg flex items-center gap-2 cursor-pointer"
                   >
-                    <Zap size={15} /> Đăng tin tuyển dụng
+                    {isCreating ? (
+                      <>
+                        <RefreshCw size={15} className="animate-spin" /> Đang đăng...
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={15} /> Đăng tin tuyển dụng
+                      </>
+                    )}
                   </button>
                 )}
               </div>
@@ -1979,6 +2100,46 @@ export default function JobManagement() {
                 className="px-5 py-3 btn-premium text-white rounded-xl text-sm font-bold shadow-lg shrink-0"
               >
                 Xác nhận Vị trí
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ==================== DELETE CONFIRMATION MODAL ==================== */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in" style={{ animation: "fadeInUp 0.3s ease-out" }}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden p-6 flex flex-col gap-4 items-center text-center">
+            <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center border border-red-100 shadow-sm">
+              <Trash2 size={24} className="animate-pulse" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="font-black text-slate-800 text-lg">
+                Xác nhận xóa tuyển dụng
+              </h3>
+              <p className="text-slate-500 text-xs font-semibold leading-relaxed">
+                Bạn có chắc chắn muốn xóa tin tuyển dụng này? <br />
+                <span className="text-red-500 font-bold">Ca làm việc liên kết với tin này cũng sẽ bị hủy bỏ hoàn toàn.</span>
+              </p>
+            </div>
+
+            <div className="flex gap-3 w-full mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmOpen(false);
+                  setJobIdToDelete(null);
+                }}
+                className="flex-1 h-11 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-xs transition cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteJob}
+                className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl font-extrabold text-xs transition shadow-md shadow-red-650/10 cursor-pointer"
+              >
+                Xóa ngay
               </button>
             </div>
           </div>

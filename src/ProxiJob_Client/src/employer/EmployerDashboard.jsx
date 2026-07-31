@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Briefcase, Users, Calendar, Wallet, Star, ShieldAlert, Award,
   ChevronRight, Zap, RefreshCw, CheckCircle2, Sparkles, Crown,
-  TrendingUp, MapPin, Settings, ArrowUpRight, Check, Copy, Receipt, Landmark
+  TrendingUp, MapPin, Settings, ArrowUpRight, Check, Copy, Receipt, Landmark, ArrowLeft
 } from "lucide-react";
 import { getBusinessProfileApi } from "../api/businessApi";
 import { getPlansApi, purchasePlanApi, getPaymentStatusApi } from "../api/auth";
@@ -92,37 +92,28 @@ export default function EmployerDashboard({ onNavigateToSection }) {
       if (p) setProfile(p);
       
       const allPlans = await getPlansApi();
-      // Filter B2B plans for businesses
-      const b2bPlans = Array.isArray(allPlans)
-        ? allPlans.filter(plan => ['Trial', 'PerShift', 'Recruit', 'HRM Basic', 'Enterprise'].includes(plan.planName || plan.Name))
-        : [];
       
-      if (b2bPlans.length === 0) {
-        setPlans([
-          { id: 1, planName: 'Trial', price: 0, description: 'Gói thử nghiệm miễn phí. Được đăng tối đa 3 tin tuyển dụng.', durationDays: 9999 },
-          { id: 5, planName: 'PerShift', price: 15000, description: 'Đăng 1 ca làm việc.', durationDays: 1 },
-          { id: 2, planName: 'Recruit', price: 99000, description: 'Gói chuyên tuyển dụng. Đăng tối đa 30 tin/tháng, bán kính quét 7km.', durationDays: 30 },
-          { id: 3, planName: 'HRM Basic', price: 199000, description: 'Gói quản lý HRM cơ bản. Đăng 60 tin, quản lý tối đa 15 nhân viên, 1 mã QR chấm công.', durationDays: 30 },
-          { id: 4, planName: 'Enterprise', price: 299000, description: 'Gói doanh nghiệp toàn diện. Đăng tin không giới hạn, ưu tiên radar, không giới hạn nhân sự & QR.', durationDays: 30 }
-        ]);
-      } else {
-        setPlans(b2bPlans);
-      }
+      // Map API plans to standard format, handling case sensitivity (camelCase or PascalCase)
+      const formattedPlans = Array.isArray(allPlans)
+        ? allPlans.map(plan => ({
+            id: plan.id ?? plan.Id,
+            planName: plan.planName ?? plan.name ?? plan.Name,
+            price: plan.price ?? plan.Price,
+            description: plan.description ?? plan.Description,
+            durationDays: plan.durationDays ?? plan.DurationDays
+          }))
+        : [];
+
+      // Filter B2B plans for businesses (exclude Student10 or keep only business plans)
+      const b2bPlans = formattedPlans.filter(plan => 
+        plan.planName && plan.planName !== 'Student10'
+      );
+      
+      setPlans(b2bPlans);
     } catch (err) {
       console.log("Failed to load business profile/plans:", err);
-      // Fallbacks
-      setProfile({
-        businessName: "Cửa hàng Coffee & Tea",
-        address: "84/10 Nam Cao, Quận 9, TP.HCM",
-        subscriptionTier: "HRM Basic"
-      });
-      setPlans([
-        { id: 1, planName: 'Trial', price: 0, description: 'Gói thử nghiệm miễn phí. Được đăng tối đa 3 tin tuyển dụng.', durationDays: 9999 },
-        { id: 5, planName: 'PerShift', price: 15000, description: 'Đăng 1 ca làm việc.', durationDays: 1 },
-        { id: 2, planName: 'Recruit', price: 99000, description: 'Gói chuyên tuyển dụng. Đăng tối đa 30 tin/tháng, bán kính quét 7km.', durationDays: 30 },
-        { id: 3, planName: 'HRM Basic', price: 199000, description: 'Gói quản lý HRM cơ bản. Đăng 60 tin, quản lý tối đa 15 nhân viên, 1 mã QR chấm công.', durationDays: 30 },
-        { id: 4, planName: 'Enterprise', price: 299000, description: 'Gói doanh nghiệp toàn diện. Đăng tin không giới hạn, ưu tiên radar, không giới hạn nhân sự & QR.', durationDays: 30 }
-      ]);
+      toast.error("Không thể tải thông tin gói cước tuyển dụng từ hệ thống.");
+      setPlans([]);
     } finally {
       setLoading(false);
     }
@@ -190,11 +181,22 @@ export default function EmployerDashboard({ onNavigateToSection }) {
           <div className="absolute right-0 top-0 -mt-10 -mr-10 w-36 h-36 bg-orange-500/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute left-0 bottom-0 -mb-10 -ml-10 w-36 h-36 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
 
-          <div className="text-center relative z-10">
-            <span className="text-[9px] uppercase font-black tracking-widest bg-emerald-50 border border-emerald-200 text-emerald-600 px-3.5 py-1 rounded-full">
-              ● Hệ thống duyệt tự động Napas247
+          {/* Top Back Header Bar */}
+          <div className="w-full flex items-center justify-between relative z-10 border-b border-slate-100 pb-3">
+            <button
+              type="button"
+              onClick={() => setOrderInfo(null)}
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer hover:bg-slate-50 py-1.5 px-3 rounded-xl border border-slate-100 hover:border-slate-200"
+            >
+              <ArrowLeft size={14} /> Quay lại
+            </button>
+            <span className="text-[9px] uppercase font-black tracking-widest bg-emerald-50 border border-emerald-200 text-emerald-600 px-3 py-1 rounded-full">
+              ● Duyệt tự động Napas247
             </span>
-            <h2 className="text-lg font-black text-slate-800 tracking-tight mt-3">Gói nâng cấp B2B: {orderInfo.planName}</h2>
+          </div>
+
+          <div className="text-center relative z-10">
+            <h2 className="text-lg font-black text-slate-800 tracking-tight mt-1">Gói nâng cấp B2B: {orderInfo.planName}</h2>
             <p className="text-slate-500 font-semibold text-[11px] mt-1.5 max-w-xs mx-auto leading-relaxed">
               Mở app ngân hàng quét mã VietQR để thanh toán kích hoạt tức thì.
             </p>
@@ -215,7 +217,14 @@ export default function EmployerDashboard({ onNavigateToSection }) {
             <div className="relative z-10 bg-emerald-50 border border-emerald-200 p-8 rounded-3xl text-center flex flex-col items-center gap-3.5 w-full">
               <CheckCircle2 size={44} className="text-emerald-600 animate-bounce" />
               <h3 className="font-extrabold text-slate-800 text-base">Thanh Toán Hoàn Tất!</h3>
-              <p className="text-xs text-slate-500 font-semibold">Hệ thống đã phê duyệt và kích hoạt gói {orderInfo.planName} cho doanh nghiệp của bạn. 🎉</p>
+              <p className="text-xs text-slate-500 font-semibold mb-2">Hệ thống đã phê duyệt và kích hoạt gói {orderInfo.planName} cho doanh nghiệp của bạn. 🎉</p>
+              <button
+                type="button"
+                onClick={() => setOrderInfo(null)}
+                className="px-6 h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition text-xs cursor-pointer shadow-sm shadow-emerald-600/20"
+              >
+                Quay lại Dashboard
+              </button>
             </div>
           ) : (
             <div className="relative z-10 bg-slate-50 border border-slate-200/60 p-6 rounded-3xl text-center text-xs text-slate-400 font-semibold w-full">

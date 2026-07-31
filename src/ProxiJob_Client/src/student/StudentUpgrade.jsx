@@ -61,17 +61,22 @@ export default function StudentUpgrade() {
         : (data && data.data && Array.isArray(data.data))
         ? data.data
         : [];
-      const studentPlans = rawPlans.filter(p => p.planName === 'Student10' || p.Name === 'Student10');
       
-      if (studentPlans.length === 0) {
-        // Fallback mock
-        setPlans([{ id: 5, planName: 'Student10', price: 10000, description: 'Gói nâng cấp mở rộng 10 lượt ứng tuyển vào các ca làm việc cao cấp trong vòng 30 ngày.', durationDays: 30 }]);
-      } else {
-        setPlans(studentPlans);
-      }
+      const formattedPlans = rawPlans.map(plan => ({
+        id: plan.id ?? plan.Id,
+        planName: plan.planName ?? plan.name ?? plan.Name,
+        price: plan.price ?? plan.Price,
+        description: plan.description ?? plan.Description,
+        durationDays: plan.durationDays ?? plan.DurationDays
+      }));
+
+      const studentPlans = formattedPlans.filter(p => p.planName === 'Student10');
+      
+      setPlans(studentPlans);
     } catch (err) {
       console.log("Failed to load plans:", err);
-      setPlans([{ id: 5, planName: 'Student10', price: 10000, description: 'Gói nâng cấp mở rộng 10 lượt ứng tuyển vào các ca làm việc cao cấp trong vòng 30 ngày.', durationDays: 30 }]);
+      toast.error("Không thể tải thông tin gói cước sinh viên từ hệ thống.");
+      setPlans([]);
     } finally {
       setLoadingPlans(false);
     }
@@ -120,18 +125,6 @@ export default function StudentUpgrade() {
 
   return (
     <div className="flex flex-col gap-6 p-4 max-w-7xl mx-auto min-h-screen">
-      {/* Back to list button if inside checkout */}
-      {orderInfo && (
-        <div className="flex">
-          <button
-            onClick={() => setOrderInfo(null)}
-            className="flex items-center gap-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-2xl hover:bg-slate-50 transition"
-          >
-            <ArrowLeft size={16} /> Quay lại gói cước
-          </button>
-        </div>
-      )}
-
       {/* 1. Synchronized Header Row */}
       {!orderInfo && (
         <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 text-white rounded-3xl p-6 md:p-8 shadow-xl shadow-slate-950/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -222,18 +215,30 @@ export default function StudentUpgrade() {
           </div>
         </div>
       ) : (
-        <div className="max-w-lg mx-auto flex flex-col gap-6 w-full items-center">
+        <div className="max-w-lg mx-auto flex flex-col gap-6 w-full items-center min-h-[80vh] justify-center animate-fade-in">
           <div className="relative overflow-hidden bg-white border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.06)] rounded-3xl p-6 w-full flex flex-col gap-5 items-center">
             {/* Background blobs for premium decoration */}
             <div className="absolute right-0 top-0 -mt-10 -mr-10 w-36 h-36 bg-orange-500/10 rounded-full blur-2xl pointer-events-none" />
             <div className="absolute left-0 bottom-0 -mb-10 -ml-10 w-36 h-36 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
 
-            <div className="text-center relative z-10">
-              <span className="text-[9px] uppercase font-black tracking-widest bg-emerald-50 border border-emerald-200 text-emerald-600 px-3.5 py-1 rounded-full">
-                ● Hệ thống duyệt tự động Napas247
+            {/* Top Back Header Bar */}
+            <div className="w-full flex items-center justify-between relative z-10 border-b border-slate-100 pb-3">
+              <button
+                type="button"
+                onClick={() => setOrderInfo(null)}
+                className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer hover:bg-slate-50 py-1.5 px-3 rounded-xl border border-slate-100 hover:border-slate-200"
+              >
+                <ArrowLeft size={14} /> Quay lại
+              </button>
+              <span className="text-[9px] uppercase font-black tracking-widest bg-emerald-50 border border-emerald-200 text-emerald-600 px-3 py-1 rounded-full">
+                ● Duyệt tự động Napas247
               </span>
-              <p className="text-slate-500 font-semibold text-xs mt-3 max-w-xs mx-auto leading-relaxed">
-                Mở app ngân hàng quét mã VietQR để thanh toán tức thì
+            </div>
+
+            <div className="text-center relative z-10">
+              <h2 className="text-lg font-black text-slate-800 tracking-tight mt-1">Gói nâng cấp: {orderInfo.planName}</h2>
+              <p className="text-slate-500 font-semibold text-[11px] mt-1.5 max-w-xs mx-auto leading-relaxed">
+                Mở app ngân hàng quét mã VietQR để thanh toán kích hoạt tức thì.
               </p>
             </div>
 
@@ -257,10 +262,10 @@ export default function StudentUpgrade() {
                 <div className="absolute left-4 right-4 h-0.5 bg-orange-500/80 rounded-full animate-pulse top-1/2 pointer-events-none" />
               </div>
             ) : paymentStatus === "Paid" ? (
-              <div className="relative z-10 bg-emerald-50 border border-emerald-250 p-8 rounded-3xl text-center flex flex-col items-center gap-3.5 w-full">
+              <div className="relative z-10 bg-emerald-50 border border-emerald-250 p-8 rounded-3xl text-center flex flex-col items-center gap-3.5 w-full animate-fade-in">
                 <CheckCircle2 size={44} className="text-emerald-600 animate-bounce" />
                 <h3 className="font-extrabold text-slate-800 text-base">Thanh Toán Hoàn Tất!</h3>
-                <p className="text-xs text-slate-500 font-semibold">Hệ thống đã phê duyệt và kích hoạt gói {orderInfo.planName} cho bạn. 🎉</p>
+                <p className="text-xs text-slate-500 font-semibold mb-2">Hệ thống đã phê duyệt và kích hoạt gói {orderInfo.planName} cho bạn. 🎉</p>
               </div>
             ) : (
               <div className="relative z-10 bg-slate-50 border border-slate-200/60 p-6 rounded-3xl text-center text-xs text-slate-400 font-semibold w-full">
@@ -332,30 +337,40 @@ export default function StudentUpgrade() {
                   </div>
                 )}
 
-                {/* Status polling/verifying action */}
-                <button
-                  type="button"
-                  disabled={verifyingPayment}
-                  onClick={handleVerifyPayment}
-                  className="w-full h-12 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600 text-white rounded-2xl font-black shadow-lg shadow-orange-600/15 hover:shadow-orange-600/25 transition-all flex items-center justify-center gap-2 text-xs cursor-pointer active:scale-95 transform duration-200"
-                >
-                  {verifyingPayment ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  ) : (
-                    <>
-                      <RefreshCw size={14} className="animate-spin-slow" /> Đã thanh toán? Kiểm tra trạng thái
-                    </>
-                  )}
-                </button>
+                {orderInfo.checkoutUrl && (
+                  <a
+                    href={orderInfo.checkoutUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full h-11 bg-[#A50064] text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:brightness-110 transition text-xs shadow-md"
+                  >
+                    ⚡ Thanh toán trực tiếp qua Ví MoMo Sandbox
+                  </a>
+                )}
 
-                {/* Back Link */}
-                <button
-                  type="button"
-                  onClick={() => setOrderInfo(null)}
-                  className="w-full text-slate-450 hover:text-slate-700 text-[11px] font-bold text-center underline block cursor-pointer transition py-1"
-                >
-                  Quay lại
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOrderInfo(null)}
+                    className="flex-1 h-11 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl font-bold transition text-xs cursor-pointer"
+                  >
+                    Quay lại
+                  </button>
+                  <button
+                    type="button"
+                    disabled={verifyingPayment}
+                    onClick={handleVerifyPayment}
+                    className="flex-1 h-11 btn-premium disabled:bg-slate-200 text-white rounded-2xl font-bold shadow-lg shadow-orange-600/10 transition flex items-center justify-center gap-2 text-xs cursor-pointer"
+                  >
+                    {verifyingPayment ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    ) : (
+                      <>
+                        <RefreshCw size={14} /> Tôi đã thanh toán
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 

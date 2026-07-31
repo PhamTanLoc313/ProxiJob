@@ -208,6 +208,10 @@ export default function JobDetail({ jobId, shiftId, onBack, onNavigateToCalendar
     setLoading(true);
     getJobPostById(jobId)
       .then((data) => {
+        if (data) {
+          const locAddress = data.location?.address || data.Location?.Address || data.location?.Address || data.Location?.address || data.address || data.Address;
+          data.address = locAddress;
+        }
         setJob(data);
         if (data && Array.isArray(data.shifts) && data.shifts.length > 0) {
           const targetShift = shiftId

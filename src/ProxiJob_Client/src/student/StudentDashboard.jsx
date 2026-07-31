@@ -224,7 +224,13 @@ export default function StudentDashboard({ onSelectJob }) {
   const { data: jobs = [], isLoading: loading } = useQuery({
     queryKey: ["publishedJobs", selectedCategory, coords.latitude, coords.longitude],
     queryFn: async () => {
-      const data = await getPublishedJobs(selectedCategory || null, 1, 100);
+      const data = await getPublishedJobs(
+        selectedCategory || null,
+        1,
+        100,
+        coords.latitude,
+        coords.longitude
+      );
       const rawJobs = Array.isArray(data)
         ? data
         : (data && Array.isArray(data.items))
@@ -251,8 +257,13 @@ export default function StudentDashboard({ onSelectJob }) {
               const shiftSlots = s.slots !== undefined ? s.slots : (s.Slots !== undefined ? s.Slots : 0);
               const shiftRemainingSlots = s.remainingSlots !== undefined ? s.remainingSlots : (s.RemainingSlots !== undefined ? s.RemainingSlots : 0);
 
+              const latVal = job.latitude !== undefined ? job.latitude : (job.Latitude !== undefined ? job.Latitude : (job.location?.latitude !== undefined ? job.location.latitude : (job.location?.Latitude !== undefined ? job.location.Latitude : 0)));
+              const lngVal = job.longitude !== undefined ? job.longitude : (job.Longitude !== undefined ? job.Longitude : (job.location?.longitude !== undefined ? job.location.longitude : (job.location?.Longitude !== undefined ? job.location.Longitude : 0)));
+
               return {
                 ...job,
+                latitude: Number(latVal),
+                longitude: Number(lngVal),
                 shiftId: s.id, // Target shift ID
                 startTime: s.startTime || s.StartTime,
                 endTime: s.endTime || s.EndTime,
@@ -707,7 +718,12 @@ export default function StudentDashboard({ onSelectJob }) {
                     <div className="w-full sm:w-auto shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 text-[11px] min-w-[120px]">
                       {job.distance !== undefined && job.distance < 999999 ? (
                         <span className="text-slate-400 font-bold bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
-                          📍 Cách bạn: <strong className="text-slate-700">{(job.distance / 1000).toFixed(1)} km</strong>
+                          📍 Cách bạn: <strong className="text-slate-700">
+                            {job.distance < 1000
+                              ? (job.distance < 5 ? "Dưới 5 m" : `${job.distance} m`)
+                              : `${(job.distance / 1000).toFixed(1)} km`
+                            }
+                          </strong>
                         </span>
                       ) : (
                         <span className="text-slate-400 font-bold bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
