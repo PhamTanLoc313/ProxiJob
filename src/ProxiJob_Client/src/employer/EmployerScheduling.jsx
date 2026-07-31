@@ -10,8 +10,9 @@ import { useToast } from "../admin/ToastContext";
 import CustomTimePicker from "./CustomTimePicker";
 
 /* ─── helpers ─── */
-function getCurrentWeekDays() {
+function getWeekDays(weekOffset = 0) {
   const today = new Date();
+  today.setDate(today.getDate() + weekOffset * 7);
   const currentDay = today.getDay();
   const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
   const monday = new Date(today);
@@ -19,13 +20,14 @@ function getCurrentWeekDays() {
 
   const days = [];
   const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+  const realTodayStr = new Date().toDateString();
 
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
     const dateStr = `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}`;
     const apiDateStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
-    const isToday = d.toDateString() === today.toDateString();
+    const isToday = d.toDateString() === realTodayStr;
     days.push({ name: dayNames[i], date: dateStr, apiDateStr, isToday, fullYear: d.getFullYear(), month: d.getMonth() + 1 });
   }
   return days;
@@ -77,6 +79,7 @@ export default function EmployerScheduling() {
   const toast = useToast();
 
   // Week & date state
+  const [weekOffset, setWeekOffset] = useState(0);
   const [weekDays, setWeekDays] = useState([]);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
 
@@ -107,11 +110,13 @@ export default function EmployerScheduling() {
 
   /* ─── init ─── */
   useEffect(() => {
-    const days = getCurrentWeekDays();
+    const days = getWeekDays(weekOffset);
     setWeekDays(days);
-    const todayIdx = days.findIndex((d) => d.isToday);
-    setSelectedDayIndex(todayIdx >= 0 ? todayIdx : 0);
-  }, []);
+    if (weekOffset === 0) {
+      const todayIdx = days.findIndex((d) => d.isToday);
+      setSelectedDayIndex(todayIdx >= 0 ? todayIdx : 0);
+    }
+  }, [weekOffset]);
 
   useEffect(() => {
     try {
@@ -128,9 +133,9 @@ export default function EmployerScheduling() {
   };
 
   /* ─── data loading ─── */
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (showFullSpinner = false) => {
     if (!user || !activeDateStr) return;
-    setLoading(true);
+    if (showFullSpinner) setLoading(true);
     try {
       const [empData, schedData] = await Promise.all([
         getEmployees(),
@@ -149,10 +154,10 @@ export default function EmployerScheduling() {
   }, [user, activeDateStr]);
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, [loadData]);
 
-  /* ─── assign/unassign staff ─── */
+  /* ─── assign/unassign staff (Optimistic like Mobile) ─── */
   const parseDateTimeToUTC = (dateStr, timeStr) => {
     const [year, month, day] = dateStr.split('-').map(Number);
     const [hours, minutes] = timeStr.split(':').map(Number);
@@ -167,17 +172,25 @@ export default function EmployerScheduling() {
     if (!targetSlot) return;
 
     const existing = schedules.find((s) => s.note === assignModal.slotId && s.employeeId === staffId);
+    const backupSchedules = [...schedules];
+
     if (existing) {
+      // Toggle OFF (Unassign immediately)
+      setSchedules((prev) => prev.filter((s) => s.id !== existing.id));
+      toast.success("Đã bỏ gán nhân sự thành công!");
+
       try {
-        await deleteSchedule(existing.id);
-        setSchedules((prev) => prev.filter((s) => s.id !== existing.id));
-        toast.success("Đã bỏ gán nhân sự thành công!");
+        if (existing.id && !existing.id.toString().startsWith("temp_")) {
+          await deleteSchedule(existing.id);
+        }
       } catch (err) {
+        setSchedules(backupSchedules);
         toast.error(err.message || "Không thể bỏ gán nhân viên.");
       }
       return;
     }
 
+    // Toggle ON (Assign immediately with optimistic temp ID)
     let startTime = "08:00";
     let endTime = "12:00";
     try {
@@ -191,16 +204,33 @@ export default function EmployerScheduling() {
     const startDateTime = parseDateTimeToUTC(activeDateStr, startTime);
     const endDateTime = parseDateTimeToUTC(activeDateStr, endTime);
 
+    const tempId = `temp_${Date.now()}`;
+    const tempSchedule = {
+      id: tempId,
+      employeeId: staffId,
+      note: assignModal.slotId,
+      date: activeDateStr,
+      startTime: startDateTime,
+      endTime: endDateTime
+    };
+
+    setSchedules((prev) => [...prev, tempSchedule]);
+    toast.success("Gán nhân sự vào ca thành công! 🎉");
+
     try {
-      await createSchedule(staffId, {
+      const created = await createSchedule(staffId, {
         date: activeDateStr,
         startTime: startDateTime,
         endTime: endDateTime,
         note: assignModal.slotId,
       });
-      await loadData();
-      toast.success("Gán nhân sự vào ca thành công! 🎉");
+
+      if (created && (created.id || created.Id)) {
+        const realId = created.id || created.Id;
+        setSchedules((prev) => prev.map((s) => (s.id === tempId ? { ...s, id: realId } : s)));
+      }
     } catch (err) {
+      setSchedules(backupSchedules);
       const errMsg = err.message || "";
       if (errMsg.includes("overlapping") || errMsg.includes("work schedule")) {
         toast.warning("⚠️ Nhân viên này đã có lịch làm việc trùng thời gian ở một ca khác trong ngày!");
@@ -336,6 +366,37 @@ export default function EmployerScheduling() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Week Navigator */}
+      <div className="flex justify-between items-center bg-white/80 backdrop-blur-sm border border-slate-100 shadow-sm rounded-2xl px-5 py-3">
+        <button
+          onClick={() => setWeekOffset((prev) => prev - 1)}
+          className="flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-orange-600 bg-slate-50 hover:bg-orange-50 px-3 py-1.5 rounded-xl border border-slate-200 transition"
+        >
+          <ChevronLeft size={16} /> Tuần trước
+        </button>
+
+        <div className="flex items-center gap-2">
+          {weekOffset !== 0 && (
+            <button
+              onClick={() => setWeekOffset(0)}
+              className="text-[11px] font-black text-orange-600 bg-orange-50 border border-orange-200 px-3 py-1 rounded-full hover:bg-orange-100 transition"
+            >
+              Trở về tuần hiện tại
+            </button>
+          )}
+          <span className="text-xs font-black text-slate-700">
+            {weekDays.length > 0 && `${weekDays[0].date} - ${weekDays[6].date}/${weekDays[0].fullYear}`}
+          </span>
+        </div>
+
+        <button
+          onClick={() => setWeekOffset((prev) => prev + 1)}
+          className="flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-orange-600 bg-slate-50 hover:bg-orange-50 px-3 py-1.5 rounded-xl border border-slate-200 transition"
+        >
+          Tuần sau <ChevronRight size={16} />
+        </button>
       </div>
 
       {/* ==================== 2. WEEK TIMELINE SELECTOR ==================== */}

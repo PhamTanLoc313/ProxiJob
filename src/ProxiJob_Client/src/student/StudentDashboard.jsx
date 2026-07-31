@@ -290,8 +290,45 @@ export default function StudentDashboard({ onSelectJob }) {
         return { ...shift, distance: 999999 };
       });
 
-      // Sort closest first
-      processedShifts.sort((a, b) => a.distance - b.distance);
+      // Sort shifts matching Mobile app sorting logic:
+      // 1. Emergency/Urgent shifts on newest date go to the top
+      // 2. Sort by date descending (newest date first)
+      // 3. For same date, prioritize urgent/emergency jobs
+      // 4. Sort by creation timestamp descending
+      const dates = processedShifts
+        .map(s => (s.createdAt || s.CreatedAt || s.startTime || s.StartTime || ""))
+        .map(d => (typeof d === "string" ? d.split("T")[0] : ""))
+        .filter(Boolean);
+
+      const newestDate = dates.length > 0 ? [...dates].sort().reverse()[0] : "";
+
+      processedShifts.sort((a, b) => {
+        const dateA = (a.createdAt || a.CreatedAt || a.startTime || a.StartTime || "");
+        const strA = typeof dateA === "string" ? dateA.split("T")[0] : "";
+        const dateB = (b.createdAt || b.CreatedAt || b.startTime || b.StartTime || "");
+        const strB = typeof dateB === "string" ? dateB.split("T")[0] : "";
+
+        const isUrgentA = Boolean(a.isUrgent || a.IsUrgent || a.isEmergency || a.IsEmergency || a.urgent || a.isUrgentShift);
+        const isUrgentB = Boolean(b.isUrgent || b.IsUrgent || b.isEmergency || b.IsEmergency || b.urgent || b.isUrgentShift);
+
+        const isNewestUrgentA = isUrgentA && strA === newestDate;
+        const isNewestUrgentB = isUrgentB && strB === newestDate;
+
+        if (isNewestUrgentA && !isNewestUrgentB) return -1;
+        if (!isNewestUrgentA && isNewestUrgentB) return 1;
+
+        if (strA !== strB) {
+          return strB.localeCompare(strA);
+        }
+
+        if (isUrgentA && !isUrgentB) return -1;
+        if (!isUrgentA && isUrgentB) return 1;
+
+        const timeA = new Date(a.createdAt || a.CreatedAt || a.startTime || a.StartTime || 0).getTime();
+        const timeB = new Date(b.createdAt || b.CreatedAt || b.startTime || b.StartTime || 0).getTime();
+        return timeB - timeA;
+      });
+
       return processedShifts;
     }
   });
