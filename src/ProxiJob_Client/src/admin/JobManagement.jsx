@@ -4,6 +4,7 @@ import { Search, Eye, Ban, CheckCircle, Briefcase, Plus, Edit2, Trash2, X, Alert
 import { getAdminSession, formatDate } from "./adminData";
 import { JOB_API_URL } from "../apiConfig";
 import { useToast } from "./ToastContext";
+import AdminModal from "./AdminModal";
 
 export default function JobManagement() {
   const queryClient = useQueryClient();
@@ -293,250 +294,211 @@ export default function JobManagement() {
       </div>
 
       {/* Detail Job Modal */}
-      {selectedJob && showDetailModal && (
-        <div className="admin-modal-overlay" onClick={() => { setShowDetailModal(false); setSelectedJob(null); }}>
-          <div className="admin-modal" style={{ maxWidth: 560, borderRadius: 20, overflow: "hidden", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)" }} onClick={(e) => e.stopPropagation()}>
-            {/* Modal Header */}
-            <div className="admin-modal-header" style={{ borderBottom: "1px solid var(--admin-border)", padding: "20px 24px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{
-                  background: "var(--admin-primary-glow)",
-                  color: "var(--admin-primary)",
-                  padding: 10,
-                  borderRadius: 12,
-                  display: "flex",
-                  boxShadow: "inset 0 0 0 1px rgba(249,115,22,0.1)"
-                }}>
-                  <Briefcase size={20} />
-                </div>
-                <div>
-                  <h3 className="admin-modal-title" style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Chi tiết tin tuyển dụng</h3>
-                  <p style={{ fontSize: 11, color: "var(--admin-text-muted)", margin: "2px 0 0" }}>Xem thông tin kiểm duyệt bài đăng của đối tác</p>
-                </div>
+      <AdminModal
+        isOpen={selectedJob && showDetailModal}
+        onClose={() => { setShowDetailModal(false); setSelectedJob(null); }}
+        title="Chi tiết tin tuyển dụng"
+        subtitle="Xem thông tin kiểm duyệt bài đăng của đối tác"
+        icon={Briefcase}
+        maxWidth={620}
+        footer={
+          <button 
+            type="button" 
+            className="admin-btn admin-btn-primary" 
+            style={{ 
+              width: "100%", 
+              padding: "12px", 
+              borderRadius: 12, 
+              background: "linear-gradient(135deg, var(--admin-primary), var(--admin-primary-hover))", 
+              color: "#ffffff", 
+              border: "none", 
+              fontWeight: 700, 
+              cursor: "pointer"
+            }}
+            onClick={() => { setShowDetailModal(false); setSelectedJob(null); }}
+          >
+            Đóng cửa sổ
+          </button>
+        }
+      >
+        {selectedJob && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {/* Job Title & Status */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span className={`admin-badge ${selectedJob.status === "Published" ? "admin-badge-published" : "admin-badge-closed"}`} style={{ fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                  {selectedJob.status === "Published" ? "Đang mở" : "Đã đóng"}
+                </span>
+                <span style={{ fontSize: "12px", color: "var(--admin-text-muted)", fontWeight: 500 }}>
+                  Mã bài viết: #{selectedJob.id}
+                </span>
               </div>
-              <button className="admin-modal-close" style={{ background: "#f1f5f9", borderRadius: "50%", padding: 6, display: "flex", border: "none", cursor: "pointer" }} onClick={() => { setShowDetailModal(false); setSelectedJob(null); }}>
-                <X size={14} style={{ color: "var(--admin-text-secondary)" }} />
-              </button>
+              <h2 style={{ fontSize: "20px", fontWeight: 800, color: "var(--admin-text)", margin: 0, lineHeight: 1.4 }}>{selectedJob.title}</h2>
             </div>
 
-            {/* Modal Body */}
-            <div className="admin-modal-body" style={{ maxHeight: "calc(100vh - 220px)", overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: 20 }}>
+            {/* Meta Grid Information */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: "10.5px", color: "var(--admin-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textTransform: "uppercase" }}>
+                  <Tag size={12} style={{ color: "var(--admin-primary)" }} /> Danh mục
+                </span>
+                <span style={{ fontSize: "13px", color: "var(--admin-text)", fontWeight: 700 }}>{selectedJob.categoryName || "Chưa phân loại"}</span>
+              </div>
+
+              <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: "10.5px", color: "var(--admin-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textTransform: "uppercase" }}>
+                  <Building size={12} style={{ color: "#3b82f6" }} /> Doanh nghiệp
+                </span>
+                <span style={{ fontSize: "13px", color: "var(--admin-text)", fontWeight: 700 }}>ID: {selectedJob.businessId}</span>
+              </div>
+
+              <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: "10.5px", color: "var(--admin-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textTransform: "uppercase" }}>
+                  <Calendar size={12} style={{ color: "#10b981" }} /> Đăng ngày
+                </span>
+                <span style={{ fontSize: "13px", color: "var(--admin-text)", fontWeight: 700 }}>{formatDate(selectedJob.createdAt)}</span>
+              </div>
+            </div>
+
+            {/* Address Map Section */}
+            <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+              <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-text)", margin: "0 0 8px 0", display: "flex", alignItems: "center", gap: 6 }}>
+                <MapPin size={15} style={{ color: "#ef4444" }} /> Địa điểm & Bản đồ
+              </h4>
+              <p style={{ fontSize: "13.5px", color: "var(--admin-text-secondary)", margin: "0 0 10px 0", lineHeight: 1.5 }}>{selectedJob.address || "Chưa có địa chỉ"}</p>
               
-              {/* Job Title & Status */}
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <span className={`admin-badge ${selectedJob.status === "Published" ? "admin-badge-published" : "admin-badge-closed"}`} style={{ fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {selectedJob.status === "Published" ? "Đang mở" : "Đã đóng"}
-                  </span>
-                  <span style={{ fontSize: "12px", color: "var(--admin-text-muted)", fontWeight: 500 }}>
-                    Mã bài viết: #{selectedJob.id}
-                  </span>
-                </div>
-                <h2 style={{ fontSize: "20px", fontWeight: 800, color: "var(--admin-text)", margin: 0, lineHeight: 1.4 }}>{selectedJob.title}</h2>
-              </div>
-
-              {/* Meta Grid Information */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span style={{ fontSize: "10.5px", color: "var(--admin-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textTransform: "uppercase" }}>
-                    <Tag size={12} style={{ color: "var(--admin-primary)" }} /> Danh mục
-                  </span>
-                  <span style={{ fontSize: "13px", color: "var(--admin-text)", fontWeight: 700 }}>{selectedJob.categoryName || "Chưa phân loại"}</span>
-                </div>
-
-                <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span style={{ fontSize: "10.5px", color: "var(--admin-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textTransform: "uppercase" }}>
-                    <Building size={12} style={{ color: "#3b82f6" }} /> Doanh nghiệp
-                  </span>
-                  <span style={{ fontSize: "13px", color: "var(--admin-text)", fontWeight: 700 }}>ID: {selectedJob.businessId}</span>
-                </div>
-
-                <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span style={{ fontSize: "10.5px", color: "var(--admin-text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, textTransform: "uppercase" }}>
-                    <Calendar size={12} style={{ color: "#10b981" }} /> Đăng ngày
-                  </span>
-                  <span style={{ fontSize: "13px", color: "var(--admin-text)", fontWeight: 700 }}>{formatDate(selectedJob.createdAt)}</span>
-                </div>
-              </div>
-
-              {/* Address Map Section */}
-              <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
-                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-text)", margin: "0 0 8px 0", display: "flex", alignItems: "center", gap: 6 }}>
-                  <MapPin size={15} style={{ color: "#ef4444" }} /> Địa điểm & Bản đồ
-                </h4>
-                <p style={{ fontSize: "13.5px", color: "var(--admin-text-secondary)", margin: "0 0 10px 0", lineHeight: 1.5 }}>{selectedJob.address || "Chưa có địa chỉ"}</p>
-                
-                {selectedJob.latitude && selectedJob.longitude && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <span style={{ background: "rgba(16,185,129,0.06)", color: "#10b981", border: "1px solid rgba(16,185,129,0.15)", padding: "4px 10px", borderRadius: 20, fontSize: "11px", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
-                        <span style={{ width: 6, height: 6, background: "#10b981", borderRadius: "50%" }}></span>
-                        Lat: {parseFloat(selectedJob.latitude).toFixed(6)}
-                      </span>
-                      <span style={{ background: "rgba(16,185,129,0.06)", color: "#10b981", border: "1px solid rgba(16,185,129,0.15)", padding: "4px 10px", borderRadius: 20, fontSize: "11px", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
-                        <span style={{ width: 6, height: 6, background: "#10b981", borderRadius: "50%" }}></span>
-                        Lng: {parseFloat(selectedJob.longitude).toFixed(6)}
-                      </span>
-                    </div>
-
-                    <div style={{ marginTop: 4, borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0", height: 200, background: "#f8fafc" }}>
-                      <iframe
-                        srcDoc={`
-                          <!DOCTYPE html>
-                          <html>
-                          <head>
-                            <meta charset="utf-8" />
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                            <style>
-                              body { margin: 0; padding: 0; }
-                              #map { height: 100vh; width: 100vw; }
-                              .leaflet-control-attribution { display: none !important; }
-                            </style>
-                          </head>
-                          <body>
-                            <div id="map"></div>
-                            <script>
-                              var map = L.map('map', { zoomControl: true }).setView([${selectedJob.latitude}, ${selectedJob.longitude}], 16);
-                              L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-                                maxZoom: 20
-                              }).addTo(map);
-                              L.marker([${selectedJob.latitude}, ${selectedJob.longitude}]).addTo(map);
-                            </script>
-                          </body>
-                          </html>
-                        `}
-                        style={{ width: "100%", height: "100%", border: "none", display: "block" }}
-                        title="Bản đồ định vị công việc"
-                      />
-                    </div>
+              {selectedJob.latitude && selectedJob.longitude && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <span style={{ background: "rgba(16,185,129,0.06)", color: "#10b981", border: "1px solid rgba(16,185,129,0.15)", padding: "4px 10px", borderRadius: 20, fontSize: "11px", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
+                      <span style={{ width: 6, height: 6, background: "#10b981", borderRadius: "50%" }}></span>
+                      Lat: {parseFloat(selectedJob.latitude).toFixed(6)}
+                    </span>
+                    <span style={{ background: "rgba(16,185,129,0.06)", color: "#10b981", border: "1px solid rgba(16,185,129,0.15)", padding: "4px 10px", borderRadius: 20, fontSize: "11px", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
+                      <span style={{ width: 6, height: 6, background: "#10b981", borderRadius: "50%" }}></span>
+                      Lng: {parseFloat(selectedJob.longitude).toFixed(6)}
+                    </span>
                   </div>
-                )}
-              </div>
 
-              {/* Description Section */}
-              <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
-                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-text)", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: 6 }}>
-                  <FileText size={15} style={{ color: "var(--admin-primary)" }} /> Mô tả công việc
-                </h4>
-                <div style={{ background: "#fafafb", padding: "14px 16px", borderRadius: 12, border: "1px solid #f1f5f9" }}>
-                  <p style={{ fontSize: "13px", color: "var(--admin-text-secondary)", margin: 0, whiteSpace: "pre-line", lineHeight: 1.6 }}>{selectedJob.description}</p>
+                  <div style={{ marginTop: 4, borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0", height: 200, background: "#f8fafc" }}>
+                    <iframe
+                      srcDoc={`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <meta charset="utf-8" />
+                          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                          <style>
+                            body { margin: 0; padding: 0; }
+                            #map { height: 100vh; width: 100vw; }
+                            .leaflet-control-attribution { display: none !important; }
+                          </style>
+                        </head>
+                        <body>
+                          <div id="map"></div>
+                          <script>
+                            var map = L.map('map', { zoomControl: true }).setView([${selectedJob.latitude}, ${selectedJob.longitude}], 16);
+                            L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                              maxZoom: 20
+                            }).addTo(map);
+                            L.marker([${selectedJob.latitude}, ${selectedJob.longitude}]).addTo(map);
+                          </script>
+                        </body>
+                        </html>
+                      `}
+                      style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+                      title="Bản đồ định vị công việc"
+                    />
+                  </div>
                 </div>
-              </div>
-
-              {/* Requirements Section */}
-              <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
-                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-text)", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: 6 }}>
-                  <ClipboardList size={15} style={{ color: "#f59e0b" }} /> Yêu cầu tuyển dụng
-                </h4>
-                <div style={{ background: "#fafafb", padding: "14px 16px", borderRadius: 12, border: "1px solid #f1f5f9" }}>
-                  <p style={{ fontSize: "13px", color: "var(--admin-text-secondary)", margin: 0, whiteSpace: "pre-line", lineHeight: 1.6 }}>{selectedJob.requirements}</p>
-                </div>
-              </div>
-
+              )}
             </div>
 
-            {/* Footer Close Button */}
-            <div className="admin-modal-footer" style={{ borderTop: "1px solid var(--admin-border)", padding: "16px 24px 20px" }}>
-              <button 
-                type="button" 
-                className="admin-btn" 
-                style={{ 
-                  width: "100%", 
-                  padding: "12px", 
-                  borderRadius: 12, 
-                  background: "linear-gradient(135deg, var(--admin-primary), var(--admin-primary-hover))", 
-                  color: "#ffffff", 
-                  border: "none", 
-                  fontWeight: 700, 
-                  boxShadow: "0 4px 12px var(--admin-primary-glow)",
-                  cursor: "pointer",
-                  transition: "transform 0.2s"
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-1px)"}
-                onMouseLeave={(e) => e.currentTarget.style.transform = "none"}
-                onClick={() => { setShowDetailModal(false); setSelectedJob(null); }}
-              >
-                Đóng cửa sổ
-              </button>
+            {/* Description Section */}
+            <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+              <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-text)", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: 6 }}>
+                <FileText size={15} style={{ color: "var(--admin-primary)" }} /> Mô tả công việc
+              </h4>
+              <div style={{ background: "#fafafb", padding: "14px 16px", borderRadius: 12, border: "1px solid #f1f5f9" }}>
+                <p style={{ fontSize: "13px", color: "var(--admin-text-secondary)", margin: 0, whiteSpace: "pre-line", lineHeight: 1.6 }}>{selectedJob.description}</p>
+              </div>
+            </div>
+
+            {/* Requirements Section */}
+            <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+              <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-text)", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: 6 }}>
+                <ClipboardList size={15} style={{ color: "#f59e0b" }} /> Yêu cầu tuyển dụng
+              </h4>
+              <div style={{ background: "#fafafb", padding: "14px 16px", borderRadius: 12, border: "1px solid #f1f5f9" }}>
+                <p style={{ fontSize: "13px", color: "var(--admin-text-secondary)", margin: 0, whiteSpace: "pre-line", lineHeight: 1.6 }}>{selectedJob.requirements}</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </AdminModal>
 
-      {/* Custom Delete Confirmation Modal */}
-      {deleteJobId && (
-        <div className="admin-modal-overlay" onClick={() => setDeleteJobId(null)}>
-          <div className="admin-modal" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header" style={{ borderBottom: "none", paddingBottom: 0 }}>
-              <h3 className="admin-modal-title" style={{ color: "var(--admin-danger)", display: "flex", alignItems: "center", gap: 8 }}>
-                <Trash2 size={20} />
-                Xác nhận xóa bài đăng
-              </h3>
-              <button className="admin-modal-close" onClick={() => setDeleteJobId(null)}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="admin-modal-body" style={{ paddingTop: 12 }}>
-              <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.5 }}>
-                Bạn có chắc chắn muốn xóa bài đăng tuyển dụng này? Toàn bộ thông tin bài đăng sẽ bị xóa vĩnh viễn khỏi hệ thống.
-              </p>
-            </div>
-            <div className="admin-modal-footer" style={{ borderTop: "none", paddingTop: 16 }}>
-              <button className="admin-btn admin-btn-outline" onClick={() => setDeleteJobId(null)}>Hủy</button>
-              <button 
-                className="admin-btn admin-btn-danger" 
-                onClick={() => {
-                  handleDeleteJob(deleteJobId);
-                  setDeleteJobId(null);
-                }}
-              >
-                Xác nhận xóa
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete Confirmation Modal */}
+      <AdminModal
+        isOpen={!!deleteJobId}
+        onClose={() => setDeleteJobId(null)}
+        title="Xác nhận xóa bài đăng"
+        icon={Trash2}
+        maxWidth={440}
+        footer={
+          <>
+            <button className="admin-btn admin-btn-outline" onClick={() => setDeleteJobId(null)}>Hủy</button>
+            <button 
+              className="admin-btn admin-btn-danger" 
+              onClick={() => {
+                handleDeleteJob(deleteJobId);
+                setDeleteJobId(null);
+              }}
+            >
+              Xác nhận xóa
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.6 }}>
+          Bạn có chắc chắn muốn xóa bài đăng tuyển dụng này? Toàn bộ thông tin bài đăng sẽ bị xóa vĩnh viễn khỏi hệ thống.
+        </p>
+      </AdminModal>
 
-      {/* Custom Status Toggle Confirmation Modal */}
-      {statusConfirmData && (
-        <div className="admin-modal-overlay" onClick={() => setStatusConfirmData(null)}>
-          <div className="admin-modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header" style={{ borderBottom: "none", paddingBottom: 0 }}>
-              <h3 className="admin-modal-title" style={{ color: "var(--admin-warning)", display: "flex", alignItems: "center", gap: 8 }}>
-                <AlertTriangle size={20} />
-                {statusConfirmData.currentStatus === "Published" ? "Xác nhận gỡ bài đăng" : "Xác nhận mở lại bài đăng"}
-              </h3>
-              <button className="admin-modal-close" onClick={() => setStatusConfirmData(null)}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="admin-modal-body" style={{ paddingTop: 12 }}>
-              <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.5 }}>
-                Bạn có chắc chắn muốn {statusConfirmData.currentStatus === "Published" ? "gỡ (đóng)" : "mở lại (hiển thị)"} bài đăng tuyển dụng <strong>"{statusConfirmData.title}"</strong> không?
-                {statusConfirmData.currentStatus === "Published"
-                  ? " Sau khi gỡ, sinh viên sẽ không thể tìm thấy và ứng tuyển vào tin này trên ứng dụng di động."
-                  : " Sau khi mở lại, tin đăng sẽ hiển thị công khai trên điện thoại cho các sinh viên nộp hồ sơ ứng tuyển."
-                }
-              </p>
-            </div>
-            <div className="admin-modal-footer" style={{ borderTop: "none", paddingTop: 16 }}>
-              <button className="admin-btn admin-btn-outline" onClick={() => setStatusConfirmData(null)}>Hủy</button>
-              <button 
-                className="admin-btn admin-btn-warning" 
-                style={statusConfirmData.currentStatus === "Published" ? {} : { backgroundColor: "var(--admin-success)", borderColor: "var(--admin-success)" }}
-                onClick={() => {
+      {/* Status Toggle Confirmation Modal */}
+      <AdminModal
+        isOpen={!!statusConfirmData}
+        onClose={() => setStatusConfirmData(null)}
+        title={statusConfirmData?.currentStatus === "Published" ? "Xác nhận gỡ bài đăng" : "Xác nhận mở lại bài đăng"}
+        icon={AlertTriangle}
+        maxWidth={450}
+        footer={
+          <>
+            <button className="admin-btn admin-btn-outline" onClick={() => setStatusConfirmData(null)}>Hủy</button>
+            <button 
+              className="admin-btn admin-btn-warning" 
+              style={statusConfirmData?.currentStatus === "Published" ? {} : { backgroundColor: "var(--admin-success)", borderColor: "var(--admin-success)" }}
+              onClick={() => {
+                if (statusConfirmData) {
                   toggleJobStatus(statusConfirmData.jobId, statusConfirmData.currentStatus);
                   setStatusConfirmData(null);
-                }}
-              >
-                Xác nhận
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                }
+              }}
+            >
+              Xác nhận
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.6 }}>
+          Bạn có chắc chắn muốn {statusConfirmData?.currentStatus === "Published" ? "gỡ (đóng)" : "mở lại (hiển thị)"} bài đăng tuyển dụng <strong>"{statusConfirmData?.title}"</strong> không?
+          {statusConfirmData?.currentStatus === "Published"
+            ? " Sau khi gỡ, sinh viên sẽ không thể tìm thấy và ứng tuyển vào tin này trên ứng dụng di động."
+            : " Sau khi mở lại, tin đăng sẽ hiển thị công khai trên điện thoại cho các sinh viên nộp hồ sơ ứng tuyển."
+          }
+        </p>
+      </AdminModal>
     </div>
   );
 }

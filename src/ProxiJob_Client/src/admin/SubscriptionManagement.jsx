@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PackageCheck, Users, Plus, Edit2, Trash2, X, AlertTriangle } from "lucide-react";
+import { PackageCheck, Users, Plus, Edit2, Trash2, X, AlertTriangle, Building2, GraduationCap, Sparkles, Layers, ShieldCheck } from "lucide-react";
 import { getAdminSession, formatCurrency } from "./adminData";
 import { IDENTITY_API_URL } from "../apiConfig";
 import { useToast } from "./ToastContext";
+import AdminModal from "./AdminModal";
 
 export default function SubscriptionManagement() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const session = getAdminSession();
   const token = session?.token;
+
+  // Active tab state ("business" | "student")
+  const [activeTab, setActiveTab] = useState("business");
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -389,559 +393,631 @@ export default function SubscriptionManagement() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "28px" }} className="admin-page-enter">
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }} className="admin-page-enter">
       
-      {/* Top action row */}
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 4px" }}>
+      {/* Top Controls Header: Segmented Tabs + Add Plan Button */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+        {/* Segmented Tab Switcher (2 Tabs Only) */}
+        <div style={{
+          display: "inline-flex",
+          background: "#f1f5f9",
+          padding: "5px",
+          borderRadius: "16px",
+          border: "1px solid #e2e8f0"
+        }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab("business")}
+            style={{
+              padding: "9px 20px",
+              borderRadius: "12px",
+              fontSize: "13.5px",
+              fontWeight: 800,
+              border: "none",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              background: activeTab === "business" ? "#ffffff" : "transparent",
+              color: activeTab === "business" ? "var(--admin-primary)" : "#64748b",
+              boxShadow: activeTab === "business" ? "0 4px 12px rgba(0,0,0,0.06)" : "none",
+              display: "flex",
+              alignItems: "center",
+              gap: 8
+            }}
+          >
+            <Building2 size={16} />
+            <span>Gói Nhà tuyển dụng / Chủ quán ({businessPlans.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("student")}
+            style={{
+              padding: "9px 20px",
+              borderRadius: "12px",
+              fontSize: "13.5px",
+              fontWeight: 800,
+              border: "none",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              background: activeTab === "student" ? "#ffffff" : "transparent",
+              color: activeTab === "student" ? "#2563eb" : "#64748b",
+              boxShadow: activeTab === "student" ? "0 4px 12px rgba(0,0,0,0.06)" : "none",
+              display: "flex",
+              alignItems: "center",
+              gap: 8
+            }}
+          >
+            <GraduationCap size={16} />
+            <span>Gói Sinh viên ({studentPlans.length})</span>
+          </button>
+        </div>
+
+        {/* Add Plan Button */}
         <button 
           className="admin-btn" 
           style={{ 
             display: "flex", 
             alignItems: "center", 
-            gap: 6, 
-            padding: "10px 20px", 
+            gap: 8, 
+            padding: "10px 22px", 
             background: "linear-gradient(135deg, var(--admin-primary), var(--admin-primary-hover))", 
             color: "#ffffff", 
             border: "none", 
-            borderRadius: 12, 
-            fontWeight: 700, 
+            borderRadius: 14, 
+            fontWeight: 800, 
             fontSize: 14, 
             cursor: "pointer", 
-            boxShadow: "0 4px 12px var(--admin-primary-glow)",
-            transition: "transform 0.2s, box-shadow 0.2s"
+            boxShadow: "0 4px 14px var(--admin-primary-glow)",
+            transition: "all 0.2s ease"
           }}
           onClick={openAddModal}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-1px)";
-            e.currentTarget.style.boxShadow = "0 6px 16px var(--admin-primary-glow)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "none";
-            e.currentTarget.style.boxShadow = "0 4px 12px var(--admin-primary-glow)";
-          }}
         >
           <Plus size={18} />
-          <span>Thêm gói dịch vụ</span>
+          <span>Thêm gói dịch vụ mới</span>
         </button>
       </div>
 
-      {/* Gói dịch vụ cho Sinh viên */}
-      <h3 style={{ 
-        fontSize: 15, 
-        fontWeight: 700, 
-        color: "var(--admin-text)", 
-        margin: "0 0 -8px 0", 
-        display: "flex", 
-        alignItems: "center", 
-        gap: 8, 
-        paddingLeft: 4 
-      }}>
-        <span style={{ width: 4, height: 16, background: "var(--admin-primary)", borderRadius: 2, display: "inline-block" }}></span>
-        GÓI DỊCH VỤ CHO SINH VIÊN ({studentPlans.length})
-      </h3>
-      {studentPlans.length === 0 ? (
-        <div style={{ padding: "30px", background: "#f8fafc", borderRadius: 16, border: "1px dashed var(--admin-border)", textAlign: "center", color: "var(--admin-text-muted)", fontSize: 13 }}>
-          Không có gói dịch vụ nào dành cho sinh viên.
-        </div>
-      ) : (
-        <div className="admin-sub-cards" style={{ marginBottom: 12 }}>
-          {studentPlans.map((sub) => renderPlanCard(sub))}
+      {/* SECTION 1: Gói dịch vụ cho Sinh viên (Shown when activeTab === "student") */}
+      {activeTab === "student" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <h3 style={{ 
+            fontSize: 15, 
+            fontWeight: 800, 
+            color: "var(--admin-text)", 
+            margin: 0, 
+            display: "flex", 
+            alignItems: "center", 
+            gap: 8, 
+            paddingLeft: 4 
+          }}>
+            <span style={{ width: 4, height: 16, background: "#3b82f6", borderRadius: 2, display: "inline-block" }}></span>
+            GÓI DỊCH VỤ DÀNH CHO SINH VIÊN ({studentPlans.length})
+          </h3>
+
+          {studentPlans.length === 0 ? (
+            <div style={{ padding: "30px", background: "#f8fafc", borderRadius: 16, border: "1px dashed var(--admin-border)", textAlign: "center", color: "var(--admin-text-muted)", fontSize: 13 }}>
+              Không có gói dịch vụ nào dành cho sinh viên.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
+              {/* Left Column: Student Plan Card */}
+              {studentPlans.map((sub) => renderPlanCard(sub))}
+
+              {/* Right Column: Information & Benefits Callout Banner */}
+              <div
+                style={{
+                  background: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+                  border: "1px solid rgba(59, 130, 246, 0.25)",
+                  borderRadius: "20px",
+                  padding: "24px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justify: "space-between",
+                  boxShadow: "0 4px 16px rgba(59, 130, 246, 0.08)"
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <div style={{ padding: "8px", background: "#ffffff", borderRadius: "12px", color: "#2563eb", display: "flex", boxShadow: "0 2px 8px rgba(37,99,235,0.15)" }}>
+                      <GraduationCap size={20} />
+                    </div>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: "#1e3a8a" }}>
+                        Quyền lợi Gói Sinh Viên ProxiJob
+                      </h4>
+                      <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#3b82f6", fontWeight: 600 }}>
+                        Cấu hình lượt ứng tuyển & tìm kiếm việc làm part-time
+                      </p>
+                    </div>
+                  </div>
+
+                  <ul style={{ margin: "16px 0 0", paddingLeft: "18px", fontSize: "13px", color: "#1e40af", display: "flex", flexDirection: "column", gap: "8px", fontWeight: 600 }}>
+                    <li>Mỗi gói cấp thêm <strong>+10 lượt nộp hồ sơ ứng tuyển</strong> trên di động.</li>
+                    <li>Hiệu lực mặc định <strong>30 ngày</strong> kể từ thời điểm thanh toán thành công.</li>
+                    <li>Tự động ưu tiên hồ sơ sinh viên khi ứng tuyển các ca làm gấp trong bán kính 10km.</li>
+                  </ul>
+                </div>
+
+                <div style={{ marginTop: 20, paddingTop: 14, borderTop: "1px dashed rgba(59, 130, 246, 0.3)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#2563eb" }}>
+                    Phân khúc áp dụng: Tài khoản Sinh viên
+                  </span>
+                  <button
+                    type="button"
+                    onClick={openAddModal}
+                    style={{
+                      background: "#ffffff",
+                      border: "1px solid #93c5fd",
+                      color: "#2563eb",
+                      fontWeight: 800,
+                      fontSize: "12.5px",
+                      padding: "6px 14px",
+                      borderRadius: "10px",
+                      cursor: "pointer"
+                    }}
+                  >
+                    + Tạo gói sinh viên mới
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Gói dịch vụ cho Chủ quán */}
-      <h3 style={{ 
-        fontSize: 15, 
-        fontWeight: 700, 
-        color: "var(--admin-text)", 
-        margin: "12px 0 -8px 0", 
-        display: "flex", 
-        alignItems: "center", 
-        gap: 8, 
-        paddingLeft: 4 
-      }}>
-        <span style={{ width: 4, height: 16, background: "var(--admin-primary)", borderRadius: 2, display: "inline-block" }}></span>
-        GÓI DỊCH VỤ CHO CHỦ QUÁN / NHÀ TUYỂN DỤNG ({businessPlans.length})
-      </h3>
-      {businessPlans.length === 0 ? (
-        <div style={{ padding: "30px", background: "#f8fafc", borderRadius: 16, border: "1px dashed var(--admin-border)", textAlign: "center", color: "var(--admin-text-muted)", fontSize: 13 }}>
-          Không có gói dịch vụ nào dành cho chủ quán.
-        </div>
-      ) : (
-        <div className="admin-sub-cards">
-          {businessPlans.map((sub) => renderPlanCard(sub))}
+      {/* SECTION 2: Gói dịch vụ cho Chủ quán / Nhà tuyển dụng (Shown when activeTab === "business") */}
+      {activeTab === "business" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <h3 style={{ 
+            fontSize: 15, 
+            fontWeight: 800, 
+            color: "var(--admin-text)", 
+            margin: 0, 
+            display: "flex", 
+            alignItems: "center", 
+            gap: 8, 
+            paddingLeft: 4 
+          }}>
+            <span style={{ width: 4, height: 16, background: "var(--admin-primary)", borderRadius: 2, display: "inline-block" }}></span>
+            GÓI DỊCH VỤ DÀNH CHO CHỦ QUÁN / NHÀ TUYỂN DỤNG ({businessPlans.length})
+          </h3>
+
+          {businessPlans.length === 0 ? (
+            <div style={{ padding: "30px", background: "#f8fafc", borderRadius: 16, border: "1px dashed var(--admin-border)", textAlign: "center", color: "var(--admin-text-muted)", fontSize: 13 }}>
+              Không có gói dịch vụ nào dành cho chủ quán.
+            </div>
+          ) : (
+            <div className="admin-sub-cards">
+              {businessPlans.map((sub) => renderPlanCard(sub))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Add Subscription Modal */}
-      {showAddModal && (
-        <div className="admin-modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="admin-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header" style={{ borderBottom: "1px solid var(--admin-border)", paddingBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{
-                  background: "var(--admin-primary-glow)",
-                  color: "var(--admin-primary)",
-                  padding: 8,
-                  borderRadius: 10,
-                  display: "flex"
-                }}>
-                  <Plus size={18} />
-                </div>
-                <div>
-                  <h3 className="admin-modal-title" style={{ margin: 0, fontSize: 16 }}>Thêm gói dịch vụ mới</h3>
-                  <p style={{ fontSize: 11, color: "var(--admin-text-muted)", margin: "2px 0 0" }}>Cấu hình gói dịch vụ đăng tuyển và quản trị</p>
-                </div>
-              </div>
-              <button className="admin-modal-close" onClick={() => setShowAddModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleAddSubmit} noValidate>
-              <div className="admin-modal-body" style={{ maxHeight: "calc(100vh - 240px)", overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: 16 }}>
-                
-                {/* Section 1: Thông tin cơ bản */}
-                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "0 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
-                  Thông tin cơ bản
-                </h4>
+      <AdminModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Thêm gói dịch vụ mới"
+        subtitle="Cấu hình gói dịch vụ đăng tuyển và quản trị"
+        icon={Plus}
+        maxWidth={580}
+        footer={
+          <>
+            <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowAddModal(false)}>Hủy</button>
+            <button type="submit" form="addSubForm" className="admin-btn admin-btn-success" style={{ backgroundColor: "var(--admin-success)", borderColor: "var(--admin-success)" }}>Thêm mới</button>
+          </>
+        }
+      >
+        <form id="addSubForm" onSubmit={handleAddSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Section 1: Thông tin cơ bản */}
+          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "0 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
+            Thông tin cơ bản
+          </h4>
 
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Tên gói dịch vụ (System Name)*</label>
-                  <input
-                    type="text"
-                    name="name"
-                    className={`admin-form-input ${fieldErrors.name ? "admin-input-error-state" : ""}`}
-                    placeholder="Ví dụ: PerShift, Recruit, HRM Basic, Enterprise"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                  />
-                  {fieldErrors.name && <span className="admin-field-error-msg">{fieldErrors.name}</span>}
-                </div>
-
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Mô tả gói</label>
-                  <textarea
-                    name="description"
-                    className="admin-form-input"
-                    placeholder="Mô tả quyền lợi nổi bật của gói..."
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    style={{ height: 60, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px", resize: "none" }}
-                  />
-                </div>
-
-                {/* Section 2: Chi phí & Chu kỳ */}
-                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "10px 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
-                  Chi phí & Chu kỳ
-                </h4>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Giá bán (VNĐ)*</label>
-                    <input
-                      type="number"
-                      name="price"
-                      className={`admin-form-input ${fieldErrors.price ? "admin-input-error-state" : ""}`}
-                      value={formData.price}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.price && <span className="admin-field-error-msg">{fieldErrors.price}</span>}
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Chi phí biến đổi (VNĐ)</label>
-                    <input
-                      type="number"
-                      name="variableCost"
-                      className={`admin-form-input ${fieldErrors.variableCost ? "admin-input-error-state" : ""}`}
-                      value={formData.variableCost}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.variableCost && <span className="admin-field-error-msg">{fieldErrors.variableCost}</span>}
-                  </div>
-                </div>
-
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Loại chu kỳ*</label>
-                  <select
-                    name="billingType"
-                    className="admin-form-input"
-                    value={formData.billingType}
-                    onChange={handleInputChange}
-                    style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px", background: "#fff" }}
-                  >
-                    <option value="PerShift">Đăng lẻ theo ca (PerShift)</option>
-                    <option value="Monthly">Thuê bao tháng (Monthly)</option>
-                  </select>
-                </div>
-
-                {/* Section 3: Giới hạn & Tính năng */}
-                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "10px 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
-                  Giới hạn & Quyền lợi
-                </h4>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Hạn mức tin đăng*</label>
-                    <input
-                      type="number"
-                      name="jobPostLimit"
-                      className={`admin-form-input ${fieldErrors.jobPostLimit ? "admin-input-error-state" : ""}`}
-                      value={formData.jobPostLimit}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.jobPostLimit && <span className="admin-field-error-msg">{fieldErrors.jobPostLimit}</span>}
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Hiệu lực (ngày)*</label>
-                    <input
-                      type="number"
-                      name="durationDays"
-                      className={`admin-form-input ${fieldErrors.durationDays ? "admin-input-error-state" : ""}`}
-                      value={formData.durationDays}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.durationDays && <span className="admin-field-error-msg">{fieldErrors.durationDays}</span>}
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Bán kính quét (km)</label>
-                    <input
-                      type="number"
-                      name="maxSearchRadius"
-                      className={`admin-form-input ${fieldErrors.maxSearchRadius ? "admin-input-error-state" : ""}`}
-                      value={formData.maxSearchRadius}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.maxSearchRadius && <span className="admin-field-error-msg">{fieldErrors.maxSearchRadius}</span>}
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Nhân viên tối đa</label>
-                    <input
-                      type="number"
-                      name="maxEmployees"
-                      className={`admin-form-input ${fieldErrors.maxEmployees ? "admin-input-error-state" : ""}`}
-                      value={formData.maxEmployees}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.maxEmployees && <span className="admin-field-error-msg">{fieldErrors.maxEmployees}</span>}
-                  </div>
-                </div>
-
-                <div className="admin-form-group">
-                  <label className="admin-form-label">QR chấm công tối đa</label>
-                  <input
-                    type="number"
-                    name="maxActiveQrs"
-                    className={`admin-form-input ${fieldErrors.maxActiveQrs ? "admin-input-error-state" : ""}`}
-                    value={formData.maxActiveQrs}
-                    onChange={handleInputChange}
-                    style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                  />
-                  {fieldErrors.maxActiveQrs && <span className="admin-field-error-msg">{fieldErrors.maxActiveQrs}</span>}
-                </div>
-
-                <div style={{
-                  display: "flex",
-                  gap: 20,
-                  marginTop: 8,
-                  padding: "12px 16px",
-                  background: "#f8fafc",
-                  borderRadius: "12px",
-                  border: "1px solid #e2e8f0"
-                }}>
-                  <label className="admin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: 0, fontSize: "13px" }}>
-                    <input
-                      type="checkbox"
-                      name="hasPriorityDisplay"
-                      checked={formData.hasPriorityDisplay}
-                      onChange={handleInputChange}
-                      style={{ width: 16, height: 16, cursor: "pointer" }}
-                    />
-                    <span>Hiển thị ưu tiên</span>
-                  </label>
-
-                  <label className="admin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: 0, fontSize: "13px" }}>
-                    <input
-                      type="checkbox"
-                      name="hasHrManagement"
-                      checked={formData.hasHrManagement}
-                      onChange={handleInputChange}
-                      style={{ width: 16, height: 16, cursor: "pointer" }}
-                    />
-                    <span>Kích hoạt HRM</span>
-                  </label>
-                </div>
-
-              </div>
-              <div className="admin-modal-footer" style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 16 }}>
-                <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowAddModal(false)}>Hủy</button>
-                <button type="submit" className="admin-btn admin-btn-success" style={{ backgroundColor: "var(--admin-success)", borderColor: "var(--admin-success)" }}>Thêm mới</button>
-              </div>
-            </form>
+          <div className="admin-form-group">
+            <label className="admin-form-label">Tên gói dịch vụ (System Name)*</label>
+            <input
+              type="text"
+              name="name"
+              className={`admin-form-input ${fieldErrors.name ? "admin-input-error-state" : ""}`}
+              placeholder="Ví dụ: PerShift, Recruit, HRM Basic, Enterprise"
+              value={formData.name}
+              onChange={handleInputChange}
+              style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+            />
+            {fieldErrors.name && <span className="admin-field-error-msg">{fieldErrors.name}</span>}
           </div>
-        </div>
-      )}
+
+          <div className="admin-form-group">
+            <label className="admin-form-label">Mô tả gói</label>
+            <textarea
+              name="description"
+              className="admin-form-input"
+              placeholder="Mô tả quyền lợi nổi bật của gói..."
+              value={formData.description}
+              onChange={handleInputChange}
+              style={{ height: 60, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px", resize: "none" }}
+            />
+          </div>
+
+          {/* Section 2: Chi phí & Chu kỳ */}
+          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "10px 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
+            Chi phí & Chu kỳ
+          </h4>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Giá bán (VNĐ)*</label>
+              <input
+                type="number"
+                name="price"
+                className={`admin-form-input ${fieldErrors.price ? "admin-input-error-state" : ""}`}
+                value={formData.price}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.price && <span className="admin-field-error-msg">{fieldErrors.price}</span>}
+            </div>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Chi phí biến đổi (VNĐ)</label>
+              <input
+                type="number"
+                name="variableCost"
+                className={`admin-form-input ${fieldErrors.variableCost ? "admin-input-error-state" : ""}`}
+                value={formData.variableCost}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.variableCost && <span className="admin-field-error-msg">{fieldErrors.variableCost}</span>}
+            </div>
+          </div>
+
+          <div className="admin-form-group">
+            <label className="admin-form-label">Loại chu kỳ*</label>
+            <select
+              name="billingType"
+              className="admin-form-input"
+              value={formData.billingType}
+              onChange={handleInputChange}
+              style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px", background: "#fff" }}
+            >
+              <option value="PerShift">Đăng lẻ theo ca (PerShift)</option>
+              <option value="Monthly">Thuê bao tháng (Monthly)</option>
+            </select>
+          </div>
+
+          {/* Section 3: Giới hạn & Tính năng */}
+          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "10px 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
+            Giới hạn & Quyền lợi
+          </h4>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Hạn mức tin đăng*</label>
+              <input
+                type="number"
+                name="jobPostLimit"
+                className={`admin-form-input ${fieldErrors.jobPostLimit ? "admin-input-error-state" : ""}`}
+                value={formData.jobPostLimit}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.jobPostLimit && <span className="admin-field-error-msg">{fieldErrors.jobPostLimit}</span>}
+            </div>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Hiệu lực (ngày)*</label>
+              <input
+                type="number"
+                name="durationDays"
+                className={`admin-form-input ${fieldErrors.durationDays ? "admin-input-error-state" : ""}`}
+                value={formData.durationDays}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.durationDays && <span className="admin-field-error-msg">{fieldErrors.durationDays}</span>}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Bán kính quét (km)</label>
+              <input
+                type="number"
+                name="maxSearchRadius"
+                className={`admin-form-input ${fieldErrors.maxSearchRadius ? "admin-input-error-state" : ""}`}
+                value={formData.maxSearchRadius}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.maxSearchRadius && <span className="admin-field-error-msg">{fieldErrors.maxSearchRadius}</span>}
+            </div>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Nhân viên tối đa</label>
+              <input
+                type="number"
+                name="maxEmployees"
+                className={`admin-form-input ${fieldErrors.maxEmployees ? "admin-input-error-state" : ""}`}
+                value={formData.maxEmployees}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.maxEmployees && <span className="admin-field-error-msg">{fieldErrors.maxEmployees}</span>}
+            </div>
+          </div>
+
+          <div className="admin-form-group">
+            <label className="admin-form-label">QR chấm công tối đa</label>
+            <input
+              type="number"
+              name="maxActiveQrs"
+              className={`admin-form-input ${fieldErrors.maxActiveQrs ? "admin-input-error-state" : ""}`}
+              value={formData.maxActiveQrs}
+              onChange={handleInputChange}
+              style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+            />
+            {fieldErrors.maxActiveQrs && <span className="admin-field-error-msg">{fieldErrors.maxActiveQrs}</span>}
+          </div>
+
+          <div style={{
+            display: "flex",
+            gap: 20,
+            marginTop: 8,
+            padding: "12px 16px",
+            background: "#f8fafc",
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0"
+          }}>
+            <label className="admin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: 0, fontSize: "13px" }}>
+              <input
+                type="checkbox"
+                name="hasPriorityDisplay"
+                checked={formData.hasPriorityDisplay}
+                onChange={handleInputChange}
+                style={{ width: 16, height: 16, cursor: "pointer" }}
+              />
+              <span>Hiển thị ưu tiên</span>
+            </label>
+
+            <label className="admin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: 0, fontSize: "13px" }}>
+              <input
+                type="checkbox"
+                name="hasHrManagement"
+                checked={formData.hasHrManagement}
+                onChange={handleInputChange}
+                style={{ width: 16, height: 16, cursor: "pointer" }}
+              />
+              <span>Kích hoạt HRM</span>
+            </label>
+          </div>
+        </form>
+      </AdminModal>
 
       {/* Edit Subscription Modal */}
-      {showEditModal && (
-        <div className="admin-modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="admin-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header" style={{ borderBottom: "1px solid var(--admin-border)", paddingBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{
-                  background: "var(--admin-primary-glow)",
-                  color: "var(--admin-primary)",
-                  padding: 8,
-                  borderRadius: 10,
-                  display: "flex"
-                }}>
-                  <Edit2 size={18} />
-                </div>
-                <div>
-                  <h3 className="admin-modal-title" style={{ margin: 0, fontSize: 16 }}>Chỉnh sửa gói dịch vụ</h3>
-                  <p style={{ fontSize: 11, color: "var(--admin-text-muted)", margin: "2px 0 0" }}>Cập nhật cấu hình gói dịch vụ đã chọn</p>
-                </div>
-              </div>
-              <button className="admin-modal-close" onClick={() => setShowEditModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleEditSubmit} noValidate>
-              <div className="admin-modal-body" style={{ maxHeight: "calc(100vh - 240px)", overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: 16 }}>
-                
-                {/* Section 1: Thông tin cơ bản */}
-                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "0 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
-                  Thông tin cơ bản
-                </h4>
+      <AdminModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Chỉnh sửa gói dịch vụ"
+        subtitle="Cập nhật cấu hình gói dịch vụ đã chọn"
+        icon={Edit2}
+        maxWidth={580}
+        footer={
+          <>
+            <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowEditModal(false)}>Hủy</button>
+            <button type="submit" form="editSubForm" className="admin-btn admin-btn-success" style={{ backgroundColor: "var(--admin-primary)", borderColor: "var(--admin-primary)" }}>Lưu thay đổi</button>
+          </>
+        }
+      >
+        <form id="editSubForm" onSubmit={handleEditSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Section 1: Thông tin cơ bản */}
+          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "0 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
+            Thông tin cơ bản
+          </h4>
 
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Tên gói dịch vụ (System Name)*</label>
-                  <input
-                    type="text"
-                    name="name"
-                    className={`admin-form-input ${fieldErrors.name ? "admin-input-error-state" : ""}`}
-                    placeholder="Ví dụ: PerShift, Recruit, HRM Basic, Enterprise"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                  />
-                  {fieldErrors.name && <span className="admin-field-error-msg">{fieldErrors.name}</span>}
-                </div>
-
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Mô tả gói</label>
-                  <textarea
-                    name="description"
-                    className="admin-form-input"
-                    placeholder="Mô tả quyền lợi nổi bật của gói..."
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    style={{ height: 60, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px", resize: "none" }}
-                  />
-                </div>
-
-                {/* Section 2: Chi phí & Chu kỳ */}
-                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "10px 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
-                  Chi phí & Chu kỳ
-                </h4>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Giá bán (VNĐ)*</label>
-                    <input
-                      type="number"
-                      name="price"
-                      className={`admin-form-input ${fieldErrors.price ? "admin-input-error-state" : ""}`}
-                      value={formData.price}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.price && <span className="admin-field-error-msg">{fieldErrors.price}</span>}
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Chi phí biến đổi (VNĐ)</label>
-                    <input
-                      type="number"
-                      name="variableCost"
-                      className={`admin-form-input ${fieldErrors.variableCost ? "admin-input-error-state" : ""}`}
-                      value={formData.variableCost}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.variableCost && <span className="admin-field-error-msg">{fieldErrors.variableCost}</span>}
-                  </div>
-                </div>
-
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Loại chu kỳ*</label>
-                  <select
-                    name="billingType"
-                    className="admin-form-input"
-                    value={formData.billingType}
-                    onChange={handleInputChange}
-                    style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px", background: "#fff" }}
-                  >
-                    <option value="PerShift">Đăng lẻ theo ca (PerShift)</option>
-                    <option value="Monthly">Thuê bao tháng (Monthly)</option>
-                  </select>
-                </div>
-
-                {/* Section 3: Giới hạn & Tính năng */}
-                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "10px 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
-                  Giới hạn & Quyền lợi
-                </h4>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Hạn mức tin đăng*</label>
-                    <input
-                      type="number"
-                      name="jobPostLimit"
-                      className={`admin-form-input ${fieldErrors.jobPostLimit ? "admin-input-error-state" : ""}`}
-                      value={formData.jobPostLimit}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.jobPostLimit && <span className="admin-field-error-msg">{fieldErrors.jobPostLimit}</span>}
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Hiệu lực (ngày)*</label>
-                    <input
-                      type="number"
-                      name="durationDays"
-                      className={`admin-form-input ${fieldErrors.durationDays ? "admin-input-error-state" : ""}`}
-                      value={formData.durationDays}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.durationDays && <span className="admin-field-error-msg">{fieldErrors.durationDays}</span>}
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Bán kính quét (km)</label>
-                    <input
-                      type="number"
-                      name="maxSearchRadius"
-                      className={`admin-form-input ${fieldErrors.maxSearchRadius ? "admin-input-error-state" : ""}`}
-                      value={formData.maxSearchRadius}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.maxSearchRadius && <span className="admin-field-error-msg">{fieldErrors.maxSearchRadius}</span>}
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Nhân viên tối đa</label>
-                    <input
-                      type="number"
-                      name="maxEmployees"
-                      className={`admin-form-input ${fieldErrors.maxEmployees ? "admin-input-error-state" : ""}`}
-                      value={formData.maxEmployees}
-                      onChange={handleInputChange}
-                      style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                    />
-                    {fieldErrors.maxEmployees && <span className="admin-field-error-msg">{fieldErrors.maxEmployees}</span>}
-                  </div>
-                </div>
-
-                <div className="admin-form-group">
-                  <label className="admin-form-label">QR chấm công tối đa</label>
-                  <input
-                    type="number"
-                    name="maxActiveQrs"
-                    className={`admin-form-input ${fieldErrors.maxActiveQrs ? "admin-input-error-state" : ""}`}
-                    value={formData.maxActiveQrs}
-                    onChange={handleInputChange}
-                    style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
-                  />
-                  {fieldErrors.maxActiveQrs && <span className="admin-field-error-msg">{fieldErrors.maxActiveQrs}</span>}
-                </div>
-
-                <div style={{
-                  display: "flex",
-                  gap: 20,
-                  marginTop: 8,
-                  padding: "12px 16px",
-                  background: "#f8fafc",
-                  borderRadius: "12px",
-                  border: "1px solid #e2e8f0"
-                }}>
-                  <label className="admin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: 0, fontSize: "13px" }}>
-                    <input
-                      type="checkbox"
-                      name="hasPriorityDisplay"
-                      checked={formData.hasPriorityDisplay}
-                      onChange={handleInputChange}
-                      style={{ width: 16, height: 16, cursor: "pointer" }}
-                    />
-                    <span>Hiển thị ưu tiên</span>
-                  </label>
-
-                  <label className="admin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: 0, fontSize: "13px" }}>
-                    <input
-                      type="checkbox"
-                      name="hasHrManagement"
-                      checked={formData.hasHrManagement}
-                      onChange={handleInputChange}
-                      style={{ width: 16, height: 16, cursor: "pointer" }}
-                    />
-                    <span>Kích hoạt HRM</span>
-                  </label>
-                </div>
-
-              </div>
-              <div className="admin-modal-footer" style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 16 }}>
-                <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowEditModal(false)}>Hủy</button>
-                <button type="submit" className="admin-btn admin-btn-success" style={{ backgroundColor: "var(--admin-primary)", borderColor: "var(--admin-primary)" }}>Lưu thay đổi</button>
-              </div>
-            </form>
+          <div className="admin-form-group">
+            <label className="admin-form-label">Tên gói dịch vụ (System Name)*</label>
+            <input
+              type="text"
+              name="name"
+              className={`admin-form-input ${fieldErrors.name ? "admin-input-error-state" : ""}`}
+              placeholder="Ví dụ: PerShift, Recruit, HRM Basic, Enterprise"
+              value={formData.name}
+              onChange={handleInputChange}
+              style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+            />
+            {fieldErrors.name && <span className="admin-field-error-msg">{fieldErrors.name}</span>}
           </div>
-        </div>
-      )}
 
-      {/* Custom Delete Confirmation Modal */}
-      {deleteSubId && (
-        <div className="admin-modal-overlay" onClick={() => setDeleteSubId(null)}>
-          <div className="admin-modal" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header" style={{ borderBottom: "none", paddingBottom: 0 }}>
-              <h3 className="admin-modal-title" style={{ color: "var(--admin-danger)", display: "flex", alignItems: "center", gap: 8 }}>
-                <AlertTriangle size={20} />
-                Xác nhận xóa gói dịch vụ
-              </h3>
-              <button className="admin-modal-close" onClick={() => setDeleteSubId(null)}>
-                <X size={20} />
-              </button>
+          <div className="admin-form-group">
+            <label className="admin-form-label">Mô tả gói</label>
+            <textarea
+              name="description"
+              className="admin-form-input"
+              placeholder="Mô tả quyền lợi nổi bật của gói..."
+              value={formData.description}
+              onChange={handleInputChange}
+              style={{ height: 60, borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px", resize: "none" }}
+            />
+          </div>
+
+          {/* Section 2: Chi phí & Chu kỳ */}
+          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "10px 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
+            Chi phí & Chu kỳ
+          </h4>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Giá bán (VNĐ)*</label>
+              <input
+                type="number"
+                name="price"
+                className={`admin-form-input ${fieldErrors.price ? "admin-input-error-state" : ""}`}
+                value={formData.price}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.price && <span className="admin-field-error-msg">{fieldErrors.price}</span>}
             </div>
-            <div className="admin-modal-body" style={{ paddingTop: 12 }}>
-              <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.5 }}>
-                Bạn có chắc chắn muốn xóa gói dịch vụ này? Toàn bộ thông tin gói sẽ bị xóa vĩnh viễn khỏi cơ sở dữ liệu.
-              </p>
-            </div>
-            <div className="admin-modal-footer" style={{ borderTop: "none", paddingTop: 16 }}>
-              <button className="admin-btn admin-btn-outline" onClick={() => setDeleteSubId(null)}>Hủy</button>
-              <button 
-                className="admin-btn admin-btn-danger" 
-                onClick={() => {
-                  handleDeletePlan(deleteSubId);
-                  setDeleteSubId(null);
-                }}
-              >
-                Xác nhận xóa
-              </button>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Chi phí biến đổi (VNĐ)</label>
+              <input
+                type="number"
+                name="variableCost"
+                className={`admin-form-input ${fieldErrors.variableCost ? "admin-input-error-state" : ""}`}
+                value={formData.variableCost}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.variableCost && <span className="admin-field-error-msg">{fieldErrors.variableCost}</span>}
             </div>
           </div>
-        </div>
-      )}
+
+          <div className="admin-form-group">
+            <label className="admin-form-label">Loại chu kỳ*</label>
+            <select
+              name="billingType"
+              className="admin-form-input"
+              value={formData.billingType}
+              onChange={handleInputChange}
+              style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px", background: "#fff" }}
+            >
+              <option value="PerShift">Đăng lẻ theo ca (PerShift)</option>
+              <option value="Monthly">Thuê bao tháng (Monthly)</option>
+            </select>
+          </div>
+
+          {/* Section 3: Giới hạn & Tính năng */}
+          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--admin-primary)", margin: "10px 0 4px 0", borderBottom: "1px dashed var(--admin-border-light)", paddingBottom: "6px" }}>
+            Giới hạn & Quyền lợi
+          </h4>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Hạn mức tin đăng*</label>
+              <input
+                type="number"
+                name="jobPostLimit"
+                className={`admin-form-input ${fieldErrors.jobPostLimit ? "admin-input-error-state" : ""}`}
+                value={formData.jobPostLimit}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.jobPostLimit && <span className="admin-field-error-msg">{fieldErrors.jobPostLimit}</span>}
+            </div>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Hiệu lực (ngày)*</label>
+              <input
+                type="number"
+                name="durationDays"
+                className={`admin-form-input ${fieldErrors.durationDays ? "admin-input-error-state" : ""}`}
+                value={formData.durationDays}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.durationDays && <span className="admin-field-error-msg">{fieldErrors.durationDays}</span>}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Bán kính quét (km)</label>
+              <input
+                type="number"
+                name="maxSearchRadius"
+                className={`admin-form-input ${fieldErrors.maxSearchRadius ? "admin-input-error-state" : ""}`}
+                value={formData.maxSearchRadius}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.maxSearchRadius && <span className="admin-field-error-msg">{fieldErrors.maxSearchRadius}</span>}
+            </div>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Nhân viên tối đa</label>
+              <input
+                type="number"
+                name="maxEmployees"
+                className={`admin-form-input ${fieldErrors.maxEmployees ? "admin-input-error-state" : ""}`}
+                value={formData.maxEmployees}
+                onChange={handleInputChange}
+                style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+              />
+              {fieldErrors.maxEmployees && <span className="admin-field-error-msg">{fieldErrors.maxEmployees}</span>}
+            </div>
+          </div>
+
+          <div className="admin-form-group">
+            <label className="admin-form-label">QR chấm công tối đa</label>
+            <input
+              type="number"
+              name="maxActiveQrs"
+              className={`admin-form-input ${fieldErrors.maxActiveQrs ? "admin-input-error-state" : ""}`}
+              value={formData.maxActiveQrs}
+              onChange={handleInputChange}
+              style={{ borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px", fontSize: "13.5px" }}
+            />
+            {fieldErrors.maxActiveQrs && <span className="admin-field-error-msg">{fieldErrors.maxActiveQrs}</span>}
+          </div>
+
+          <div style={{
+            display: "flex",
+            gap: 20,
+            marginTop: 8,
+            padding: "12px 16px",
+            background: "#f8fafc",
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0"
+          }}>
+            <label className="admin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: 0, fontSize: "13px" }}>
+              <input
+                type="checkbox"
+                name="hasPriorityDisplay"
+                checked={formData.hasPriorityDisplay}
+                onChange={handleInputChange}
+                style={{ width: 16, height: 16, cursor: "pointer" }}
+              />
+              <span>Hiển thị ưu tiên</span>
+            </label>
+
+            <label className="admin-form-label" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: 0, fontSize: "13px" }}>
+              <input
+                type="checkbox"
+                name="hasHrManagement"
+                checked={formData.hasHrManagement}
+                onChange={handleInputChange}
+                style={{ width: 16, height: 16, cursor: "pointer" }}
+              />
+              <span>Kích hoạt HRM</span>
+            </label>
+          </div>
+        </form>
+      </AdminModal>
+
+      {/* Delete Confirmation Modal */}
+      <AdminModal
+        isOpen={!!deleteSubId}
+        onClose={() => setDeleteSubId(null)}
+        title="Xác nhận xóa gói dịch vụ"
+        icon={AlertTriangle}
+        maxWidth={440}
+        footer={
+          <>
+            <button className="admin-btn admin-btn-outline" onClick={() => setDeleteSubId(null)}>Hủy</button>
+            <button 
+              className="admin-btn admin-btn-danger" 
+              onClick={() => {
+                handleDeletePlan(deleteSubId);
+                setDeleteSubId(null);
+              }}
+            >
+              Xác nhận xóa
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.6 }}>
+          Bạn có chắc chắn muốn xóa gói dịch vụ này? Toàn bộ thông tin gói sẽ bị xóa vĩnh viễn khỏi cơ sở dữ liệu.
+        </p>
+      </AdminModal>
     </div>
   );
 }

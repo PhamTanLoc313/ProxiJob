@@ -14,8 +14,10 @@ import {
   Menu,
   X,
   Bell,
-  Settings,
+  Sparkles,
   Calendar,
+  ChevronRight,
+  ShieldCheck
 } from "lucide-react";
 import "./admin.css";
 
@@ -62,32 +64,38 @@ export default function AdminLayout() {
       case "/admin":
         return {
           title: "Tổng quan hệ thống",
-          subtitle: "Báo cáo hoạt động của ProxiJob hôm nay và phân tích tăng trưởng."
+          subtitle: "Báo cáo hoạt động real-time của ProxiJob và phân tích tăng trưởng.",
+          category: "Dashboard"
         };
       case "/admin/users":
         return {
           title: "Quản lý người dùng",
-          subtitle: "Quản lý danh sách sinh viên, nhà tuyển dụng và quản trị viên hệ thống."
+          subtitle: "Giám sát tài khoản sinh viên, nhà tuyển dụng và phân quyền hệ thống.",
+          category: "Người dùng"
         };
       case "/admin/jobs":
         return {
           title: "Quản lý việc làm",
-          subtitle: "Giám sát, duyệt bài hoặc gỡ bài đăng tuyển dụng của các nhà tuyển dụng."
+          subtitle: "Kiểm duyệt, theo dõi và gỡ bỏ tin tuyển dụng vi phạm quy định.",
+          category: "Việc làm"
         };
       case "/admin/payments":
         return {
           title: "Quản lý thanh toán",
-          subtitle: "Phê duyệt các đơn thanh toán nâng cấp gói VIP và HRM của doanh nghiệp."
+          subtitle: "Xác thực & phê duyệt đơn chuyển khoản nâng cấp gói dịch vụ.",
+          category: "Thanh toán"
         };
       case "/admin/subscriptions":
         return {
-          title: "Gói dịch vụ",
-          subtitle: "Cấu hình giá cả, hạn mức và quyền lợi của các gói dịch vụ trên ProxiJob."
+          title: "Gói dịch vụ ProxiJob",
+          subtitle: "Cấu hình giá cả, quyền lợi và hạn mức đăng bài các gói VIP & HRM.",
+          category: "Gói dịch vụ"
         };
       default:
         return {
           title: "Quản trị hệ thống",
-          subtitle: "Trang quản trị ProxiJob"
+          subtitle: "Trang quản trị ProxiJob Executive Suite",
+          category: "Admin"
         };
     }
   };
@@ -103,24 +111,30 @@ export default function AdminLayout() {
       )}
 
       {/* Sidebar */}
-      <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`} style={{ height: "100vh", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-          <div className="admin-sidebar-logo" style={{ flexShrink: 0 }}>
-            <img src={logoImg} className="admin-sidebar-logo-img" style={{ width: 36, height: 36, borderRadius: 8, marginRight: 8, objectFit: "contain" }} />
+      <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`}>
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="admin-sidebar-logo">
+            <div className="relative">
+              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl blur-xs opacity-60 animate-pulse" />
+              <img src={logoImg} className="relative w-9 h-9 rounded-lg object-contain bg-white p-0.5 border border-amber-200/50 shadow-sm" alt="Logo" />
+            </div>
             <div className="admin-sidebar-logo-text">
-              <span className="admin-sidebar-logo-title">ProxiJob</span>
-              <span className="admin-sidebar-logo-sub">Admin Panel</span>
+              <span className="admin-sidebar-logo-title flex items-center gap-1">
+                ProxiJob
+                <Sparkles size={13} className="text-amber-500 inline fill-amber-400" />
+              </span>
+              <span className="admin-sidebar-logo-sub">Executive Suite</span>
             </div>
             <button
-              className="admin-menu-toggle"
-              style={{ marginLeft: "auto" }}
+              className="admin-menu-toggle md:hidden ml-auto p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               onClick={() => setSidebarOpen(false)}
             >
               <X size={18} />
             </button>
           </div>
 
-          <nav className="admin-nav" style={{ flex: 1, overflowY: "auto" }}>
+          <nav className="admin-nav">
+            <div className="admin-nav-label">Chức năng quản trị</div>
             {navItems.map((item) => (
               <Link
                 key={item.path}
@@ -128,7 +142,7 @@ export default function AdminLayout() {
                 className={`admin-nav-item ${isActive(item.path, item.end) ? "active" : ""}`}
                 onClick={() => setSidebarOpen(false)}
               >
-                <item.icon size={20} className="admin-nav-icon" />
+                <item.icon size={19} className="admin-nav-icon" />
                 <span>{item.label}</span>
                 {item.badgeKey === "pendingPayments" && pendingPaymentsCount > 0 && (
                   <span className="admin-nav-badge">{pendingPaymentsCount}</span>
@@ -139,24 +153,26 @@ export default function AdminLayout() {
         </div>
 
         {/* User profile footer info */}
-        <div className="p-4 border-t border-slate-100 flex flex-col gap-3 shrink-0 bg-gradient-to-b from-transparent to-slate-50/50">
-          <div className="bg-gradient-to-b from-white to-slate-50/80 border border-slate-200/60 rounded-2xl p-3 flex flex-col gap-3 shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-all">
+        <div className="p-4 border-t border-slate-100/80 flex flex-col gap-3 shrink-0 bg-gradient-to-b from-transparent to-amber-50/20">
+          <div className="bg-white/90 backdrop-blur-md border border-slate-200/70 rounded-2xl p-3 flex flex-col gap-3 shadow-[0_4px_20px_rgb(249,115,22,0.04)]">
             <div className="flex items-center gap-3 px-0.5">
               <div className="relative">
                 <div className="absolute -inset-0.5 bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-500 rounded-full blur-xs opacity-75 animate-pulse" />
-                <div className="relative w-8 h-8 bg-gradient-to-br from-orange-400 to-amber-500 rounded-full flex items-center justify-center font-bold text-xs border border-white text-white shrink-0">
-                  🛠️
+                <div className="relative w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-500 rounded-full flex items-center justify-center font-bold text-xs border border-white text-white shrink-0 shadow-sm">
+                  <ShieldCheck size={16} />
                 </div>
               </div>
               <div className="min-w-0 flex-1">
-                <h4 className="font-black text-slate-800 text-xs truncate">Quản trị viên</h4>
-                <p className="text-[10px] text-slate-400 font-bold truncate mt-0.5">{session?.email || "admin@proxijob.test"}</p>
+                <h4 className="font-extrabold text-slate-900 text-xs truncate flex items-center gap-1">
+                  Quản trị viên
+                </h4>
+                <p className="text-[10px] text-slate-400 font-semibold truncate mt-0.5">{session?.email || "admin@proxijob.test"}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setShowLogoutConfirm(true)}
-              className="w-full h-9 bg-slate-100 hover:bg-slate-200/80 text-slate-650 rounded-xl font-black text-xs transition duration-300 flex items-center justify-center gap-2 cursor-pointer border border-slate-200/10"
+              className="w-full h-9 bg-slate-50 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-600 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer border border-slate-200/60 shadow-xs"
             >
               <LogOut size={14} />
               <span>Đăng xuất</span>
@@ -165,35 +181,45 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      {/* Main */}
+      {/* Main Container */}
       <div className="admin-main">
-        <header className="admin-header" style={{ height: "auto", padding: "20px 32px", background: "#ffffff", borderBottom: "1px solid var(--admin-border)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", flexWrap: "wrap", gap: 16 }}>
-            {/* Left: Title & Subtitle */}
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <header className="admin-header glassmorphism-light">
+          <div className="flex justify-between items-center w-full flex-wrap gap-4">
+            {/* Left: Breadcrumbs & Title */}
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 pt-1 mb-1.5">
                 <button
-                  className="admin-menu-toggle"
+                  className="admin-menu-toggle md:hidden mr-1 p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600"
                   onClick={() => setSidebarOpen(true)}
-                  style={{ marginRight: 4 }}
                 >
                   <Menu size={18} />
                 </button>
-                <h1 style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", letterSpacing: "-0.8px", margin: 0 }}>
-                  {getHeaderInfo().title}
-                </h1>
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-600 bg-amber-500/10 px-2.5 py-0.5 rounded-md border border-amber-500/20 shadow-2xs">
+                  ProxiJob Admin
+                </span>
+                <ChevronRight size={13} className="text-slate-300" />
+                <span className="text-xs font-bold text-slate-500">
+                  {getHeaderInfo().category}
+                </span>
               </div>
-              <p style={{ fontSize: 13, color: "var(--admin-text-secondary)", margin: "4px 0 0 0", fontWeight: 500 }}>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight margin-0">
+                {getHeaderInfo().title}
+              </h1>
+              <p className="text-xs text-slate-500 font-medium mt-1">
                 {getHeaderInfo().subtitle}
               </p>
             </div>
 
-            {/* Right: Actions */}
-            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              {/* Date Badge */}
-              <div className="admin-date-badge" style={{ margin: 0, padding: "8px 14px", background: "var(--admin-bg)", borderRadius: 12, border: "1px solid var(--admin-border)" }}>
-                <Calendar size={14} style={{ marginRight: 6, color: "var(--admin-primary)" }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)" }}>
+            {/* Right: Date & System Status Badge */}
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-emerald-600 text-xs font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>Hệ thống Live</span>
+              </div>
+
+              <div className="admin-date-badge shadow-xs bg-white/80 border border-slate-200/80 rounded-xl px-3.5 py-1.5 flex items-center text-xs font-bold text-slate-700">
+                <Calendar size={14} className="mr-2 text-amber-500" />
+                <span>
                   {new Date().toLocaleDateString("vi-VN", {
                     weekday: "long",
                     year: "numeric",
@@ -207,7 +233,7 @@ export default function AdminLayout() {
         </header>
 
         <div className="admin-content">
-          <div className="admin-page-enter">
+          <div className="dashboard-fade-in">
             <Outlet />
           </div>
         </div>
@@ -216,25 +242,27 @@ export default function AdminLayout() {
       {/* Custom Logout Confirmation Modal */}
       {showLogoutConfirm && (
         <div className="admin-modal-overlay" onClick={() => setShowLogoutConfirm(false)}>
-          <div className="admin-modal" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header" style={{ borderBottom: "none", paddingBottom: 0 }}>
-              <h3 className="admin-modal-title" style={{ color: "var(--admin-danger)", display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="admin-modal max-w-sm rounded-3xl p-6 shadow-2xl bg-white border border-slate-100" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header border-b-0 pb-0">
+              <h3 className="admin-modal-title text-rose-600 flex items-center gap-2 font-black text-lg">
                 <LogOut size={20} />
                 Xác nhận đăng xuất
               </h3>
-              <button className="admin-modal-close" onClick={() => setShowLogoutConfirm(false)}>
+              <button className="admin-modal-close text-slate-400 hover:text-slate-600" onClick={() => setShowLogoutConfirm(false)}>
                 <X size={20} />
               </button>
             </div>
-            <div className="admin-modal-body" style={{ paddingTop: 12 }}>
-              <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.5 }}>
+            <div className="admin-modal-body pt-3">
+              <p className="m-0 text-sm text-slate-600 font-medium leading-relaxed">
                 Bạn có chắc chắn muốn đăng xuất khỏi tài khoản Quản trị viên của ProxiJob không?
               </p>
             </div>
-            <div className="admin-modal-footer" style={{ borderTop: "none", paddingTop: 16 }}>
-              <button className="admin-btn admin-btn-outline" onClick={() => setShowLogoutConfirm(false)}>Hủy</button>
+            <div className="admin-modal-footer border-t-0 pt-4 flex gap-3 justify-end">
+              <button className="px-4 py-2.5 rounded-xl font-bold text-xs border border-slate-200 hover:bg-slate-50 text-slate-600 cursor-pointer" onClick={() => setShowLogoutConfirm(false)}>
+                Hủy
+              </button>
               <button
-                className="admin-btn admin-btn-danger"
+                className="px-4 py-2.5 rounded-xl font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-md shadow-rose-600/20"
                 onClick={() => {
                   setShowLogoutConfirm(false);
                   adminLogout();
@@ -252,3 +280,4 @@ export default function AdminLayout() {
     </div>
   );
 }
+

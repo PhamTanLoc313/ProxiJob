@@ -4,6 +4,36 @@ import { Search, Eye, EyeOff, UserX, UserCheck, Users, UserPlus, Plus, Edit2, Tr
 import { getAdminSession, formatDateTime } from "./adminData";
 import { IDENTITY_API_URL } from "../apiConfig";
 import { useToast } from "./ToastContext";
+import avatarNamImg from "../assets/AvatarNam.png";
+import avatarNuImg from "../assets/AvatarNu.png";
+import AdminModal from "./AdminModal";
+
+function UserAvatar({ src, name, gender, role, size = 36 }) {
+  const [imgError, setImgError] = useState(false);
+
+  const defaultAvatar = (gender && (gender.toLowerCase().includes("nữ") || gender.toLowerCase().includes("female")))
+    ? avatarNuImg
+    : avatarNamImg;
+
+  const avatarSrc = (src && !imgError) ? src : defaultAvatar;
+
+  return (
+    <img
+      src={avatarSrc}
+      alt={name || "Avatar"}
+      onError={() => setImgError(true)}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        objectFit: "cover",
+        border: "1.5px solid rgba(226, 232, 240, 0.9)",
+        boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+        flexShrink: 0
+      }}
+    />
+  );
+}
 
 export default function UserManagement() {
   const queryClient = useQueryClient();
@@ -375,9 +405,12 @@ export default function UserManagement() {
                   <tr key={user.id}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div className="admin-sidebar-avatar" style={{ width: 32, height: 32, borderRadius: 8, fontSize: 12 }}>
-                          {(user.fullName || "U").charAt(0).toUpperCase()}
-                        </div>
+                        <UserAvatar
+                          src={user.avatarUrl || user.avatar || user.profilePicture}
+                          name={user.fullName}
+                          role={user.role}
+                          size={36}
+                        />
                         <div>
                           <div style={{ fontWeight: 600 }}>{user.fullName}</div>
                           <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>{user.email}</div>
@@ -434,322 +467,276 @@ export default function UserManagement() {
       </div>
 
       {/* CRUD Add User Modal */}
-      {showAddModal && (
-        <div className="admin-modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="admin-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header" style={{ borderBottom: "1px solid var(--admin-border)", paddingBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{
-                  background: "var(--admin-primary-glow)",
-                  color: "var(--admin-primary)",
-                  padding: 8,
-                  borderRadius: 10,
-                  display: "flex"
-                }}>
-                  <UserPlus size={18} />
-                </div>
-                <div>
-                  <h3 className="admin-modal-title" style={{ margin: 0, fontSize: 16 }}>Thêm người dùng mới</h3>
-                  <p style={{ fontSize: 11, color: "var(--admin-text-muted)", margin: "2px 0 0" }}>Tạo tài khoản thành viên mới cho hệ thống</p>
-                </div>
-              </div>
-              <button className="admin-modal-close" onClick={() => setShowAddModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddSubmit} noValidate autoComplete="off">
-              <div className="admin-modal-body" style={{ display: "flex", flexDirection: "column", gap: 16, padding: "24px" }}>
-                
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Họ và Tên*</label>
-                  <input
-                    type="text"
-                    className={`admin-form-input ${fieldErrors.fullName ? "admin-input-error-state" : ""}`}
-                    placeholder="Ví dụ: Nguyễn Văn A"
-                    value={formData.fullName}
-                    onChange={(e) => {
-                      setFormData({ ...formData, fullName: e.target.value });
-                      if (fieldErrors.fullName) setFieldErrors(prev => ({ ...prev, fullName: "" }));
-                    }}
-                    style={{
-                      borderRadius: 12,
-                      border: "1px solid #e2e8f0",
-                      padding: "11px 14px",
-                      fontSize: "13.5px"
-                    }}
-                  />
-                  {fieldErrors.fullName && <span className="admin-field-error-msg">{fieldErrors.fullName}</span>}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Email*</label>
-                    <input
-                      type="email"
-                      autoComplete="new-email"
-                      className={`admin-form-input ${fieldErrors.email ? "admin-input-error-state" : ""}`}
-                      placeholder="user@example.com"
-                      value={formData.email}
-                      onChange={(e) => {
-                        setFormData({ ...formData, email: e.target.value });
-                        if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: "" }));
-                      }}
-                      style={{
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                        padding: "11px 14px",
-                        fontSize: "13.5px"
-                      }}
-                    />
-                    {fieldErrors.email && <span className="admin-field-error-msg">{fieldErrors.email}</span>}
-                  </div>
-
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Số điện thoại</label>
-                    <input
-                      type="text"
-                      className="admin-form-input"
-                      placeholder="Ví dụ: 0987654321"
-                      value={formData.phoneNumber}
-                      onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                      style={{
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                        padding: "11px 14px",
-                        fontSize: "13.5px"
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Vai trò (Role)*</label>
-                  <select
-                    className="admin-form-input"
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    style={{
-                      borderRadius: 12,
-                      border: "1px solid #e2e8f0",
-                      padding: "11px 14px",
-                      fontSize: "13.5px",
-                      background: "#fff"
-                    }}
-                  >
-                    <option value="Student">Student (Sinh viên)</option>
-                    <option value="Business">Business (Doanh nghiệp)</option>
-                    <option value="Admin">Admin (Quản trị viên)</option>
-                  </select>
-                </div>
-
-                <div className="admin-form-group" style={{ position: "relative" }}>
-                  <label className="admin-form-label">Mật khẩu*</label>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      className={`admin-form-input ${fieldErrors.password ? "admin-input-error-state" : ""}`}
-                      placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
-                      value={formData.password}
-                      onChange={(e) => {
-                        setFormData({ ...formData, password: e.target.value });
-                        if (fieldErrors.password) setFieldErrors(prev => ({ ...prev, password: "" }));
-                      }}
-                      style={{
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                        padding: "11px 44px 11px 14px",
-                        fontSize: "13.5px"
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      style={{
-                        position: "absolute",
-                        right: "12px",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "var(--admin-text-muted)",
-                        padding: "4px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  {fieldErrors.password && <span className="admin-field-error-msg">{fieldErrors.password}</span>}
-                </div>
-              </div>
-              
-              <div className="admin-modal-footer" style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 16 }}>
-                <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowAddModal(false)}>Hủy</button>
-                <button type="submit" className="admin-btn admin-btn-success" style={{ backgroundColor: "var(--admin-success)", borderColor: "var(--admin-success)" }}>Thêm mới</button>
-              </div>
-            </form>
+      {/* CRUD Add User Modal */}
+      <AdminModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Thêm người dùng mới"
+        subtitle="Tạo tài khoản thành viên mới cho hệ thống"
+        icon={UserPlus}
+        maxWidth={520}
+        footer={
+          <>
+            <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowAddModal(false)}>Hủy</button>
+            <button type="submit" form="addUserForm" className="admin-btn admin-btn-success" style={{ backgroundColor: "var(--admin-success)", borderColor: "var(--admin-success)" }}>Thêm mới</button>
+          </>
+        }
+      >
+        <form id="addUserForm" onSubmit={handleAddSubmit} noValidate autoComplete="off" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div className="admin-form-group">
+            <label className="admin-form-label">Họ và Tên*</label>
+            <input
+              type="text"
+              className={`admin-form-input ${fieldErrors.fullName ? "admin-input-error-state" : ""}`}
+              placeholder="Ví dụ: Nguyễn Văn A"
+              value={formData.fullName}
+              onChange={(e) => {
+                setFormData({ ...formData, fullName: e.target.value });
+                if (fieldErrors.fullName) setFieldErrors(prev => ({ ...prev, fullName: "" }));
+              }}
+              style={{
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                padding: "11px 14px",
+                fontSize: "13.5px"
+              }}
+            />
+            {fieldErrors.fullName && <span className="admin-field-error-msg">{fieldErrors.fullName}</span>}
           </div>
-        </div>
-      )}
 
-      {/* CRUD Edit User Modal */}
-      {showEditModal && (
-        <div className="admin-modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="admin-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header" style={{ borderBottom: "1px solid var(--admin-border)", paddingBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{
-                  background: "var(--admin-primary-glow)",
-                  color: "var(--admin-primary)",
-                  padding: 8,
-                  borderRadius: 10,
-                  display: "flex"
-                }}>
-                  <Edit2 size={18} />
-                </div>
-                <div>
-                  <h3 className="admin-modal-title" style={{ margin: 0, fontSize: 16 }}>Chỉnh sửa thông tin</h3>
-                  <p style={{ fontSize: 11, color: "var(--admin-text-muted)", margin: "2px 0 0" }}>Cập nhật thông tin tài khoản người dùng</p>
-                </div>
-              </div>
-              <button className="admin-modal-close" onClick={() => setShowEditModal(false)}>
-                <X size={20} />
-              </button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Email*</label>
+              <input
+                type="email"
+                autoComplete="new-email"
+                className={`admin-form-input ${fieldErrors.email ? "admin-input-error-state" : ""}`}
+                placeholder="user@example.com"
+                value={formData.email}
+                onChange={(e) => {
+                  setFormData({ ...formData, email: e.target.value });
+                  if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: "" }));
+                }}
+                style={{
+                  borderRadius: 12,
+                  border: "1px solid #e2e8f0",
+                  padding: "11px 14px",
+                  fontSize: "13.5px"
+                }}
+              />
+              {fieldErrors.email && <span className="admin-field-error-msg">{fieldErrors.email}</span>}
             </div>
 
-            <form onSubmit={handleEditSubmit} noValidate>
-              <div className="admin-modal-body" style={{ display: "flex", flexDirection: "column", gap: 16, padding: "24px" }}>
-                
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Họ và Tên*</label>
-                  <input
-                    type="text"
-                    className={`admin-form-input ${fieldErrors.fullName ? "admin-input-error-state" : ""}`}
-                    placeholder="Ví dụ: Nguyễn Văn A"
-                    value={formData.fullName}
-                    onChange={(e) => {
-                      setFormData({ ...formData, fullName: e.target.value });
-                      if (fieldErrors.fullName) setFieldErrors(prev => ({ ...prev, fullName: "" }));
-                    }}
-                    style={{
-                      borderRadius: 12,
-                      border: "1px solid #e2e8f0",
-                      padding: "11px 14px",
-                      fontSize: "13.5px"
-                    }}
-                  />
-                  {fieldErrors.fullName && <span className="admin-field-error-msg">{fieldErrors.fullName}</span>}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Email*</label>
-                    <input
-                      type="email"
-                      className={`admin-form-input ${fieldErrors.email ? "admin-input-error-state" : ""}`}
-                      placeholder="user@example.com"
-                      value={formData.email}
-                      onChange={(e) => {
-                        setFormData({ ...formData, email: e.target.value });
-                        if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: "" }));
-                      }}
-                      style={{
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                        padding: "11px 14px",
-                        fontSize: "13.5px"
-                      }}
-                    />
-                    {fieldErrors.email && <span className="admin-field-error-msg">{fieldErrors.email}</span>}
-                  </div>
-
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Số điện thoại</label>
-                    <input
-                      type="text"
-                      className="admin-form-input"
-                      placeholder="Ví dụ: 0987654321"
-                      value={formData.phoneNumber}
-                      onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                      style={{
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                        padding: "11px 14px",
-                        fontSize: "13.5px"
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="admin-form-group">
-                  <label className="admin-form-label">Vai trò (Role)*</label>
-                  <select
-                    className="admin-form-input"
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    disabled={selectedUser?.role === "Admin"}
-                    style={{
-                      borderRadius: 12,
-                      border: "1px solid #e2e8f0",
-                      padding: "11px 14px",
-                      fontSize: "13.5px",
-                      background: "#fff"
-                    }}
-                  >
-                    <option value="Student">Student (Sinh viên)</option>
-                    <option value="Business">Business (Doanh nghiệp)</option>
-                    <option value="Admin">Admin (Quản trị viên)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="admin-modal-footer" style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 16 }}>
-                <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowEditModal(false)}>Hủy</button>
-                <button type="submit" className="admin-btn admin-btn-success" style={{ backgroundColor: "var(--admin-primary)", borderColor: "var(--admin-primary)" }}>Lưu thay đổi</button>
-              </div>
-            </form>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Số điện thoại</label>
+              <input
+                type="text"
+                className="admin-form-input"
+                placeholder="Ví dụ: 0987654321"
+                value={formData.phoneNumber}
+                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                style={{
+                  borderRadius: 12,
+                  border: "1px solid #e2e8f0",
+                  padding: "11px 14px",
+                  fontSize: "13.5px"
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Custom Delete Confirmation Modal */}
-      {deleteUserId && (
-        <div className="admin-modal-overlay" onClick={() => setDeleteUserId(null)}>
-          <div className="admin-modal" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header" style={{ borderBottom: "none", paddingBottom: 0 }}>
-              <h3 className="admin-modal-title" style={{ color: "var(--admin-danger)", display: "flex", alignItems: "center", gap: 8 }}>
-                <Trash2 size={20} />
-                Xác nhận xóa tài khoản
-              </h3>
-              <button className="admin-modal-close" onClick={() => setDeleteUserId(null)}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="admin-modal-body" style={{ paddingTop: 12 }}>
-              <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.5 }}>
-                Bạn có chắc chắn muốn xóa người dùng này? Tài khoản sẽ bị xóa vĩnh viễn khỏi danh sách hoạt động và không thể khôi phục lại.
-              </p>
-            </div>
-            <div className="admin-modal-footer" style={{ borderTop: "none", paddingTop: 16 }}>
-              <button className="admin-btn admin-btn-outline" onClick={() => setDeleteUserId(null)}>Hủy</button>
-              <button 
-                className="admin-btn admin-btn-danger" 
-                onClick={() => {
-                  handleDeleteUser(deleteUserId);
-                  setDeleteUserId(null);
+          <div className="admin-form-group">
+            <label className="admin-form-label">Vai trò (Role)*</label>
+            <select
+              className="admin-form-input"
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              style={{
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                padding: "11px 14px",
+                fontSize: "13.5px",
+                background: "#fff"
+              }}
+            >
+              <option value="Student">Student (Sinh viên)</option>
+              <option value="Business">Business (Doanh nghiệp)</option>
+              <option value="Admin">Admin (Quản trị viên)</option>
+            </select>
+          </div>
+
+          <div className="admin-form-group" style={{ position: "relative" }}>
+            <label className="admin-form-label">Mật khẩu*</label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                className={`admin-form-input ${fieldErrors.password ? "admin-input-error-state" : ""}`}
+                placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
+                value={formData.password}
+                onChange={(e) => {
+                  setFormData({ ...formData, password: e.target.value });
+                  if (fieldErrors.password) setFieldErrors(prev => ({ ...prev, password: "" }));
+                }}
+                style={{
+                  borderRadius: 12,
+                  border: "1px solid #e2e8f0",
+                  padding: "11px 44px 11px 14px",
+                  fontSize: "13.5px"
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute",
+                  right: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--admin-text-muted)",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                Xác nhận xóa
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            {fieldErrors.password && <span className="admin-field-error-msg">{fieldErrors.password}</span>}
           </div>
-        </div>
-      )}
+        </form>
+      </AdminModal>
+
+      {/* CRUD Edit User Modal */}
+      <AdminModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Chỉnh sửa thông tin"
+        subtitle="Cập nhật thông tin tài khoản người dùng"
+        icon={Edit2}
+        maxWidth={520}
+        footer={
+          <>
+            <button type="button" className="admin-btn admin-btn-outline" onClick={() => setShowEditModal(false)}>Hủy</button>
+            <button type="submit" form="editUserForm" className="admin-btn admin-btn-success" style={{ backgroundColor: "var(--admin-primary)", borderColor: "var(--admin-primary)" }}>Lưu thay đổi</button>
+          </>
+        }
+      >
+        <form id="editUserForm" onSubmit={handleEditSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div className="admin-form-group">
+            <label className="admin-form-label">Họ và Tên*</label>
+            <input
+              type="text"
+              className={`admin-form-input ${fieldErrors.fullName ? "admin-input-error-state" : ""}`}
+              placeholder="Ví dụ: Nguyễn Văn A"
+              value={formData.fullName}
+              onChange={(e) => {
+                setFormData({ ...formData, fullName: e.target.value });
+                if (fieldErrors.fullName) setFieldErrors(prev => ({ ...prev, fullName: "" }));
+              }}
+              style={{
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                padding: "11px 14px",
+                fontSize: "13.5px"
+              }}
+            />
+            {fieldErrors.fullName && <span className="admin-field-error-msg">{fieldErrors.fullName}</span>}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="admin-form-group">
+              <label className="admin-form-label">Email*</label>
+              <input
+                type="email"
+                className={`admin-form-input ${fieldErrors.email ? "admin-input-error-state" : ""}`}
+                placeholder="user@example.com"
+                value={formData.email}
+                onChange={(e) => {
+                  setFormData({ ...formData, email: e.target.value });
+                  if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: "" }));
+                }}
+                style={{
+                  borderRadius: 12,
+                  border: "1px solid #e2e8f0",
+                  padding: "11px 14px",
+                  fontSize: "13.5px"
+                }}
+              />
+              {fieldErrors.email && <span className="admin-field-error-msg">{fieldErrors.email}</span>}
+            </div>
+
+            <div className="admin-form-group">
+              <label className="admin-form-label">Số điện thoại</label>
+              <input
+                type="text"
+                className="admin-form-input"
+                placeholder="Ví dụ: 0987654321"
+                value={formData.phoneNumber}
+                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                style={{
+                  borderRadius: 12,
+                  border: "1px solid #e2e8f0",
+                  padding: "11px 14px",
+                  fontSize: "13.5px"
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="admin-form-group">
+            <label className="admin-form-label">Vai trò (Role)*</label>
+            <select
+              className="admin-form-input"
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              disabled={selectedUser?.role === "Admin"}
+              style={{
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                padding: "11px 14px",
+                fontSize: "13.5px",
+                background: "#fff"
+              }}
+            >
+              <option value="Student">Student (Sinh viên)</option>
+              <option value="Business">Business (Doanh nghiệp)</option>
+              <option value="Admin">Admin (Quản trị viên)</option>
+            </select>
+          </div>
+        </form>
+      </AdminModal>
+
+      {/* Delete Confirmation Modal */}
+      <AdminModal
+        isOpen={!!deleteUserId}
+        onClose={() => setDeleteUserId(null)}
+        title="Xác nhận xóa tài khoản"
+        icon={Trash2}
+        maxWidth={440}
+        footer={
+          <>
+            <button className="admin-btn admin-btn-outline" onClick={() => setDeleteUserId(null)}>Hủy</button>
+            <button 
+              className="admin-btn admin-btn-danger" 
+              onClick={() => {
+                handleDeleteUser(deleteUserId);
+                setDeleteUserId(null);
+              }}
+            >
+              Xác nhận xóa
+            </button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.6 }}>
+          Bạn có chắc chắn muốn xóa người dùng này? Tài khoản sẽ bị xóa vĩnh viễn khỏi danh sách hoạt động và không thể khôi phục lại.
+        </p>
+      </AdminModal>
     </div>
   );
 }

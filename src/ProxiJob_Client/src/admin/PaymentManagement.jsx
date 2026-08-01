@@ -4,6 +4,7 @@ import { Check, X, Search, Filter, Eye, CreditCard, Calendar } from "lucide-reac
 import { getAdminSession, formatCurrency, formatDateTime } from "./adminData";
 import { IDENTITY_API_URL } from "../apiConfig";
 import { useToast } from "./ToastContext";
+import AdminModal from "./AdminModal";
 
 export default function PaymentManagement() {
   const queryClient = useQueryClient();
@@ -252,211 +253,307 @@ export default function PaymentManagement() {
         </div>
       </div>
 
-      {/* Modals */}
-      {selectedOrder && (
-        <div className="admin-modal-overlay" onClick={closeModal}>
-          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h3 className="admin-modal-title">
-                {modalType === "confirm" && "Xác nhận Thanh toán"}
-                {modalType === "reject" && "Từ chối Thanh toán"}
-                {modalType === "view" && "Chi tiết Đơn hàng"}
-              </h3>
-              <button className="admin-modal-close" onClick={closeModal}>
-                <X size={20} />
+      {/* Portal Modal */}
+      <AdminModal
+        isOpen={!!selectedOrder}
+        onClose={closeModal}
+        title={
+          modalType === "confirm"
+            ? "Xác nhận Thanh toán"
+            : modalType === "reject"
+            ? "Từ chối Thanh toán"
+            : "Chi tiết Đơn hàng"
+        }
+        subtitle={selectedOrder ? `Mã giao dịch: #${selectedOrder.orderCode}` : ""}
+        icon={CreditCard}
+        maxWidth={580}
+        footer={
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, width: "100%" }}>
+            <button
+              type="button"
+              className="admin-btn admin-btn-outline"
+              onClick={closeModal}
+              style={{
+                padding: "10px 22px",
+                borderRadius: "12px",
+                fontWeight: 700,
+                fontSize: "13.5px"
+              }}
+            >
+              Đóng cửa sổ
+            </button>
+            {modalType === "view" && selectedOrder?.status === "Pending" && (
+              <>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn-danger"
+                  onClick={() => setModalType("reject")}
+                  style={{ borderRadius: "12px", padding: "10px 20px" }}
+                >
+                  Từ chối đơn
+                </button>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn-success"
+                  onClick={() => setModalType("confirm")}
+                  style={{ borderRadius: "12px", padding: "10px 22px" }}
+                >
+                  Phê duyệt đơn
+                </button>
+              </>
+            )}
+            {modalType === "confirm" && (
+              <button
+                type="submit"
+                form="actionForm"
+                className="admin-btn admin-btn-success"
+                style={{ borderRadius: "12px", padding: "10px 24px" }}
+              >
+                Xác nhận Thanh toán
               </button>
-            </div>
-
-            <div className="admin-modal-body" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              {/* Premium Summary Card */}
-              <div style={{
-                background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
-                border: "1px solid #e2e8f0",
-                borderRadius: "16px",
-                padding: "20px",
+            )}
+            {modalType === "reject" && (
+              <button
+                type="submit"
+                form="actionForm"
+                className="admin-btn admin-btn-danger"
+                style={{ borderRadius: "12px", padding: "10px 24px" }}
+              >
+                Từ chối Thanh toán
+              </button>
+            )}
+          </div>
+        }
+      >
+        {selectedOrder && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            {/* Hero Transaction Card */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)",
+                border: "1px solid rgba(249, 115, 22, 0.25)",
+                borderRadius: "20px",
+                padding: "24px",
                 display: "flex",
                 flexDirection: "column",
-                gap: "12px",
-                boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02)"
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--admin-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Chi tiết giao dịch
-                  </span>
-                  {renderBadge(selectedOrder.status)}
-                </div>
-                
-                <div>
-                  <h4 style={{ fontSize: "17px", fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
-                    {selectedOrder.planName}
-                  </h4>
-                  <div style={{ fontSize: "26px", fontWeight: 800, color: "var(--admin-primary)", marginTop: "4px" }}>
-                    {formatCurrency(selectedOrder.amount)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Transaction Metadata Grid */}
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
                 gap: "16px",
-                padding: "4px 4px"
-              }}>
-                <div className="admin-info-item">
-                  <span className="admin-info-item-label">Mã đơn hàng</span>
-                  <span className="admin-info-item-value" style={{ fontFamily: "monospace", fontSize: "13px", fontWeight: 600, color: "var(--admin-text-secondary)" }}>
-                    {selectedOrder.orderCode}
-                  </span>
-                </div>
-                
-                <div className="admin-info-item">
-                  <span className="admin-info-item-label">Thời gian tạo</span>
-                  <span className="admin-info-item-value" style={{ fontSize: "13px", color: "var(--admin-text-secondary)" }}>
-                    {formatDateTime(selectedOrder.createdAt)}
-                  </span>
-                </div>
+                boxShadow: "0 10px 25px -5px rgba(249, 115, 22, 0.12)"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 900,
+                    color: "#ea580c",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    background: "rgba(249, 115, 22, 0.12)",
+                    padding: "4px 12px",
+                    borderRadius: "20px",
+                    border: "1px solid rgba(249, 115, 22, 0.2)"
+                  }}
+                >
+                  Chi tiết giao dịch
+                </span>
+                {renderBadge(selectedOrder.status)}
+              </div>
 
-                <div className="admin-info-item" style={{ gridColumn: "span 2" }}>
-                  <span className="admin-info-item-label">Khách hàng</span>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                    <span className="admin-info-item-value" style={{ fontSize: "14px", fontWeight: 600 }}>
+              <div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: "#64748b", marginBottom: "4px" }}>
+                  Gói dịch vụ đăng ký
+                </div>
+                <h4 style={{ fontSize: "20px", fontWeight: 900, color: "#0f172a", margin: 0, tracking: "-0.02em" }}>
+                  {selectedOrder.planName}
+                </h4>
+                <div style={{ fontSize: "32px", fontWeight: 900, color: "#ea580c", marginTop: "8px", letterSpacing: "-0.03em" }}>
+                  {formatCurrency(selectedOrder.amount)}
+                </div>
+              </div>
+            </div>
+
+            {/* Information Grid Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              {/* Card 1: Order Code */}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "16px",
+                  padding: "16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px"
+                }}
+              >
+                <span style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Mã đơn hàng
+                </span>
+                <span
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    color: "#0f172a",
+                    background: "#ffffff",
+                    padding: "6px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    wordBreak: "break-all"
+                  }}
+                >
+                  {selectedOrder.orderCode}
+                </span>
+              </div>
+
+              {/* Card 2: Created Date */}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "16px",
+                  padding: "16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px"
+                }}
+              >
+                <span style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Thời gian khởi tạo
+                </span>
+                <span style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a" }}>
+                  {formatDateTime(selectedOrder.createdAt)}
+                </span>
+              </div>
+
+              {/* Card 3: User Customer Details (Full Width) */}
+              <div
+                style={{
+                  gridColumn: "span 2",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "16px",
+                  padding: "16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px"
+                }}
+              >
+                <span style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Khách hàng / Doanh nghiệp
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "#ffffff", padding: "12px 14px", borderRadius: "12px", border: "1px solid #cbd5e1" }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "12px",
+                      background: "linear-gradient(135deg, #f97316, #ea580c)",
+                      color: "#ffffff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 900,
+                      fontSize: "16px",
+                      flexShrink: 0
+                    }}
+                  >
+                    {(selectedOrder.userFullName || "K").charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a" }}>
                       {selectedOrder.userFullName}
-                    </span>
-                    <span style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>
+                    </div>
+                    <div style={{ fontSize: "12.5px", color: "#64748b", fontWeight: 600 }}>
                       {selectedOrder.userEmail}
-                    </span>
+                    </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Admin Note Section */}
-              {modalType !== "view" ? (
-                <form id="actionForm" onSubmit={modalType === "confirm" ? handleConfirm : handleReject} style={{ margin: 0 }}>
-                  <div className="admin-form-group" style={{ marginBottom: 0, width: "100%" }}>
-                    <label className="admin-form-label" style={{ fontSize: "13px", fontWeight: 600, color: "var(--admin-text-secondary)", marginBottom: "8px" }}>
-                      Ghi chú của Admin (Tùy chọn)
-                    </label>
-                    <textarea
-                      className="admin-form-input"
-                      placeholder="Nhập ghi chú hoặc lý do phê duyệt/từ chối giao dịch này..."
-                      value={adminNote}
-                      onChange={(e) => setAdminNote(e.target.value)}
-                      style={{
-                        width: "100%",
-                        minHeight: "90px",
-                        resize: "none",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "12px",
-                        padding: "12px 14px",
-                        background: "#fff",
-                        fontSize: "13.5px",
-                        lineHeight: "1.5",
-                        outline: "none",
-                        boxSizing: "border-box",
-                        boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)",
-                        transition: "all 0.2s ease"
-                      }}
-                    />
-                  </div>
-                </form>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  {/* If order is Paid, show processing metadata */}
-                  {selectedOrder.status === "Paid" && (
-                    <div style={{
+            {/* Admin Note Form or Approval Metadata */}
+            {modalType !== "view" ? (
+              <form id="actionForm" onSubmit={modalType === "confirm" ? handleConfirm : handleReject} style={{ margin: 0 }}>
+                <div className="admin-form-group" style={{ marginBottom: 0, width: "100%" }}>
+                  <label
+                    className="admin-form-label"
+                    style={{ fontSize: "13px", fontWeight: 800, color: "#1e293b", marginBottom: "8px" }}
+                  >
+                    Ghi chú của Admin (Tùy chọn)
+                  </label>
+                  <textarea
+                    className="admin-form-input"
+                    placeholder="Nhập ghi chú hoặc lý do phê duyệt/từ chối giao dịch này..."
+                    value={adminNote}
+                    onChange={(e) => setAdminNote(e.target.value)}
+                    style={{
+                      width: "100%",
+                      minHeight: "95px",
+                      resize: "none",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "14px",
+                      padding: "12px 16px",
+                      background: "#ffffff",
+                      fontSize: "14px",
+                      lineHeight: "1.5",
+                      outline: "none",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+              </form>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {selectedOrder.status === "Paid" && (
+                  <div
+                    style={{
                       display: "grid",
                       gridTemplateColumns: "1fr 1fr",
                       gap: "16px",
-                      padding: "12px 16px",
-                      background: "rgba(16,185,129,0.04)",
-                      border: "1px solid rgba(16,185,129,0.15)",
-                      borderRadius: "12px"
-                    }}>
-                      <div className="admin-info-item">
-                        <span className="admin-info-item-label" style={{ color: "var(--admin-success)" }}>Thời gian duyệt</span>
-                        <span style={{ fontSize: "13px", fontWeight: 600 }}>{formatDateTime(selectedOrder.paidAt)}</span>
-                      </div>
-                      <div className="admin-info-item">
-                        <span className="admin-info-item-label" style={{ color: "var(--admin-success)" }}>Người phê duyệt</span>
-                        <span style={{ fontSize: "13px", fontWeight: 600 }}>{selectedOrder.confirmedBy || "Hệ thống"}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* If order is Expired, show expiry metadata */}
-                  {selectedOrder.status === "Expired" && (
-                    <div style={{
-                      padding: "12px 16px",
-                      background: "rgba(148,163,184,0.05)",
-                      border: "1px solid rgba(148,163,184,0.15)",
-                      borderRadius: "12px",
-                      fontSize: "13px",
-                      color: "var(--admin-text-secondary)",
-                      display: "flex",
-                      justifyContent: "space-between"
-                    }}>
-                      <span style={{ fontWeight: 600 }}>Hạn thanh toán:</span>
-                      <span>{formatDateTime(selectedOrder.expiresAt)}</span>
-                    </div>
-                  )}
-
-                  {/* Admin Note if exists */}
-                  {selectedOrder.adminNote && (
-                    <div style={{
                       padding: "16px",
-                      background: "rgba(255,107,0,0.04)",
-                      border: "1px dashed rgba(255,107,0,0.2)",
-                      borderRadius: "12px"
-                    }}>
-                      <span className="admin-info-item-label" style={{ color: "var(--admin-primary)", display: "block", marginBottom: "6px" }}>
-                        Ghi chú từ Admin
+                      background: "rgba(16, 185, 129, 0.06)",
+                      border: "1px solid rgba(16, 185, 129, 0.2)",
+                      borderRadius: "16px"
+                    }}
+                  >
+                    <div className="admin-info-item">
+                      <span className="admin-info-item-label" style={{ color: "#059669", fontWeight: 800 }}>
+                        Thời gian duyệt
                       </span>
-                      <span style={{ fontSize: "13.5px", color: "var(--admin-text-secondary)", lineHeight: "1.5" }}>
-                        {selectedOrder.adminNote}
-                      </span>
+                      <span style={{ fontSize: "13.5px", fontWeight: 800, color: "#0f172a" }}>{formatDateTime(selectedOrder.paidAt)}</span>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                    <div className="admin-info-item">
+                      <span className="admin-info-item-label" style={{ color: "#059669", fontWeight: 800 }}>
+                        Người phê duyệt
+                      </span>
+                      <span style={{ fontSize: "13.5px", fontWeight: 800, color: "#0f172a" }}>{selectedOrder.confirmedBy || "Hệ thống"}</span>
+                    </div>
+                  </div>
+                )}
 
-            <div className="admin-modal-footer">
-              <button className="admin-btn admin-btn-outline" onClick={closeModal}>
-                Đóng
-              </button>
-              {modalType === "view" && selectedOrder.status === "Pending" && (
-                <>
-                  <button 
-                    className="admin-btn admin-btn-danger" 
-                    onClick={() => setModalType("reject")}
-                    style={{ marginLeft: 8 }}
+                {selectedOrder.adminNote && (
+                  <div
+                    style={{
+                      padding: "16px",
+                      background: "rgba(249, 115, 22, 0.05)",
+                      border: "1px dashed rgba(249, 115, 22, 0.3)",
+                      borderRadius: "16px"
+                    }}
                   >
-                    Từ chối đơn
-                  </button>
-                  <button 
-                    className="admin-btn admin-btn-success" 
-                    onClick={() => setModalType("confirm")}
-                    style={{ marginLeft: 8 }}
-                  >
-                    Phê duyệt đơn
-                  </button>
-                </>
-              )}
-              {modalType === "confirm" && (
-                <button type="submit" form="actionForm" className="admin-btn admin-btn-success">
-                  Xác nhận Thanh toán
-                </button>
-              )}
-              {modalType === "reject" && (
-                <button type="submit" form="actionForm" className="admin-btn admin-btn-danger">
-                  Từ chối Thanh toán
-                </button>
-              )}
-            </div>
+                    <span
+                      className="admin-info-item-label"
+                      style={{ color: "#ea580c", display: "block", marginBottom: "6px", fontWeight: 800 }}
+                    >
+                      Ghi chú từ Admin
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </AdminModal>
     </div>
   );
 }

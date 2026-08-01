@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Users, Briefcase, CreditCard, DollarSign, Calendar, TrendingUp } from "lucide-react";
 import { getAdminSession, formatCurrency } from "./adminData";
 import { IDENTITY_API_URL, JOB_API_URL } from "../apiConfig";
+import avatarNamImg from "../assets/AvatarNam.png";
+import avatarNuImg from "../assets/AvatarNu.png";
 
 export default function Dashboard() {
   const [timeRange, setTimeRange] = useState("7days");
@@ -314,9 +316,7 @@ export default function Dashboard() {
         list.push({
           id: `u-${u.id}`,
           userName: u.fullName || "Người dùng",
-          userAvatar: u.role === "Student" 
-            ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120"
-            : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120",
+          userAvatar: u.avatarUrl || u.avatar || (u.role === "Student" ? avatarNuImg : avatarNamImg),
           message: `đăng ký tài khoản ${u.role} mới`,
           date: u.createdAt ? new Date(u.createdAt) : new Date(),
           dotColor: "var(--admin-info)"
@@ -330,7 +330,7 @@ export default function Dashboard() {
         list.push({
           id: `j-${j.id}`,
           userName: `DN tuyển dụng`,
-          userAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=120",
+          userAvatar: j.businessLogoUrl || avatarNamImg,
           message: `đăng tuyển việc làm '${j.title}'`,
           date: j.createdAt ? new Date(j.createdAt) : new Date(),
           dotColor: "var(--admin-success)"
@@ -344,7 +344,7 @@ export default function Dashboard() {
         list.push({
           id: `p-${p.id}`,
           userName: p.fullName || `Đối tác`,
-          userAvatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=120",
+          userAvatar: p.avatarUrl || avatarNamImg,
           message: `tạo đơn thanh toán gói ${p.planName || "VIP"}`,
           date: p.createdAt ? new Date(p.createdAt) : new Date(),
           dotColor: "var(--admin-warning)"
@@ -372,77 +372,75 @@ export default function Dashboard() {
       {/* Stats Grid */}
       <div className="admin-stats-grid">
         {/* Card 1: Users */}
-        <div className="admin-stat-card">
+        <div className="admin-stat-card stat-card-orange card-hover-lift">
           <div className="admin-card-inner">
             <div>
-              <span className="admin-stat-card-label" style={{ textTransform: "uppercase", fontSize: 10 }}>Tổng Users</span>
-              <div className="admin-stat-card-value" style={{ margin: "6px 0", fontSize: 24 }}>{stats.totalUsers}</div>
-              <div className="admin-stat-card-change" style={{ color: "var(--admin-success)", display: "flex", alignItems: "center", gap: 3, fontSize: 12 }}>
+              <span className="admin-stat-card-label" style={{ textTransform: "uppercase", fontSize: 11, fontWeight: 800, color: "#c2410c" }}>Tổng Người dùng</span>
+              <div className="admin-stat-card-value" style={{ margin: "6px 0", fontSize: 30, color: "#9a3412" }}>{stats.totalUsers}</div>
+              <div className="admin-stat-card-change" style={{ color: "#ea580c", display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700 }}>
                 <TrendingUp size={14} />
-                <span>+12% tháng này</span>
+                <span>SV: {stats.totalStudents} | DN: {stats.totalBusinesses}</span>
               </div>
             </div>
             {/* Circular Progress Ring */}
-            <div className="admin-card-progress-container">
-              <svg width="52" height="52" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--admin-border)" strokeWidth="3.5" />
-                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--admin-primary)" strokeWidth="3.5" strokeDasharray="65, 100" strokeLinecap="round" />
-              </svg>
-              <div className="admin-card-progress-label">65%</div>
+            <div className="admin-card-progress-container bg-white/60 p-2 rounded-2xl border border-orange-200/50 shadow-xs">
+              <Users size={24} className="text-orange-600" />
             </div>
           </div>
         </div>
 
         {/* Card 2: Jobs */}
-        <div className="admin-stat-card">
+        <div className="admin-stat-card stat-card-emerald card-hover-lift">
           <div className="admin-card-inner" style={{ flexDirection: "column", alignItems: "flex-start" }}>
             <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
               <div>
-                <span className="admin-stat-card-label" style={{ textTransform: "uppercase", fontSize: 10 }}>Việc làm đang mở</span>
-                <div className="admin-stat-card-value" style={{ margin: "6px 0", fontSize: 24 }}>{stats.publishedJobs}</div>
+                <span className="admin-stat-card-label" style={{ textTransform: "uppercase", fontSize: 11, fontWeight: 800, color: "#047857" }}>Việc làm đang mở</span>
+                <div className="admin-stat-card-value" style={{ margin: "6px 0", fontSize: 30, color: "#065f46" }}>{stats.publishedJobs}</div>
               </div>
-              <div style={{ background: "var(--admin-success-bg)", color: "var(--admin-success)", padding: 8, borderRadius: 8, height: "fit-content", display: "flex" }}>
-                <Briefcase size={18} />
+              <div style={{ background: "rgba(16, 185, 129, 0.2)", color: "#047857", padding: 10, borderRadius: 14, height: "fit-content", display: "flex" }}>
+                <Briefcase size={22} />
               </div>
             </div>
-            <div style={{ width: "100%", marginTop: 4 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--admin-text-muted)" }}>
-                <span>Tiến trình phủ tin</span>
+            <div style={{ width: "100%", marginTop: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#047857", fontWeight: 700 }}>
+                <span>Tiến trình tin đã duyệt</span>
                 <span>{Math.round((stats.publishedJobs / (stats.totalJobs || 1)) * 100)}%</span>
               </div>
-              <div className="admin-progress-bar-bg">
-                <div className="admin-progress-bar-fill" style={{ width: `${(stats.publishedJobs / (stats.totalJobs || 1)) * 100}%` }}></div>
+              <div className="admin-progress-bar-bg" style={{ background: "rgba(16, 185, 129, 0.15)", height: 6 }}>
+                <div className="admin-progress-bar-fill" style={{ width: `${(stats.publishedJobs / (stats.totalJobs || 1)) * 100}%`, background: "linear-gradient(to right, #10b981, #059669)" }}></div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Card 3: Pending Payments */}
-        <div className="admin-stat-card" style={stats.pendingPayments > 0 ? { borderColor: "var(--admin-warning)" } : {}}>
+        <div className="admin-stat-card stat-card-purple card-hover-lift" style={stats.pendingPayments > 0 ? { borderColor: "#a855f7" } : {}}>
           <div className="admin-card-inner">
             <div>
-              <span className="admin-stat-card-label" style={{ textTransform: "uppercase", fontSize: 10 }}>Đơn chờ duyệt</span>
-              <div className="admin-stat-card-value" style={{ margin: "6px 0", fontSize: 24 }}>{stats.pendingPayments}</div>
+              <span className="admin-stat-card-label" style={{ textTransform: "uppercase", fontSize: 11, fontWeight: 800, color: "#7e22ce" }}>Đơn chờ duyệt</span>
+              <div className="admin-stat-card-value" style={{ margin: "6px 0", fontSize: 30, color: "#6b21a8" }}>{stats.pendingPayments}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span className="admin-pulse-dot"></span>
-                <span className="admin-stat-card-change" style={{ color: "var(--admin-warning)", fontSize: 12 }}>Cần duyệt ngay</span>
+                <span className="admin-pulse-dot" style={{ background: "#a855f7" }}></span>
+                <span className="admin-stat-card-change" style={{ color: "#7e22ce", fontSize: 12, fontWeight: 700 }}>
+                  {stats.pendingPayments > 0 ? "Cần phê duyệt ngay" : "Tất cả đã xử lý"}
+                </span>
               </div>
             </div>
-            <div style={{ background: "var(--admin-warning-bg)", color: "var(--admin-warning)", padding: 10, borderRadius: 10, display: "flex" }}>
-              <CreditCard size={20} />
+            <div style={{ background: "rgba(168, 85, 247, 0.2)", color: "#7e22ce", padding: 10, borderRadius: 14, display: "flex" }}>
+              <CreditCard size={22} />
             </div>
           </div>
         </div>
 
         {/* Card 4: Total Revenue */}
-        <div className="admin-stat-card">
+        <div className="admin-stat-card stat-card-blue card-hover-lift">
           <div className="admin-card-inner">
             <div>
-              <span className="admin-stat-card-label" style={{ textTransform: "uppercase", fontSize: 10 }}>Tổng doanh thu</span>
-              <div className="admin-stat-card-value" style={{ margin: "6px 0", fontSize: 24 }}>{formatCurrency(stats.totalRevenue)}</div>
-              <div className="admin-stat-card-change" style={{ color: "var(--admin-success)", display: "flex", alignItems: "center", gap: 3, fontSize: 12 }}>
-                <TrendingUp size={14} />
-                <span>Tăng trưởng đều</span>
+              <span className="admin-stat-card-label" style={{ textTransform: "uppercase", fontSize: 11, fontWeight: 800, color: "#1d4ed8" }}>Tổng doanh thu</span>
+              <div className="admin-stat-card-value" style={{ margin: "6px 0", fontSize: 26, color: "#1e40af" }}>{formatCurrency(stats.totalRevenue)}</div>
+              <div className="admin-stat-card-change" style={{ color: "#2563eb", display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700 }}>
+                <DollarSign size={14} />
+                <span>Doanh thu xác thực</span>
               </div>
             </div>
             {/* Sparkline column bars */}
@@ -461,7 +459,7 @@ export default function Dashboard() {
                     width={w} 
                     height={h} 
                     rx="2" 
-                    fill={isLast ? "var(--admin-success)" : "rgba(16, 185, 129, 0.15)"}
+                    fill={isLast ? "#2563eb" : "rgba(37, 99, 235, 0.2)"}
                   />
                 );
               })}
@@ -631,40 +629,87 @@ export default function Dashboard() {
         </div>
 
         {/* Chart Card 2: Job Categories Bar Chart */}
-        <div className="admin-chart-container" style={{ padding: 24 }}>
+        <div className="admin-chart-container" style={{ padding: 24, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
-            <h2 className="admin-chart-title" style={{ margin: 0, fontSize: 16 }}>Top danh mục</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 className="admin-chart-title" style={{ margin: 0, fontSize: 16 }}>Top danh mục</h2>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: "var(--admin-primary)",
+                  background: "var(--admin-primary-glow)",
+                  padding: "4px 10px",
+                  borderRadius: 12
+                }}
+              >
+                {rawJobs.length} tin tuyển dụng
+              </span>
+            </div>
+
+            {/* Vertical Bar Chart SVG */}
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "center", alignItems: "center" }}>
+              <svg viewBox="0 0 320 190" width="100%" height="200" style={{ overflow: "visible" }}>
+                {categoryData.map((cat, idx) => {
+                  const barWidth = 32;
+                  const spacing = 45;
+                  const x = 32 + idx * (barWidth + spacing);
+                  const barHeight = (cat.count / maxCategoryCount) * 120;
+                  const y = 150 - barHeight;
+                  return (
+                    <g key={idx}>
+                      {/* Background track capsule */}
+                      <rect x={x} y={20} width={barWidth} height={130} rx={16} fill="var(--admin-border)" opacity="0.3" />
+                      {/* Capsule bar with rounded caps */}
+                      <rect x={x} y={y} width={barWidth} height={barHeight} rx={16} fill={cat.color} style={{ transition: "height 0.5s ease" }} />
+                      {/* Value text above bar */}
+                      <text x={x + barWidth / 2} y={y - 8} textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--admin-text)">
+                        {cat.count}
+                      </text>
+                      {/* Category text label underneath */}
+                      <text x={x + barWidth / 2} y={168} textAnchor="middle" fontSize="10" fill="var(--admin-text-secondary)" fontWeight="800">
+                        {cat.name.split(" ")[0]}
+                      </text>
+                      <text x={x + barWidth / 2} y={182} textAnchor="middle" fontSize="10" fill="var(--admin-text-secondary)" fontWeight="800">
+                        {cat.name.split(" ")[1] || ""}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
           </div>
 
-          <div style={{ marginTop: 24, display: "flex", justifyContent: "center", alignItems: "center" }}>
-            <svg viewBox="0 0 320 200" width="100%" height="220" style={{ overflow: "visible" }}>
+          {/* Job Allocation breakdown section below bar chart */}
+          <div style={{ marginTop: 20, paddingTop: 18, borderTop: "1px solid var(--admin-border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 11, fontWeight: 750, color: "var(--admin-text-secondary)", letterSpacing: 0.5 }}>THỐNG KÊ CHI TIẾT THEO NGÀNH</span>
+              <span style={{ fontSize: 12, color: "var(--admin-text-muted)", fontWeight: 500 }}>Tỷ lệ thị phần</span>
+            </div>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {categoryData.map((cat, idx) => {
-                const barWidth = 32;
-                const spacing = 45;
-                const x = 32 + idx * (barWidth + spacing);
-                const barHeight = (cat.count / maxCategoryCount) * 130;
-                const y = 160 - barHeight;
+                const percent = rawJobs.length > 0 ? Math.round((cat.count / rawJobs.length) * 100) : 0;
                 return (
-                  <g key={idx}>
-                    {/* Background track capsule */}
-                    <rect x={x} y={20} width={barWidth} height={140} rx={16} fill="var(--admin-border)" opacity="0.3" />
-                    {/* Capsule bar with rounded caps */}
-                    <rect x={x} y={y} width={barWidth} height={barHeight} rx={16} fill={cat.color} style={{ transition: "height 0.5s ease" }} />
-                    {/* Value text above bar */}
-                    <text x={x + barWidth / 2} y={y - 8} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--admin-text)">
-                      {cat.count}
-                    </text>
-                    {/* Category text label underneath */}
-                    <text x={x + barWidth / 2} y={178} textAnchor="middle" fontSize="10" fill="var(--admin-text-secondary)" fontWeight="700">
-                      {cat.name.split(" ")[0]}
-                    </text>
-                    <text x={x + barWidth / 2} y={192} textAnchor="middle" fontSize="10" fill="var(--admin-text-secondary)" fontWeight="700">
-                      {cat.name.split(" ")[1] || ""}
-                    </text>
-                  </g>
+                  <div key={idx} style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: 10, border: "1px solid var(--admin-border)", display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: cat.color }}></span>
+                        <span style={{ fontSize: 12, fontWeight: 750, color: "#0f172a" }}>{cat.name}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 850, color: "#0f172a" }}>{cat.count} tin</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--admin-text-muted)", minWidth: 32, textAlign: "right" }}>{percent}%</span>
+                      </div>
+                    </div>
+                    {/* Animated Progress Bar */}
+                    <div style={{ width: "100%", height: 5, background: "#e2e8f0", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: `${percent}%`, height: "100%", background: cat.color, borderRadius: 3, transition: "width 0.5s ease" }}></div>
+                    </div>
+                  </div>
                 );
               })}
-            </svg>
+            </div>
           </div>
         </div>
 
