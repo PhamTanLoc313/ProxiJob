@@ -279,7 +279,7 @@ export default function StudentLayout() {
         )}
 
         {/* 3. Main content body render */}
-        <main className="flex-1 overflow-y-auto bg-slate-50 md:p-6 p-2 z-0 relative">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 md:p-6 p-2 z-0 relative">
           {renderContent()}
         </main>
         {/* Logout Confirmation Modal */}

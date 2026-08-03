@@ -418,10 +418,40 @@ export default function StudentDashboard({ onSelectJob }) {
     };
     window.addEventListener("select-job", handleSelectJobEvent);
 
+    // Invalidate map size after markers & tiles render
+    const resizeTimer = setTimeout(() => {
+      if (leafletMap.current) {
+        leafletMap.current.invalidateSize();
+      }
+    }, 150);
+
     return () => {
+      clearTimeout(resizeTimer);
       window.removeEventListener("select-job", handleSelectJobEvent);
     };
   }, [coords, jobs]);
+
+  // Recalculate map tile size whenever mobile map visibility toggles or window resizes
+  useEffect(() => {
+    const triggerInvalidate = () => {
+      if (leafletMap.current) {
+        leafletMap.current.invalidateSize();
+      }
+    };
+
+    // Trigger multiple passes for smooth animation/render transitions
+    const t1 = setTimeout(triggerInvalidate, 50);
+    const t2 = setTimeout(triggerInvalidate, 200);
+    const t3 = setTimeout(triggerInvalidate, 400);
+
+    window.addEventListener("resize", triggerInvalidate);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      window.removeEventListener("resize", triggerInvalidate);
+    };
+  }, [mapExpanded]);
 
   // Filter jobs based on search term & salary
   const filteredJobs = jobs.filter((job) => {
@@ -437,7 +467,7 @@ export default function StudentDashboard({ onSelectJob }) {
   });
 
   return (
-    <div className="flex flex-col gap-6 p-4 max-w-7xl mx-auto min-h-screen">
+    <div className="flex flex-col gap-5 px-2 py-3 sm:px-4 md:px-6 w-full max-w-7xl mx-auto min-h-screen overflow-x-hidden">
       <style>{`
         @keyframes urgentPulse {
           0%, 100% {
@@ -460,26 +490,34 @@ export default function StudentDashboard({ onSelectJob }) {
         .urgent-badge-pulse {
           animation: badgePulse 1.2s infinite ease-in-out;
         }
+        .leaflet-container {
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+        .leaflet-popup-content-wrapper {
+          max-width: 240px !important;
+          border-radius: 1rem !important;
+        }
       `}</style>
 
       {/* 1. Header Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 p-6 md:p-8 text-white rounded-3xl shadow-xl shadow-slate-950/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 p-5 sm:p-6 md:p-8 text-white rounded-3xl shadow-xl shadow-slate-950/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 w-full">
         {/* Glow circles decoration */}
         <div className="absolute right-0 top-0 -mt-10 -mr-10 w-44 h-44 bg-orange-500/25 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute left-1/3 bottom-0 -mb-14 w-52 h-52 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10">
-          <span className="text-[10px] uppercase font-extrabold tracking-widest bg-orange-500/20 border border-orange-500/30 text-orange-400 px-3 py-1 rounded-full backdrop-blur-xs">
+        <div className="relative z-10 min-w-0">
+          <span className="text-[10px] uppercase font-extrabold tracking-widest bg-orange-500/20 border border-orange-500/30 text-orange-400 px-3 py-1 rounded-full backdrop-blur-xs inline-block">
             👋 Chào mừng, {user?.name || "Sinh viên"}
           </span>
-          <h1 className="text-3xl font-black text-white mt-3.5 tracking-tight">Tìm ca làm quanh bạn ngay lập tức!</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-white mt-3 tracking-tight">Tìm ca làm quanh bạn ngay lập tức!</h1>
           <p className="text-slate-300 text-xs mt-1 max-w-xl">
             Ghép ca làm việc trong bán kính 100m. Nhận lương quyết toán nhanh chóng, an toàn và uy tín.
           </p>
         </div>
 
-        <div className="relative z-10 flex items-center gap-2.5 bg-white/10 px-4.5 py-2.5 rounded-2xl backdrop-blur-xs border border-white/15 shadow-sm">
-          <Compass className="animate-spin text-amber-250" size={22} />
+        <div className="relative z-10 flex items-center gap-2.5 bg-white/10 px-4 py-2.5 rounded-2xl backdrop-blur-xs border border-white/15 shadow-sm shrink-0">
+          <Compass className="animate-spin text-amber-250 shrink-0" size={20} />
           <div className="text-xs">
             <p className="font-extrabold text-amber-100 uppercase tracking-widest text-[9px]">Bán kính quét</p>
             <p className="text-white/90 mt-0.5 font-bold">Dưới 10km quanh bạn</p>
@@ -488,35 +526,38 @@ export default function StudentDashboard({ onSelectJob }) {
       </div>
 
       {/* 2. Search and Filter Bar */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-900/4 p-5 flex flex-col gap-4">
-        <div className="grid gap-4 md:grid-cols-12">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-900/4 p-4 sm:p-5 flex flex-col gap-4 w-full">
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-12">
           {/* Search box */}
-          <div className="relative md:col-span-6">
+          <div className="relative md:col-span-6 w-full">
             <Search className="absolute left-4 top-3.5 text-slate-400" size={18} />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Tìm kiếm theo tiêu đề công việc hoặc tên quán..."
-              className="w-full h-11 pl-11 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 text-sm focus:outline-none focus:border-amber-400 focus:bg-white transition"
+              className="w-full h-11 pl-11 pr-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 text-xs sm:text-sm focus:outline-none focus:border-amber-400 focus:bg-white transition truncate"
             />
           </div>
 
           {/* Category drop down */}
-          <div className="relative md:col-span-3">
+          <div className="relative md:col-span-3 w-full">
             <button
               type="button"
-              onClick={() => setCatDropdownOpen(!catDropdownOpen)}
-              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-sm font-semibold flex items-center justify-between hover:bg-white hover:border-amber-400 transition cursor-pointer"
+              onClick={() => {
+                setCatDropdownOpen(!catDropdownOpen);
+                setSalaryDropdownOpen(false);
+              }}
+              className="w-full h-11 px-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-xs sm:text-sm font-semibold flex items-center justify-between hover:bg-white hover:border-amber-400 transition cursor-pointer"
             >
-              <span>{categories.find(c => c.id.toString() === selectedCategory)?.name || "Tất cả ngành nghề"}</span>
-              <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${catDropdownOpen ? "rotate-180" : ""}`} />
+              <span className="truncate">{categories.find(c => c.id.toString() === selectedCategory)?.name || "Tất cả ngành nghề"}</span>
+              <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-200 ${catDropdownOpen ? "rotate-180" : ""}`} />
             </button>
             
             {catDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setCatDropdownOpen(false)} />
-                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200/80 rounded-2xl shadow-xl p-1.5 space-y-0.5 max-h-60 overflow-y-auto">
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200/80 rounded-2xl shadow-xl p-1.5 space-y-0.5 max-h-60 overflow-y-auto w-full">
                   <button
                     type="button"
                     onClick={() => {
@@ -539,7 +580,7 @@ export default function StudentDashboard({ onSelectJob }) {
                         setSelectedCategory(c.id.toString());
                         setCatDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      className={`w-full text-left px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer truncate ${
                         selectedCategory === c.id.toString()
                           ? "bg-orange-600 text-white"
                           : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
@@ -554,20 +595,23 @@ export default function StudentDashboard({ onSelectJob }) {
           </div>
 
           {/* Salary filter */}
-          <div className="relative md:col-span-3">
+          <div className="relative md:col-span-3 w-full">
             <button
               type="button"
-              onClick={() => setSalaryDropdownOpen(!salaryDropdownOpen)}
-              className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-sm font-semibold flex items-center justify-between hover:bg-white hover:border-amber-400 transition cursor-pointer"
+              onClick={() => {
+                setSalaryDropdownOpen(!salaryDropdownOpen);
+                setCatDropdownOpen(false);
+              }}
+              className="w-full h-11 px-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 text-xs sm:text-sm font-semibold flex items-center justify-between hover:bg-white hover:border-amber-400 transition cursor-pointer"
             >
-              <span>{minSalary === 0 ? "Tất cả mức lương" : `Từ ${minSalary.toLocaleString("vi-VN")}đ/h`}</span>
-              <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${salaryDropdownOpen ? "rotate-180" : ""}`} />
+              <span className="truncate">{minSalary === 0 ? "Tất cả mức lương" : `Từ ${minSalary.toLocaleString("vi-VN")}đ/h`}</span>
+              <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-200 ${salaryDropdownOpen ? "rotate-180" : ""}`} />
             </button>
             
             {salaryDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSalaryDropdownOpen(false)} />
-                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200/80 rounded-2xl shadow-xl p-1.5 space-y-0.5">
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200/80 rounded-2xl shadow-xl p-1.5 space-y-0.5 w-full">
                   {[
                     { val: 0, lbl: "Tất cả mức lương" },
                     { val: 20000, lbl: "Từ 20.000đ/h" },
@@ -598,11 +642,11 @@ export default function StudentDashboard({ onSelectJob }) {
         </div>
 
         {/* Horizontal scrollable category Quick Filter pills */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none border-t border-slate-100 pt-3">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none border-t border-slate-100 pt-3 max-w-full">
           <button
             type="button"
             onClick={() => setSelectedCategory("")}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border cursor-pointer ${selectedCategory === ""
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border cursor-pointer ${selectedCategory === ""
               ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/15"
               : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
               }`}
@@ -625,7 +669,7 @@ export default function StudentDashboard({ onSelectJob }) {
                 key={cat.id}
                 type="button"
                 onClick={() => setSelectedCategory(cat.id.toString())}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border cursor-pointer ${isSelected
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border cursor-pointer ${isSelected
                   ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/15"
                   : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                   }`}
@@ -637,28 +681,40 @@ export default function StudentDashboard({ onSelectJob }) {
         </div>
       </div>
 
+      {/* Mobile view toggle for Map / List */}
+      <div className="flex lg:hidden justify-between items-center bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
+        <span className="text-xs font-bold text-slate-600 px-2">Chế độ xem di động:</span>
+        <button
+          type="button"
+          onClick={() => setMapExpanded(!mapExpanded)}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl text-xs font-black hover:bg-orange-100 transition cursor-pointer"
+        >
+          {mapExpanded ? "📋 Hiện danh sách tin" : "🗺️ Mở bản đồ Radar GPS"}
+        </button>
+      </div>
+
       {/* 3. Main Grid layout: List + Map */}
-      <div className="grid gap-6 lg:grid-cols-12 mt-2">
+      <div className="grid gap-6 lg:grid-cols-12 mt-1 w-full">
         {/* Left side: Job list */}
-        <div className="lg:col-span-8 flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <h3 className="font-extrabold text-slate-800 text-lg">Việc làm phù hợp ({filteredJobs.length})</h3>
-            <span className="text-xs text-slate-400 font-semibold">Tự động sắp xếp theo vị trí gần bạn nhất</span>
+        <div className={`lg:col-span-8 flex-col gap-4 ${mapExpanded ? "hidden lg:flex" : "flex"}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+            <h3 className="font-extrabold text-slate-800 text-base sm:text-lg">Việc làm phù hợp ({filteredJobs.length})</h3>
+            <span className="text-[11px] text-slate-400 font-semibold">📍 Tự động sắp xếp theo vị trí gần bạn nhất</span>
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md">
+            <div className="flex flex-col items-center justify-center p-14 bg-white rounded-3xl border border-slate-100 shadow-md">
               <div className="animate-spin rounded-full h-10 w-10 border-4 border-orange-500 border-t-transparent mb-4" />
               <p className="text-slate-500 text-sm font-semibold">Đang quét ca làm xung quanh bạn...</p>
             </div>
           ) : filteredJobs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-md text-center">
+            <div className="flex flex-col items-center justify-center p-14 bg-white rounded-3xl border border-slate-100 shadow-md text-center">
               <span className="text-4xl mb-4">🔍</span>
               <p className="text-slate-800 font-bold">Không tìm thấy ca làm nào phù hợp</p>
               <p className="text-slate-400 text-xs mt-1">Hãy thay đổi bộ lọc hoặc vị trí của bạn để quét rộng hơn nhé.</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3.5 sm:gap-4 w-full">
               {filteredJobs.slice((currentPage - 1) * 10, currentPage * 10).map((job) => {
                 const isUrgent = checkIsEmergency(job.title, job.description);
                 const companyName = job.companyName || job.company || "Cửa hàng tuyển dụng";
@@ -674,31 +730,30 @@ export default function StudentDashboard({ onSelectJob }) {
                     key={`${job.id}_${job.shiftId}`}
                     onClick={() => onSelectJob && onSelectJob(job.id, job.shiftId)}
                     style={{
-                      borderLeft: `6px solid ${theme.accent}`,
+                      borderLeft: `5px solid ${theme.accent}`,
                       "--urgent-bg": theme.accentBg,
                       "--urgent-border": theme.borderLight,
                       "--urgent-glow": `${theme.accent}26`
                     }}
-                    className={`group relative bg-white border border-slate-100 hover:border-slate-200 rounded-2xl p-5 shadow-xs hover:shadow-md transition duration-200 cursor-pointer flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${isUrgent ? 'urgent-flashing-card' : ''}`}
+                    className={`group relative bg-white border border-slate-100 hover:border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs hover:shadow-md transition duration-200 cursor-pointer flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 w-full ${isUrgent ? 'urgent-flashing-card' : ''}`}
                   >
-                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0 w-full">
                       {/* Company Avatar */}
                       <div
                         style={{ backgroundColor: avatarBg, color: avatarText }}
-                        className="font-extrabold flex items-center justify-center rounded-xl w-12 h-12 shrink-0 border border-slate-200/50"
+                        className="font-extrabold flex items-center justify-center rounded-xl w-11 h-11 sm:w-12 sm:h-12 shrink-0 border border-slate-200/50 text-xs sm:text-sm mt-0.5"
                       >
                         {initials}
                       </div>
 
                       <div className="flex-1 min-w-0">
                         {/* Tags and Badges */}
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${theme.bg} ${theme.text} border ${theme.border}`}>
-                            {job.categoryName || "Part-time"}
-                          </span>
-                          <span className="text-[10px] font-extrabold text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">
-                            Part-time
-                          </span>
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2 w-full">
+                          {job.categoryName && (
+                            <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${theme.bg} ${theme.text} border ${theme.border}`}>
+                              {job.categoryName}
+                            </span>
+                          )}
                           {job.remainingSlots !== undefined && (
                             <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${job.remainingSlots <= 0
                                 ? "bg-red-50 text-red-700 border-red-200"
@@ -712,36 +767,38 @@ export default function StudentDashboard({ onSelectJob }) {
                               🔥 TUYỂN GẤP
                             </span>
                           )}
-                          <div className="flex items-center gap-0.5 text-xs font-bold text-amber-500 ml-auto sm:ml-0">
-                            <Star size={12} fill="currentColor" /> 5.0
+                          <div className="inline-flex items-center gap-0.5 text-xs font-bold text-amber-500 shrink-0 ml-auto sm:ml-0">
+                            <Star size={13} fill="currentColor" /> 5.0
                           </div>
                         </div>
 
-                        <h4 className="font-extrabold text-slate-800 text-base group-hover:text-orange-600 transition truncate">
+                        {/* Title - allow 2 lines on mobile so full title is readable */}
+                        <h4 className="font-extrabold text-slate-800 text-sm sm:text-base group-hover:text-orange-600 transition leading-snug line-clamp-2 sm:line-clamp-none">
                           {job.title}
                         </h4>
                         <p className="text-xs text-slate-400 font-bold mt-0.5">{companyName}</p>
 
                         {/* Shift Date and Time details */}
                         <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                          <div className="flex items-center gap-1.5">
-                            <Calendar size={14} className="text-slate-400 shrink-0" />
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Calendar size={13} className="text-slate-400 shrink-0" />
                             <span>{formatDateVN(job.startTime)}</span>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <Clock size={14} className="text-slate-400 shrink-0" />
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Clock size={13} className="text-slate-400 shrink-0" />
                             <span>{formatTimeVN(job.startTime)} - {formatTimeVN(job.endTime)}</span>
                           </div>
                         </div>
 
-                        <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-slate-500">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <MapPin size={14} className="text-slate-400 shrink-0" />
-                            <span className="truncate">{job.address || "Quanh vị trí của bạn"}</span>
+                        {/* Address & Salary */}
+                        <div className="mt-2.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs text-slate-500">
+                          <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                            <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" />
+                            <span className="break-words leading-tight">{job.address || "Quanh vị trí của bạn"}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <DollarSign size={14} className="text-emerald-500 shrink-0" />
-                            <span className="font-bold text-emerald-600">
+                          <div className="flex items-center gap-1 shrink-0">
+                            <DollarSign size={13} className="text-emerald-500 shrink-0" />
+                            <span className="font-extrabold text-emerald-600">
                               {salaryVal && salaryVal > 0
                                 ? `${salaryVal.toLocaleString('vi-VN')} đ/giờ`
                                 : "Lương thỏa thuận"
@@ -752,10 +809,10 @@ export default function StudentDashboard({ onSelectJob }) {
                       </div>
                     </div>
 
-                    <div className="w-full sm:w-auto shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 text-[11px] min-w-[120px]">
+                    <div className="w-full sm:w-auto shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 text-xs">
                       {job.distance !== undefined && job.distance < 999999 ? (
-                        <span className="text-slate-400 font-bold bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
-                          📍 Cách bạn: <strong className="text-slate-700">
+                        <span className="text-slate-500 font-bold bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg text-xs">
+                          📍 Cách bạn: <strong className="text-slate-800">
                             {job.distance < 1000
                               ? (job.distance < 5 ? "Dưới 5 m" : `${job.distance} m`)
                               : `${(job.distance / 1000).toFixed(1)} km`
@@ -763,13 +820,13 @@ export default function StudentDashboard({ onSelectJob }) {
                           </strong>
                         </span>
                       ) : (
-                        <span className="text-slate-400 font-bold bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
+                        <span className="text-slate-500 font-bold bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg text-xs">
                           📍 Quét định vị
                         </span>
                       )}
                       <button
                         type="button"
-                        className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-xl shadow-md shadow-orange-600/10 hover:shadow-orange-600/20 transition-all text-xs text-center cursor-pointer whitespace-nowrap mt-2"
+                        className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-xl shadow-md shadow-orange-600/10 hover:shadow-orange-600/20 transition-all text-xs text-center cursor-pointer whitespace-nowrap"
                       >
                         Xem ca làm
                       </button>
@@ -780,7 +837,7 @@ export default function StudentDashboard({ onSelectJob }) {
 
               {/* Pagination controls */}
               {Math.ceil(filteredJobs.length / 10) > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-6">
+                <div className="flex items-center justify-center gap-1.5 mt-4">
                   <button
                     type="button"
                     disabled={currentPage === 1}
@@ -797,7 +854,7 @@ export default function StudentDashboard({ onSelectJob }) {
                         key={pageNum}
                         type="button"
                         onClick={() => setCurrentPage(pageNum)}
-                        className={`h-9 w-9 text-xs font-bold rounded-xl border transition-all cursor-pointer ${isCurrent
+                        className={`h-8 w-8 text-xs font-bold rounded-xl border transition-all cursor-pointer ${isCurrent
                           ? "bg-orange-600 text-white border-orange-600 shadow-md shadow-orange-600/15"
                           : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                           }`}
@@ -821,9 +878,9 @@ export default function StudentDashboard({ onSelectJob }) {
         </div>
 
         {/* Right side: Map */}
-        <div className="lg:col-span-4">
-          <div className="sticky top-6 bg-white border border-slate-100 shadow-xl rounded-3xl overflow-hidden flex flex-col">
-            <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
+        <div className={`lg:col-span-4 w-full max-w-full min-w-0 ${mapExpanded ? "block" : "hidden lg:block"}`}>
+          <div className="sticky top-6 bg-white border border-slate-100 shadow-xl rounded-3xl overflow-hidden flex flex-col w-full max-w-full">
+            <div className="p-3.5 flex justify-between items-center bg-slate-50 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <span className="flex h-3 w-3 relative">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -831,11 +888,18 @@ export default function StudentDashboard({ onSelectJob }) {
                 </span>
                 <h2 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Radar việc làm GPS</h2>
               </div>
+              <button
+                type="button"
+                onClick={() => setMapExpanded(false)}
+                className="lg:hidden text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-200/60 px-2 py-1 rounded-lg"
+              >
+                ✖ Đóng
+              </button>
             </div>
             <div
               ref={mapRef}
-              className="relative z-0"
-              style={{ height: "300px" }}
+              className="relative z-0 w-full max-w-full overflow-hidden"
+              style={{ height: "320px" }}
             />
           </div>
         </div>
