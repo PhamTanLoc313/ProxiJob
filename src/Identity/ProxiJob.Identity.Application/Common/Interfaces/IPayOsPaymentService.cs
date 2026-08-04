@@ -23,5 +23,16 @@ namespace ProxiJob.Identity.Application.Common.Interfaces
 
         /// <summary>Xác thực và parse dữ liệu webhook từ PayOS</summary>
         Task<PayOsWebhookResult> VerifyWebhookDataAsync(string webhookBody, CancellationToken cancellationToken = default);
+
+        /// <summary>Truy vấn trạng thái thanh toán trực tiếp từ PayOS API theo orderCode</summary>
+        Task<PayOsPaymentInfo?> GetPaymentInfoAsync(long orderCode, CancellationToken cancellationToken = default);
+    }
+
+    public class PayOsPaymentInfo
+    {
+        public long OrderCode { get; set; }
+        /// <summary>PAID, PENDING, CANCELLED, PROCESSING</summary>
+        public string Status { get; set; } = string.Empty;
+        public string? TransactionId { get; set; }
     }
 }

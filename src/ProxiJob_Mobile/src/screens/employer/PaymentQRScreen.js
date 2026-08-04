@@ -17,7 +17,7 @@ import { AppContext } from '../../context/AppContext';
 import { getPaymentStatusApi, createPaymentSessionApi, saveAuthSession, checkAuthApi } from '../../api/auth';
 import { Ionicons } from '@expo/vector-icons';
 
-const POLL_INTERVAL_MS = 8000;
+const POLL_INTERVAL_MS = 5000;
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // QR Dimensions
@@ -25,7 +25,7 @@ const QR_WIDTH = Math.min(SCREEN_W - 80, 260);
 const QR_HEIGHT = QR_WIDTH;
 
 export default function PaymentQRScreen() {
-  const { navigationParams, goBack, showToast, navigateTo, setIsEnterprise } = useContext(AppContext);
+  const { navigationParams, goBack, showToast, navigateTo, setIsEnterprise, user } = useContext(AppContext);
   const { orderId, orderCode, amount, expiresAt, planName, bankTransfer } = navigationParams || {};
 
   const [checkoutUrl, setCheckoutUrl] = useState(navigationParams?.checkoutUrl || null);
