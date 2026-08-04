@@ -57,22 +57,174 @@
 
 *   **Sơ đồ Kiến trúc Hệ thống (System Architecture Diagram):**
     *   *(Mô tả: Sơ đồ thể hiện kết nối giữa React Mobile App, React Web Client qua Nginx Reverse Proxy / API Gateway tới 3 Microservices Backend .NET 9, truyền tin đồng bộ qua gRPC, bất đồng bộ qua RabbitMQ và lưu trữ tập trung trên Supabase PostgreSQL Cloud).*
-    
-    `[📌 CẦN BẠN BỔ SUNG: Chèn hình ảnh Sơ đồ Kiến trúc Hệ thống tại đây]`
 
-*   **Sơ đồ Luồng xử lý (Sequence Diagram):**
-    *   *(Mô tả: Sơ đồ luồng Sinh viên thực hiện Check-in GPS trên Mobile App -> Hệ thống so khớp tọa độ với vị trí Cửa hàng -> Nếu vượt bán kính 100m sẽ cảnh báo Suspicious -> Đồng bộ giờ công sang Management Service để tính lương tạm tính).*
+```mermaid
+flowchart TD
+    subgraph CLIENTS ["Frontend / Client Layer"]
+        MA["React Mobile App<br/>(Sinh vien & Chu quan)"]
+        WC["React Web Client<br/>(Admin & Management Dashboard)"]
+        LP["React Landing Page<br/>(Marketing Page)"]
+    end
+
+    subgraph GATEWAY ["API Gateway & Proxy Layer"]
+        NGINX["Nginx Reverse Proxy / API Gateway<br/>(SSL/TLS, Routing, Rate Limiting, JWT Auth)"]
+    end
+
+    subgraph MICROSERVICES ["Microservices Backend (.NET 9)"]
+        IDS["Identity Service<br/>- Auth Engine (JWT & Refresh Token)<br/>- E-Portfolio & Rating Engine<br/>- CCCD & GPKD Verification"]
+        JS["Job Service<br/>- Shift & Job Management<br/>- PostGIS Geofencing (ST_DWithin)<br/>- GPS Job Radar 3-5km Engine"]
+        MS["Management Service<br/>- Timekeeping Engine (GPS + QR Code)<br/>- Fraud Detection (>100m Suspicious)<br/>- Payroll & Wage Settlement<br/>- B2B Subscription Filter"]
+    end
+
+    subgraph BROKER ["Asynchronous Message Broker"]
+        RABBIT["RabbitMQ + MassTransit<br/>(Event Bus / Pub-Sub Engine)"]
+    end
+
+    subgraph DATA ["Data & Cloud Infrastructure"]
+        DB[("Supabase PostgreSQL Cloud<br/>(Identity, Job, Management DBs)<br/>+ PostGIS Extension")]
+        S3[("Supabase Storage<br/>(Avatars, CCCD & Payment Bills)")]
+    end
+
+    %% Client Layer to Gateway
+    MA -->|HTTPS / REST| NGINX
+    WC -->|HTTPS / REST| NGINX
+    LP -->|HTTPS / Static| NGINX
+
+    %% Gateway Routing
+    NGINX -->|/api/v1/auth<br/>/api/v1/users| IDS
+    NGINX -->|/api/v1/jobs<br/>/api/v1/radar| JS
+    NGINX -->|/api/v1/timekeepings<br/>/api/v1/payrolls| MS
+
+    %% Synchronous Inter-Service Communication (gRPC)
+    JS <-->|gRPC Sync: User Profile & Rating| IDS
+    MS <-->|gRPC Sync: Shift & Store Location| JS
+
+    %% Asynchronous Event-Driven Communication (RabbitMQ Pub/Sub)
+    JS -->|Publish: ShiftStatusChangedEvent| RABBIT
+    RABBIT -.->|Consume: ShiftStatusChangedEvent| MS
+
+    MS -->|Publish: TimekeepingCreatedEvent| RABBIT
+    RABBIT -.->|Consume: TimekeepingCreatedEvent| JS
+
+    %% Database & Cloud Storage Connections
+    IDS --> DB
+    JS --> DB
+    MS --> DB
     
-    `[📌 CẦN BẠN BỔ SUNG: Chèn hình ảnh Sơ đồ Luồng xử lý Sequence Diagram tại đây]`
+    IDS --> S3
+    MS --> S3
+
+    %% Styling
+    classDef client fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef gateway fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#e65100;
+    classDef service fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
+    classDef broker fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
+    classDef storage fill:#fffde7,stroke:#fbc02d,stroke-width:2px,color:#f57f17;
+
+    class MA,WC,LP client;
+    class NGINX gateway;
+    class IDS,JS,MS service;
+    class RABBIT broker;
+    class DB,S3 storage;
+```
+
+*   **Sơ đồ Luồng xử lý Cốt lõi (Sequence Diagrams):**
+
+    ### 📌 Sơ đồ 1 (Chính): Luồng Chấm công GPS Geofence Kép & Phát hiện Gian lận >100m & Tính Lương Tạm tính
+    *(Mô tả: Sơ đồ luồng Sinh viên thực hiện Check-in GPS trên Mobile App -> Hệ thống so khớp tọa độ với vị trí Cửa hàng -> Nếu vượt bán kính 100m sẽ cảnh báo Suspicious -> Đồng bộ giờ công sang Management Service để tính lương tạm tính).*
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor SV as Sinh vien (Mobile App)
+    participant GW as API Gateway (Nginx)
+    participant MS as Management Service
+    participant JS as Job Service (PostGIS)
+    participant MQ as RabbitMQ (Event Bus)
+
+    SV->>GW: 1. Request Check-in GPS (ShiftID, Lat, Long, JWT Token)
+    GW->>MS: 2. Forward request /api/v1/timekeepings/check-in
+
+    Note over MS,JS: 3. Lấy vị trí Cửa hàng qua gRPC Sync
+    MS->>JS: gRPC Call: GetStoreLocationInfo(ShiftID)
+    JS-->>MS: Return: Store Tọa độ (StoreLat, StoreLong, Radius = 100m)
+
+    Note over MS: 4. So khớp tọa độ bằng thuật toán Haversine (Khoảng cách D)
+    alt Khoảng cách D > 100m (Cảnh báo nghi vấn)
+        MS->>MS: Đánh dấu trạng thái: SUSPICIOUS (>100m Exceeded)
+        MS->>MQ: Publish Event: SuspiciousTimekeepingDetected
+        MQ-->>SV: Push Notification: Cảnh báo Check-in xa cửa hàng (>100m)
+        MS-->>GW: Return HTTP 200 (Status: Suspicious, Warning Message)
+        GW-->>SV: Hiển thị Banner Cảnh báo Ca làm nghi vấn trên App
+    else Khoảng cách D <= 100m (Hợp lệ)
+        MS->>MS: Đánh dấu trạng thái: VALID (Check-in Thành công)
+        MS-->>GW: Return HTTP 200 (Status: Valid, Check-in Success)
+        GW-->>SV: Hiển thị Thông báo Check-in Thành công trên App
+    end
+
+    Note over MS: 5. Đồng bộ giờ công & Tự động tính Lương tạm tính
+    MS->>MS: Execute PayrollEngine: Lương tạm tính = Số giờ làm x Đơn giá
+    MS->>MQ: Publish Event: InterimPayrollUpdatedEvent
+    MQ-->>MS: Consume Event & Đồng bộ Realtime Dashboard (Chủ quán & Sinh viên)
+```
+
+    ### 📌 Sơ đồ 2: Luồng Quét vị trí GPS Job Radar & Tìm kiếm việc làm Siêu cục bộ (PostGIS ST_DWithin)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor SV as Sinh vien (Mobile App)
+    participant GW as API Gateway (Nginx)
+    participant JS as Job Service
+    participant DB as Supabase PostgreSQL (PostGIS)
+
+    SV->>GW: 1. Gửi Tọa độ GPS hiện tại (Lat, Long, Radius = 3km-5km)
+    GW->>JS: 2. Route GET /api/v1/jobs/radar-search
+    JS->>DB: 3. Exec Query: ST_DWithin(store_location, ST_SetSRID(ST_MakePoint(long, lat), 4326), radius)
+    DB-->>JS: 4. Trả về Danh sách Ca làm việc trong bán kính & Khoảng cách (meters)
+    JS-->>GW: 5. Response Danh sách Công việc + Khoảng cách thực tế
+    GW-->>SV: 6. Hiển thị Màn hình GPS Job Radar trên Bản đồ Mobile App
+```
+
+    ### 📌 Sơ đồ 3: Luồng Ứng tuyển 1-Chạm, Duyệt E-Portfolio & Tự động Từ chối (Auto-Reject)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor SV as Sinh vien (Mobile App)
+    actor CQ as Chủ quán (Web / App)
+    participant JS as Job Service
+    participant IDS as Identity Service
+    participant MQ as RabbitMQ (Event Bus)
+    participant MS as Management Service
+
+    SV->>JS: 1. Nhấn 1-Click Apply Ca làm việc (Create Application Pending)
+    CQ->>JS: 2. Xem danh sách ứng viên & Truy vấn E-Portfolio
+    JS->>IDS: 3. gRPC Sync: GetStudentReputationScore & Portfolio
+    IDS-->>JS: 4. Trả về Điểm uy tín (1-5 sao) & Kỹ năng F&B
+    CQ->>JS: 5. Nhấn Approve ứng viên đạt yêu cầu
+    Note over JS: 6. Số lượng Duyệt = Slot tối đa của Ca làm
+    JS->>MQ: 7. Publish Event: ShiftFilledEvent & AutoRejectPendingApplications
+    MQ-->>SV: 8. Thông báo Auto-Reject cho các ứng viên chưa duyệt còn lại
+    MQ-->>MS: 9. Consume Event: Tạo Ma trận Lịch trực (WorkSchedule) tự động
+```
 
 *   **Hình ảnh giao diện thực tế (UI Screenshots):**
-    *   `[📌 CẦN BẠN BỔ SUNG: Chèn 3-5 ảnh chụp màn hình các giao diện quan trọng bên dưới:]`
-        1. *Màn hình Trang chủ Sinh viên: Bản đồ GPS Job Radar việc làm quanh đây.*
-        2. *Màn hình Sinh viên: Chấm công định vị GPS & Quét mã Geofence QR Code.*
-        3. *Màn hình Chủ quán: Đăng ca gãy khẩn cấp & Xét duyệt E-Portfolio ứng viên.*
-        4. *Màn hình Web Admin: Dashboard Quản lý Nhân sự & Bản đồ Giám sát Chấm công Live.*
-        5. *Màn hình Web Client: Đối soát thù lao lương & Tải bill chuyển khoản.*
+    
+    1. **Màn hình Trang chủ Sinh viên: Bản đồ GPS Job Radar việc làm quanh đây**
+       ![Màn hình Trang chủ Sinh viên: Bản đồ GPS Job Radar](file:///d:/ProxiJob/images/student_job_radar.png)
+
+    2. **Màn hình Sinh viên: Chấm công định vị GPS & Quét mã Geofence QR Code**
+       ![Màn hình Sinh viên: Chấm công định vị GPS & Quét mã QR Code](file:///d:/ProxiJob/images/student_checkin_qr.png)
+
+    3. **Màn hình Chủ quán: Đăng ca gãy khẩn cấp & Xét duyệt E-Portfolio ứng viên**
+       ![Màn hình Chủ quán: Đăng ca gãy khẩn cấp & E-Portfolio](file:///d:/ProxiJob/images/employer_emergency_portfolio.png)
+
+    4. **Màn hình Web Admin: Dashboard Quản lý Nhân sự & Bản đồ Giám sát Chấm công Live**
+       ![Màn hình Web Admin: Dashboard Quản lý Nhân sự & Live Map](file:///d:/ProxiJob/images/admin_live_timekeeping.png)
+
+    5. **Màn hình Web Client: Đối soát thù lao lương & Tải bill chuyển khoản**
+       ![Màn hình Web Client: Đối soát thù lao lương & Tải bill](file:///d:/ProxiJob/images/webclient_payroll_bill.png)
 
 *   **Link Video Demo MVP & TVC:**
     *   **Link Video Demo MVP:** `[📌 CẦN BẠN BỔ SUNG: Dán link Youtube quay Video Demo trải nghiệm ứng dụng thực tế tại đây]`
     *   **Link Video TVC Quảng cáo:** `[📌 CẦN BẠN BỔ SUNG: Dán link Youtube TVC truyền thông dự án tại đây]`
+

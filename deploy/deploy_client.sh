@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================
-# ProxiJob Admin Web Client VPS Deployment Script
-# Domain: proxijob.io.vn / admin.proxijob.io.vn
+# ProxiJob Web Client VPS Deployment Script
+# Domains: proxijob.io.vn / app.proxijob.io.vn / admin.proxijob.io.vn
 # ==============================================
 
 set -e  # Dừng ngay nếu có lỗi
@@ -14,7 +14,7 @@ NC='\033[0m'
 
 echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║    🌐 ProxiJob Client Deployment Script      ║${NC}"
-echo -e "${CYAN}║    Domain: proxijob.io.vn / admin.proxijob   ║${NC}"
+echo -e "${CYAN}║    Domain: app.proxijob / admin.proxijob     ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -57,59 +57,23 @@ echo ""
 echo -e "${GREEN}━━━ BƯỚC 2/2: Cấu hình Nginx & Cấp chứng chỉ SSL/HTTPS ━━━${NC}"
 mkdir -p /var/www/certbot
 
-SSL_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-
-if [ ! -f "$SSL_PATH" ]; then
-    echo -e "  ${YELLOW}⏳ Chưa phát hiện chứng chỉ SSL. Đang tạo cấu hình Nginx Bootstrap (HTTP-only) để xác thực...${NC}"
-    
-    cat <<EOF > /etc/nginx/sites-available/proxijob.io.vn
-server {
-    listen 80;
-    server_name $DOMAIN admin.$DOMAIN;
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    location / {
-        return 200 "ProxiJob Client Bootstrapping...";
-        add_header Content-Type text/plain;
-    }
-}
-EOF
-
-    ln -sf /etc/nginx/sites-available/proxijob.io.vn /etc/nginx/sites-enabled/proxijob.io.vn
-    # Xóa file default nếu có
-    rm -f /etc/nginx/sites-enabled/default
-    
-    systemctl reload nginx
-    
-    echo -e "  ${YELLOW}📝 Đang xin chứng chỉ Let's Encrypt cho $DOMAIN và admin.$DOMAIN...${NC}"
-    # Đăng ký chứng chỉ chung cho cả 2 domains
-    certbot certonly --webroot -w /var/www/certbot -d "$DOMAIN" -d "admin.$DOMAIN" --non-interactive --agree-tos --email "$EMAIL"
-    
-    if [ $? -ne 0 ]; then
-        echo -e "${YELLOW}⚠️ Đăng ký đa tên miền thất bại. Đang thử đăng ký riêng tên miền gốc $DOMAIN...${NC}"
-        certbot certonly --webroot -w /var/www/certbot -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL"
-        
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}❌ Lỗi nghiêm trọng: Không thể lấy SSL Cert. Hãy kiểm tra DNS của $DOMAIN đã trỏ về IP này chưa.${NC}"
-            exit 1
-        fi
-    fi
-    echo -e "  ✅ SSL certificate đã được cấp thành công!"
-fi
-
 # Sao chép cấu hình Nginx chính thức
 echo -e "  ${YELLOW}⚙️ Đang kích hoạt cấu hình Nginx Gateway chính thức...${NC}"
 cp "$PROJECT_DIR/deploy/nginx/proxijob.io.vn.conf" /etc/nginx/sites-available/proxijob.io.vn
 ln -sf /etc/nginx/sites-available/proxijob.io.vn /etc/nginx/sites-enabled/proxijob.io.vn
+rm -f /etc/nginx/sites-enabled/default
 
-# Kiểm tra cú pháp Nginx và khởi động lại
+systemctl reload nginx
+
+# Đăng ký hoặc mở rộng SSL Certbot cho cả app.proxijob.io.vn, admin.proxijob.io.vn, proxijob.io.vn
+echo -e "  ${YELLOW}📝 Đang đăng ký/cập nhật chứng chỉ SSL Certbot cho app.$DOMAIN, admin.$DOMAIN, $DOMAIN...${NC}"
+certbot certonly --webroot -w /var/www/certbot -d "$DOMAIN" -d "app.$DOMAIN" -d "admin.$DOMAIN" --expand --non-interactive --agree-tos --email "$EMAIL" || true
+
 nginx -t
 systemctl reload nginx
 
 echo ""
 echo -e "${GREEN}🎉 QUY TRÌNH DEPLOY HOÀN TẤT THÀNH CÔNG! 🎉${NC}"
-echo -e "🔗 Truy cập Website: ${CYAN}https://proxijob.io.vn${NC} hoặc ${CYAN}https://admin.proxijob.io.vn${NC}"
+echo -e "🔗 Web Client App: ${CYAN}https://app.proxijob.io.vn${NC}"
+echo -e "🔗 Admin Client: ${CYAN}https://admin.proxijob.io.vn${NC}"
 echo ""
