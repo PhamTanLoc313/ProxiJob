@@ -12,13 +12,16 @@ namespace ProxiJob.Identity.Application.Features.Business.Queries.GetMyBusinessP
     {
         private readonly ICurrentUserService _currentUser;
         private readonly IBusinessProfileRepository _profileRepository;
+        private readonly ISubscriptionRepository _subscriptionRepository;
 
         public GetMyBusinessProfileQueryHandler(
             ICurrentUserService currentUser,
-            IBusinessProfileRepository profileRepository)
+            IBusinessProfileRepository profileRepository,
+            ISubscriptionRepository subscriptionRepository)
         {
             _currentUser = currentUser;
             _profileRepository = profileRepository;
+            _subscriptionRepository = subscriptionRepository;
         }
 
         public async Task<BusinessProfileDto> Handle(GetMyBusinessProfileQuery request, CancellationToken cancellationToken)
@@ -28,7 +31,9 @@ namespace ProxiJob.Identity.Application.Features.Business.Queries.GetMyBusinessP
             var profile = await _profileRepository.GetByUserIdWithUserAsync(_currentUser.UserId!.Value, cancellationToken)
                 ?? throw new InvalidOperationException(BusinessMessages.BusinessProfileNotFound);
 
-            return BusinessProfileMapper.ToDto(profile);
+            var (tier, _) = await _subscriptionRepository.GetUserTierInfoAsync(_currentUser.UserId!.Value, cancellationToken);
+
+            return BusinessProfileMapper.ToDto(profile, tier);
         }
 
         private void EnsureBusiness()

@@ -18,6 +18,7 @@ namespace ProxiJob.Identity.Application.DTOs
         public int ReviewCount { get; set; }
         public DateTime? ProfileCompleteAt { get; set; }
         public int CompletionPercent { get; set; }
+        public string SubscriptionTier { get; set; } = "Trial";
         public IReadOnlyList<string> MissingFields { get; set; } = Array.Empty<string>();
     }
 }

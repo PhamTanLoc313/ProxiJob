@@ -6,7 +6,7 @@ import {
   ShieldCheck, Clock, X, ExternalLink
 } from "lucide-react";
 import { getBusinessProfileApi } from "../api/businessApi";
-import { getPlansApi, purchasePlanApi, getPaymentStatusApi } from "../api/auth";
+import { getPlansApi, purchasePlanApi, getPaymentStatusApi, getJobPostQuotaApi } from "../api/auth";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../admin/ToastContext";
 
@@ -66,10 +66,11 @@ const PLAN_FEATURES = {
 };
 
 export default function EmployerDashboard({ onNavigateToSection }) {
-  const { user } = useAuth();
+  const { user, setCurrentUser } = useAuth();
   const toast = useToast();
   const [profile, setProfile] = useState(null);
   const [plans, setPlans] = useState([]);
+  const [quotaInfo, setQuotaInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
 
@@ -78,6 +79,25 @@ export default function EmployerDashboard({ onNavigateToSection }) {
   const [paymentStatus, setPaymentStatus] = useState("Pending");
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [copiedField, setCopiedField] = useState("");
+
+  // Handle return URL params (e.g. from PayOS redirect in new tab)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    if (status === "paid" || status === "PAID" || status === "SUCCESS") {
+      setOrderInfo(null);
+      setPaymentStatus("Pending");
+      toast.success("Nâng cấp gói cước thành công! 🎉");
+      window.history.replaceState(null, "", cleanUrl);
+      loadData();
+    } else if (status === "cancelled" || status === "CANCELLED") {
+      setOrderInfo(null);
+      setPaymentStatus("Pending");
+      toast.error("Đơn hàng đã bị hủy.");
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, []);
 
   const handleCopyText = (text, fieldName) => {
     navigator.clipboard.writeText(text);
@@ -91,6 +111,19 @@ export default function EmployerDashboard({ onNavigateToSection }) {
     try {
       const p = await getBusinessProfileApi();
       if (p) setProfile(p);
+
+      const q = await getJobPostQuotaApi();
+      if (q) {
+        setQuotaInfo(q);
+        const subTier = q.subscriptionTier || q.SubscriptionTier || p?.subscriptionTier || p?.SubscriptionTier;
+        if (subTier && user && setCurrentUser && user.subscriptionTier !== subTier) {
+          const updatedUser = { ...user, subscriptionTier: subTier };
+          setCurrentUser(updatedUser);
+          try {
+            localStorage.setItem("proxijob_user", JSON.stringify(updatedUser));
+          } catch (e) {}
+        }
+      }
       
       const allPlans = await getPlansApi();
       
@@ -125,6 +158,9 @@ export default function EmployerDashboard({ onNavigateToSection }) {
   }, []);
 
   const handlePurchase = async (plan) => {
+    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    window.history.replaceState(null, "", cleanUrl);
+
     setPurchasing(true);
     try {
       const res = await purchasePlanApi(plan.id);
@@ -152,8 +188,8 @@ export default function EmployerDashboard({ onNavigateToSection }) {
         if (!alive) return;
         const status = statusData.status || statusData.Status || "Pending";
         if (status === "Paid") {
-          setPaymentStatus("Paid");
-          toast.success("Nâng cấp gói cước thành công! Vui lòng tải lại trang để áp dụng hạn ngạch mới. 🎉");
+          setOrderInfo(null);
+          toast.success("Nâng cấp gói cước thành công! 🎉");
           loadData();
         } else if (status === "Expired" || status === "Cancelled") {
           setPaymentStatus(status);
@@ -162,11 +198,11 @@ export default function EmployerDashboard({ onNavigateToSection }) {
       } catch {}
     };
     poll();
-    const iv = setInterval(poll, 2500);
+    const iv = setInterval(poll, 1500);
 
     const handleMessage = (e) => {
       if (e.data?.type === 'PAYOS_SUCCESS') {
-        setPaymentStatus("Paid");
+        setOrderInfo(null);
         toast.success("Nâng cấp gói cước thành công! 🎉");
         loadData();
       } else if (e.data?.type === 'PAYOS_CANCEL') {
@@ -200,7 +236,7 @@ export default function EmployerDashboard({ onNavigateToSection }) {
     }
   };
 
-  const currentTier = profile?.subscriptionTier || user?.subscriptionTier || "Trial";
+  const currentTier = quotaInfo?.subscriptionTier || quotaInfo?.SubscriptionTier || profile?.subscriptionTier || user?.subscriptionTier || "Trial";
 
   if (loading) {
     return (

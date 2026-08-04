@@ -70,11 +70,13 @@ namespace ProxiJob.Identity.Application.Services
                     throw new InvalidOperationException(BusinessMessages.AlreadyOnPlan);
             }
 
-            // Kiểm tra đơn pending đã có cho user+plan này
+            // Nếu có đơn pending cũ chưa hoàn tất của user+plan này -> Hủy đơn cũ để luôn khởi tạo đơn mới với mã PayOS tươi
             var existingPending = await _paymentRepository.GetPendingByUserAndPlanAsync(userId, planId, cancellationToken);
             if (existingPending != null)
             {
-                return MapPurchaseResponse(existingPending, BusinessMessages.PaymentOrderCreated);
+                existingPending.Status = PaymentOrderStatus.Cancelled;
+                await _paymentRepository.UpdateAsync(existingPending, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
             var user = await _authRepository.GetUserByIdAsync(userId, cancellationToken)
@@ -96,9 +98,9 @@ namespace ProxiJob.Identity.Application.Services
                 PayOsOrderCode = payOsOrderCode
             };
 
-            // Gọi PayOS tạo payment link
-            var returnUrl = $"{_publicBaseUrl}/api/payments/payos/return?orderCode={payOsOrderCode}";
-            var cancelUrl = $"{_publicBaseUrl}/api/payments/payos/cancel?orderCode={payOsOrderCode}";
+            // Gọi PayOS tạo payment link (dùng trang callback tĩnh payment-return.html để tự động chuyển hướng window.top mượt mà)
+            var returnUrl = $"https://app.proxijob.io.vn/payment-return.html?status=paid&role={userRole}&orderCode={payOsOrderCode}";
+            var cancelUrl = $"https://app.proxijob.io.vn/payment-return.html?status=cancelled&role={userRole}&orderCode={payOsOrderCode}";
             var description = order.OrderCode;
 
             var payOsResult = await _payOs.CreatePaymentLinkAsync(order, description, returnUrl, cancelUrl, cancellationToken);

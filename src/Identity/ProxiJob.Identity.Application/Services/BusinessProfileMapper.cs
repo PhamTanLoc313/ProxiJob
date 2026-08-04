@@ -5,7 +5,7 @@ namespace ProxiJob.Identity.Application.Services
 {
     public static class BusinessProfileMapper
     {
-        public static BusinessProfileDto ToDto(BusinessProfile profile)
+        public static BusinessProfileDto ToDto(BusinessProfile profile, string subscriptionTier = "Trial")
         {
             var missing = BusinessProfileCompletion.GetMissingFields(profile.User, profile);
             return new BusinessProfileDto
@@ -26,6 +26,7 @@ namespace ProxiJob.Identity.Application.Services
                 ReviewCount = profile.ReviewCount,
                 ProfileCompleteAt = profile.ProfileCompleteAt,
                 CompletionPercent = BusinessProfileCompletion.GetCompletionPercent(profile.User, profile),
+                SubscriptionTier = subscriptionTier,
                 MissingFields = missing
             };
         }

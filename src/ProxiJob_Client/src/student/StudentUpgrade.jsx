@@ -23,6 +23,25 @@ export default function StudentUpgrade() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  // Handle return URL params (e.g. from PayOS redirect in new tab)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    if (status === "paid" || status === "PAID" || status === "SUCCESS") {
+      setOrderInfo(null);
+      setPaymentStatus("Pending");
+      toast.success("Giao dịch thành công! Tài khoản của bạn đã được cộng thêm 10 lượt ứng tuyển. 🎉");
+      window.history.replaceState(null, "", cleanUrl);
+      loadPlans();
+    } else if (status === "cancelled" || status === "CANCELLED") {
+      setOrderInfo(null);
+      setPaymentStatus("Pending");
+      toast.error("Đơn hàng đã bị hủy.");
+      window.history.replaceState(null, "", cleanUrl);
+    }
+  }, []);
+
   // Countdown timer
   useEffect(() => {
     if (!orderInfo || !orderInfo.expiresAt) return;
@@ -42,7 +61,7 @@ export default function StudentUpgrade() {
     return () => clearInterval(timer);
   }, [orderInfo]);
 
-  // Auto-polling payment status every 2.5s
+  // Auto-polling payment status every 1.5s
   useEffect(() => {
     if (!orderInfo || paymentStatus !== "Pending") return;
     let alive = true;
@@ -52,23 +71,29 @@ export default function StudentUpgrade() {
         if (!alive) return;
         const status = statusData.status || statusData.Status || "Pending";
         if (status === "Paid") {
-          setPaymentStatus("Paid");
+          setOrderInfo(null);
+          setPaymentStatus("Pending");
           toast.success("Giao dịch thành công! Tài khoản của bạn đã được cộng thêm 10 lượt ứng tuyển. 🎉");
+          loadPlans();
         } else if (status === "Expired" || status === "Cancelled") {
-          setPaymentStatus(status);
+          setOrderInfo(null);
+          setPaymentStatus("Pending");
           toast.error(status === "Expired" ? "Đơn hàng đã hết hạn." : "Đơn hàng đã bị hủy.");
         }
       } catch {}
     };
     poll();
-    const iv = setInterval(poll, 2500);
+    const iv = setInterval(poll, 1500);
 
     const handleMessage = (e) => {
       if (e.data?.type === 'PAYOS_SUCCESS') {
-        setPaymentStatus("Paid");
+        setOrderInfo(null);
+        setPaymentStatus("Pending");
         toast.success("Giao dịch thành công! Tài khoản của bạn đã được cộng thêm 10 lượt ứng tuyển. 🎉");
+        loadPlans();
       } else if (e.data?.type === 'PAYOS_CANCEL') {
-        setPaymentStatus("Cancelled");
+        setOrderInfo(null);
+        setPaymentStatus("Pending");
         toast.error("Đơn hàng đã bị hủy.");
       }
     };
@@ -111,6 +136,9 @@ export default function StudentUpgrade() {
   useEffect(() => { loadPlans(); }, []);
 
   const handlePurchase = async (plan) => {
+    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    window.history.replaceState(null, "", cleanUrl);
+
     setPurchasing(true);
     try {
       const res = await purchasePlanApi(plan.id);
