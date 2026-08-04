@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getPlansApi, purchasePlanApi, getPaymentStatusApi } from "../api/auth";
 import { Star, ShieldCheck, CheckCircle2, ChevronRight, RefreshCw, Clock, ArrowLeft, Copy, Check, Receipt, Landmark, X } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
@@ -36,6 +36,28 @@ export default function StudentUpgrade() {
     }, 1000);
     return () => clearInterval(timer);
   }, [orderInfo]);
+
+  // Auto-polling: kiểm tra trạng thái thanh toán mỗi 5 giây
+  useEffect(() => {
+    if (!orderInfo || paymentStatus !== "Pending") return;
+    let alive = true;
+    const poll = async () => {
+      try {
+        const statusData = await getPaymentStatusApi(orderInfo.orderId);
+        if (!alive) return;
+        const status = statusData.status || statusData.Status || "Pending";
+        setPaymentStatus(status);
+        if (status === "Paid") {
+          toast.success("Giao dịch thành công! Tài khoản của bạn đã được cộng 10 lượt ứng tuyển. 🎉");
+        } else if (status === "Expired" || status === "Cancelled") {
+          toast.error(status === "Expired" ? "Đơn hàng đã hết hạn." : "Đơn hàng đã bị hủy.");
+        }
+      } catch {}
+    };
+    poll();
+    const iv = setInterval(poll, 5000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [orderInfo, paymentStatus]);
 
   const handleCopyText = async (text, fieldName) => {
     try {
@@ -355,20 +377,6 @@ export default function StudentUpgrade() {
                     className="flex-1 h-11 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl font-bold transition text-xs cursor-pointer"
                   >
                     Quay lại
-                  </button>
-                  <button
-                    type="button"
-                    disabled={verifyingPayment}
-                    onClick={handleVerifyPayment}
-                    className="flex-1 h-11 btn-premium disabled:bg-slate-200 text-white rounded-2xl font-bold shadow-lg shadow-orange-600/10 transition flex items-center justify-center gap-2 text-xs cursor-pointer"
-                  >
-                    {verifyingPayment ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                    ) : (
-                      <>
-                        <RefreshCw size={14} /> Tôi đã thanh toán
-                      </>
-                    )}
                   </button>
                 </div>
               </div>
