@@ -305,17 +305,97 @@ export default function EmployerDashboard({ onNavigateToSection }) {
                 {/* 1. Order Summary Card */}
                 <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-4">
                   <div className="flex items-center gap-1.5 text-slate-800 font-black text-[11px] uppercase tracking-wider border-b border-slate-100 pb-2.5 mb-2.5">
-                  className="flex-1 h-11 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl font-bold transition text-xs cursor-pointer"
-                >
-                  Quay lại
-                </button>
+                    <Receipt size={14} className="text-orange-500" /> Thông tin đơn hàng
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center py-0.5">
+                      <span className="text-slate-400 font-bold text-[10px] uppercase">Gói dịch vụ</span>
+                      <span className="text-orange-600 font-black">{orderInfo.planName}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-0.5">
+                      <span className="text-slate-400 font-bold text-[10px] uppercase">Số tiền thanh toán</span>
+                      <span className="text-emerald-600 font-black text-sm">{(orderInfo.amount || 10000).toLocaleString("vi-VN")} đ</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Recipient details card */}
+                {orderInfo && (
+                  <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-4">
+                    <div className="flex items-center gap-1.5 text-slate-800 font-black text-[11px] uppercase tracking-wider border-b border-slate-100 pb-2.5 mb-2.5">
+                      <Landmark size={14} className="text-blue-500" /> Thông tin tài khoản nhận
+                    </div>
+                    <div className="space-y-2.5 text-xs">
+                      <div className="flex justify-between items-center py-0.5">
+                        <span className="text-slate-400 font-bold text-[10px] uppercase">Ngân hàng thụ hưởng</span>
+                        <span className="text-slate-850 font-black">{orderInfo.bankTransfer?.bankName || "MB Bank"}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-0.5">
+                        <span className="text-slate-400 font-bold text-[10px] uppercase">Tên chủ tài khoản</span>
+                        <span className="text-slate-850 font-black">{orderInfo.bankTransfer?.accountHolder || "NGUYEN DUY KHOI"}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-0.5">
+                        <span className="text-slate-400 font-bold text-[10px] uppercase">Số tài khoản</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-850 font-black font-mono">{orderInfo.bankTransfer?.accountNumber || "VQRQAKNBQ9902"}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(orderInfo.bankTransfer?.accountNumber || "VQRQAKNBQ9902", "Số tài khoản")}
+                            className="p-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 rounded-lg transition cursor-pointer"
+                          >
+                            {copiedField === "Số tài khoản" ? <Check size={10} className="text-emerald-600" /> : <Copy size={10} />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center py-0.5">
+                        <span className="text-slate-400 font-bold text-[10px] uppercase">Nội dung chuyển khoản</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-red-500 font-black font-mono">{orderInfo.bankTransfer?.transferContent || orderInfo.orderCode || orderInfo.orderId}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(orderInfo.bankTransfer?.transferContent || orderInfo.orderCode || orderInfo.orderId, "Nội dung chuyển khoản")}
+                            className="p-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 rounded-lg transition cursor-pointer"
+                          >
+                            {copiedField === "Nội dung chuyển khoản" ? <Check size={10} className="text-emerald-600" /> : <Copy size={10} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {orderInfo.checkoutUrl && (
+                  <a
+                    href={orderInfo.checkoutUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full h-11 bg-[#A50064] text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:brightness-110 transition text-xs shadow-md"
+                  >
+                    ⚡ Thanh toán trực tiếp qua Ví MoMo Sandbox
+                  </a>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOrderInfo(null)}
+                    className="flex-1 h-11 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl font-bold transition text-xs cursor-pointer"
+                  >
+                    Quay lại
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+            )}
+
+            {/* Live checking status indicator */}
+            {paymentStatus === "Pending" && (
+              <div className="text-[11px] text-slate-400 font-semibold flex items-center justify-center gap-1.5 mt-1 relative z-10">
+                <div className="h-1.5 w-1.5 bg-orange-500 rounded-full animate-ping" />
+                <span>Hệ thống đang kiểm tra tự động giao dịch của bạn...</span>
+              </div>
+            )}
+          </div>
+        )}
 
   return (
     <div className="max-w-7xl mx-auto p-4 flex flex-col gap-6">
