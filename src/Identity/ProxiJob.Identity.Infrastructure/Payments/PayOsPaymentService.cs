@@ -77,5 +77,26 @@ namespace ProxiJob.Identity.Infrastructure.Payments
                 return new PayOsWebhookResult { Success = false };
             }
         }
+
+        public async Task<PayOsPaymentInfo?> GetPaymentInfoAsync(long orderCode, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var paymentInfo = await _payOs.PaymentRequests.GetAsync(orderCode);
+                if (paymentInfo == null) return null;
+
+                return new PayOsPaymentInfo
+                {
+                    OrderCode = paymentInfo.OrderCode,
+                    Status = paymentInfo.Status.ToString(),
+                    TransactionId = paymentInfo.Id
+                };
+            }
+            catch (Exception)
+            {
+                // PayOS API call failed — return null to skip auto-verify
+                return null;
+            }
+        }
     }
 }

@@ -223,26 +223,6 @@ export default function PaymentManagement() {
                         >
                           <Eye size={16} />
                         </button>
-                        {order.status === "Pending" && (
-                          <>
-                            <button
-                              className="admin-btn-icon"
-                              style={{ color: "var(--admin-success)", borderColor: "rgba(16,185,129,0.3)" }}
-                              title="Xác nhận"
-                              onClick={() => openModal(order, "confirm")}
-                            >
-                              <Check size={16} />
-                            </button>
-                            <button
-                              className="admin-btn-icon"
-                              style={{ color: "var(--admin-danger)", borderColor: "rgba(239,68,68,0.3)" }}
-                              title="Từ chối"
-                              onClick={() => openModal(order, "reject")}
-                            >
-                              <X size={16} />
-                            </button>
-                          </>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -282,46 +262,6 @@ export default function PaymentManagement() {
             >
               Đóng cửa sổ
             </button>
-            {modalType === "view" && selectedOrder?.status === "Pending" && (
-              <>
-                <button
-                  type="button"
-                  className="admin-btn admin-btn-danger"
-                  onClick={() => setModalType("reject")}
-                  style={{ borderRadius: "12px", padding: "10px 20px" }}
-                >
-                  Từ chối đơn
-                </button>
-                <button
-                  type="button"
-                  className="admin-btn admin-btn-success"
-                  onClick={() => setModalType("confirm")}
-                  style={{ borderRadius: "12px", padding: "10px 22px" }}
-                >
-                  Phê duyệt đơn
-                </button>
-              </>
-            )}
-            {modalType === "confirm" && (
-              <button
-                type="submit"
-                form="actionForm"
-                className="admin-btn admin-btn-success"
-                style={{ borderRadius: "12px", padding: "10px 24px" }}
-              >
-                Xác nhận Thanh toán
-              </button>
-            )}
-            {modalType === "reject" && (
-              <button
-                type="submit"
-                form="actionForm"
-                className="admin-btn admin-btn-danger"
-                style={{ borderRadius: "12px", padding: "10px 24px" }}
-              >
-                Từ chối Thanh toán
-              </button>
-            )}
           </div>
         }
       >

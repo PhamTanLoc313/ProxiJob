@@ -116,6 +116,13 @@ namespace ProxiJob.Identity.Application.Services
         {
             var order = await GetOwnedOrderAsync(orderId, userId, cancellationToken);
             await ExpireIfNeededAsync(order, cancellationToken);
+
+            // Active verification: nếu đơn vẫn Pending và có PayOsOrderCode, gọi PayOS API kiểm tra trực tiếp
+            if (order.Status == PaymentOrderStatus.Pending && order.PayOsOrderCode.HasValue)
+            {
+                await TryActiveVerifyPayOsAsync(order, cancellationToken);
+            }
+
             return await MapStatusAsync(order, cancellationToken);
         }
 
@@ -231,6 +238,43 @@ namespace ProxiJob.Identity.Application.Services
 
             await _paymentRepository.UpdateAsync(order, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        /// <summary>
+        /// Gọi PayOS API kiểm tra trực tiếp trạng thái thanh toán.
+        /// Nếu PayOS xác nhận đã thanh toán thành công → tự động hoàn tất đơn.
+        /// </summary>
+        private async Task TryActiveVerifyPayOsAsync(PaymentOrder order, CancellationToken cancellationToken)
+        {
+            if (!order.PayOsOrderCode.HasValue) return;
+
+            try
+            {
+                var paymentInfo = await _payOs.GetPaymentInfoAsync(order.PayOsOrderCode.Value, cancellationToken);
+                if (paymentInfo == null) return;
+
+                if (string.Equals(paymentInfo.Status, "PAID", StringComparison.OrdinalIgnoreCase))
+                {
+                    await CompletePaidOrderAsync(
+                        order,
+                        paymentInfo.TransactionId ?? order.GatewayTransactionId,
+                        "PayOS Auto-Verify",
+                        "Tự động xác nhận qua PayOS API",
+                        cancellationToken);
+                }
+                else if (string.Equals(paymentInfo.Status, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                {
+                    order.Status = PaymentOrderStatus.Cancelled;
+                    order.FailureReason = "Đơn bị hủy trên PayOS.";
+                    order.UpdatedAt = DateTime.UtcNow;
+                    await _paymentRepository.UpdateAsync(order, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+            }
+            catch
+            {
+                // PayOS API lỗi → bỏ qua, để lần poll sau thử lại
+            }
         }
 
         private async Task<PaymentOrder> GetOwnedOrderAsync(int orderId, int userId, CancellationToken cancellationToken)
