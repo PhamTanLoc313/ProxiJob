@@ -21,6 +21,15 @@ import UserManagement from "./admin/UserManagement";
 import SubscriptionManagement from "./admin/SubscriptionManagement";
 import JobManagement from "./admin/JobManagement";
 
+function normalizeRole(role) {
+  if (!role) return "";
+  const r = String(role).toLowerCase();
+  if (r === "business" || r === "employer") return "employer";
+  if (r === "student") return "student";
+  if (r === "admin") return "admin";
+  return r;
+}
+
 // Role-based Route Guard
 function PrivateRoute({ allowedRole, children }) {
   const { user, loading } = useAuth();
@@ -37,7 +46,10 @@ function PrivateRoute({ allowedRole, children }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRole && user.role !== allowedRole) {
+  const userRole = normalizeRole(user.role);
+  const targetAllowedRole = normalizeRole(allowedRole);
+
+  if (targetAllowedRole && userRole !== targetAllowedRole) {
     return <Navigate to="/" replace />;
   }
 
@@ -46,6 +58,7 @@ function PrivateRoute({ allowedRole, children }) {
 
 function App() {
   const { user } = useAuth();
+  const userRole = normalizeRole(user?.role);
 
   return (
     <ToastProvider>
@@ -89,9 +102,9 @@ function App() {
           path="/"
           element={
             user ? (
-              user.role === "student" ? (
+              userRole === "student" ? (
                 <Navigate to="/student" replace />
-              ) : user.role === "admin" ? (
+              ) : userRole === "admin" ? (
                 <Navigate to="/admin" replace />
               ) : (
                 <Navigate to="/employer" replace />

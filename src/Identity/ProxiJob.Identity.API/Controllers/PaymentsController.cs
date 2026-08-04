@@ -91,25 +91,33 @@ namespace ProxiJob.Identity.API.Controllers
         [AllowAnonymous]
         public IActionResult PayOsReturn([FromQuery] string orderCode)
         {
-            // Trả về HTML đơn giản để tự động đóng/báo cho user
-            var html = @"
+            var html = $@"
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <meta charset='utf-8'>
                     <meta name='viewport' content='width=device-width, initial-scale=1'>
-                    <title>Trạng thái thanh toán</title>
+                    <title>Thanh toán thành công</title>
                     <style>
-                        body { font-family: sans-serif; text-align: center; padding: 40px; }
-                        .success { color: #10B981; }
-                        h1 { margin-bottom: 10px; }
+                        body {{ font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 40px 20px; background: #F8FAFC; margin: 0; }}
+                        .card {{ background: white; padding: 32px 24px; border-radius: 24px; box-shadow: 0 10px 30px rgba(16,185,129,0.1); max-width: 360px; margin: 0 auto; border: 1px solid #E2E8F0; }}
+                        .icon {{ width: 64px; height: 64px; background: linear-gradient(135deg, #10B981, #059669); color: white; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 16px; box-shadow: 0 8px 20px rgba(16,185,129,0.3); }}
+                        .title {{ color: #0F172A; font-size: 20px; font-weight: 900; margin-bottom: 8px; tracking-tight: -0.02em; }}
+                        .desc {{ color: #64748B; font-size: 13px; font-weight: 500; line-height: 1.5; margin: 0; }}
                     </style>
                 </head>
                 <body>
-                    <h1 class='success'>Thanh toán hoàn tất!</h1>
-                    <p>Vui lòng quay lại ứng dụng để kiểm tra.</p>
+                    <div class='card'>
+                        <div class='icon'>✓</div>
+                        <div class='title'>Thanh Toán Thành Công!</div>
+                        <div class='desc'>Hệ thống đang tự động kích hoạt tài khoản của bạn...</div>
+                    </div>
                     <script>
-                        setTimeout(function() { window.close(); }, 3000);
+                        try {{
+                            if (window.parent && window.parent !== window) {{
+                                window.parent.postMessage({{ type: 'PAYOS_SUCCESS', orderCode: '{orderCode}' }}, '*');
+                            }}
+                        }} catch(e) {{}}
                     </script>
                 </body>
                 </html>";
@@ -120,7 +128,7 @@ namespace ProxiJob.Identity.API.Controllers
         [AllowAnonymous]
         public IActionResult PayOsCancel([FromQuery] string orderCode)
         {
-            var html = @"
+            var html = $@"
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -128,16 +136,25 @@ namespace ProxiJob.Identity.API.Controllers
                     <meta name='viewport' content='width=device-width, initial-scale=1'>
                     <title>Thanh toán bị hủy</title>
                     <style>
-                        body { font-family: sans-serif; text-align: center; padding: 40px; }
-                        .error { color: #EF4444; }
-                        h1 { margin-bottom: 10px; }
+                        body {{ font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 40px 20px; background: #F8FAFC; margin: 0; }}
+                        .card {{ background: white; padding: 32px 24px; border-radius: 24px; box-shadow: 0 10px 30px rgba(239,68,68,0.1); max-width: 360px; margin: 0 auto; border: 1px solid #E2E8F0; }}
+                        .icon {{ width: 64px; height: 64px; background: linear-gradient(135deg, #EF4444, #DC2626); color: white; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 16px; box-shadow: 0 8px 20px rgba(239,68,68,0.3); }}
+                        .title {{ color: #0F172A; font-size: 20px; font-weight: 900; margin-bottom: 8px; }}
+                        .desc {{ color: #64748B; font-size: 13px; font-weight: 500; line-height: 1.5; margin: 0; }}
                     </style>
                 </head>
                 <body>
-                    <h1 class='error'>Thanh toán đã bị hủy</h1>
-                    <p>Vui lòng quay lại ứng dụng và thử lại sau.</p>
+                    <div class='card'>
+                        <div class='icon'>✕</div>
+                        <div class='title'>Thanh Toán Đã Hủy</div>
+                        <div class='desc'>Giao dịch chưa hoàn tất. Vui lòng thử lại.</div>
+                    </div>
                     <script>
-                        setTimeout(function() { window.close(); }, 3000);
+                        try {{
+                            if (window.parent && window.parent !== window) {{
+                                window.parent.postMessage({{ type: 'PAYOS_CANCEL', orderCode: '{orderCode}' }}, '*');
+                            }}
+                        }} catch(e) {{}}
                     </script>
                 </body>
                 </html>";

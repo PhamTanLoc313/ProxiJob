@@ -11,69 +11,82 @@ namespace DbSequenceFixTemp
             string host = "180.93.59.204";
             string username = "root";
             string password = "3u6RplHgaC8ye1OH";
-            string localFilePath = @"d:\ProxiJob\ProxiJob_Client.tar.gz";
-            string remoteDirPath = "/root/ProxiJob";
-            string remoteTarPath = "/root/ProxiJob/ProxiJob_Client.tar.gz";
 
-            Console.WriteLine($"=== STEP 1: CONNECTING VIA SFTP TO {host} ===");
+            Console.WriteLine("=== UPLOADING CLIENT DIST TO VPS ===");
             using (var sftp = new SftpClient(host, username, password))
             {
                 sftp.Connect();
-                Console.WriteLine("SFTP Connected successfully.");
+                Console.WriteLine("SFTP Connected.");
 
-                if (!sftp.Exists(remoteDirPath))
-                {
-                    sftp.CreateDirectory(remoteDirPath);
-                    Console.WriteLine($"Created remote directory {remoteDirPath}.");
-                }
+                string distDir = Path.Combine(@"d:\ProxiJob", "src", "ProxiJob_Client", "dist");
+                string remoteDir = "/var/www/proxijob-client";
 
-                Console.WriteLine($"Uploading {localFilePath} ({new FileInfo(localFilePath).Length / 1024 / 1024} MB) to {remoteTarPath}...");
-                using (var fileStream = File.OpenRead(localFilePath))
+                try
                 {
-                    sftp.UploadFile(fileStream, remoteTarPath, (uploaded) =>
+                    foreach (var f in sftp.ListDirectory(remoteDir))
                     {
-                        Console.Write($"\rUploaded {uploaded / 1024 / 1024} MB...");
-                    });
+                        if (f.Name == "." || f.Name == "..") continue;
+                        string rp = remoteDir + "/" + f.Name;
+                        if (f.IsDirectory)
+                        {
+                            foreach (var sf in sftp.ListDirectory(rp))
+                            {
+                                if (sf.Name == "." || sf.Name == "..") continue;
+                                sftp.DeleteFile(rp + "/" + sf.Name);
+                            }
+                            sftp.DeleteDirectory(rp);
+                        }
+                        else sftp.DeleteFile(rp);
+                    }
+                } catch {}
+
+                UploadDir(sftp, distDir, remoteDir);
+
+                // Upload Nginx config
+                string localNginxConfig = @"d:\ProxiJob\deploy\nginx\api.proxijob.io.vn.conf";
+                string remoteNginxConfig = "/etc/nginx/conf.d/api.proxijob.io.vn.conf";
+                if (File.Exists(localNginxConfig))
+                {
+                    using var fs = File.OpenRead(localNginxConfig);
+                    sftp.UploadFile(fs, remoteNginxConfig, true);
+                    Console.WriteLine("✅ Uploaded api.proxijob.io.vn.conf to /etc/nginx/conf.d/");
                 }
-                Console.WriteLine("\nUpload complete!");
+
                 sftp.Disconnect();
+                Console.WriteLine("✅ Client dist uploaded!");
             }
 
-            Console.WriteLine($"\n=== STEP 2: EXECUTING DEPLOYMENT SCRIPT ON VPS VIA SSH ===");
+            Console.WriteLine("\n=== REBUILDING BACKEND IDENTITY API & RELOADING NGINX ===");
             using (var ssh = new SshClient(host, username, password))
             {
                 ssh.Connect();
-                Console.WriteLine("SSH Connected successfully.");
 
-                string deployCmd = "cd /root/ProxiJob && tar -xzf ProxiJob_Client.tar.gz && chmod +x deploy/deploy_client.sh && ./deploy/deploy_client.sh";
-                using (var cmd = ssh.CreateCommand(deployCmd))
-                {
-                    var asyncResult = cmd.BeginExecute();
-                    using (var reader = new StreamReader(cmd.OutputStream))
-                    {
-                        while (!asyncResult.IsCompleted || !reader.EndOfStream)
-                        {
-                            string? line = reader.ReadLine();
-                            if (line != null)
-                            {
-                                Console.WriteLine(line);
-                            }
-                        }
-                    }
-                    cmd.EndExecute(asyncResult);
-
-                    if (cmd.ExitStatus != 0)
-                    {
-                        Console.WriteLine($"\nCommand failed with exit code: {cmd.ExitStatus}");
-                        Console.WriteLine($"Error Output: {cmd.Error}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"\nDeployment Command completed successfully (Exit Code: 0).");
-                    }
-                }
+                // Git pull & docker compose rebuild backend
+                Console.WriteLine("Executing SSH Commands...");
+                var cmd = ssh.CreateCommand("cd /var/www/proxijob && git pull && docker compose build identity-api && docker compose up -d identity-api && nginx -s reload 2>/dev/null || docker exec proxijob-nginx nginx -s reload 2>/dev/null || true");
+                cmd.CommandTimeout = TimeSpan.FromMinutes(3);
+                string result = cmd.Execute();
+                Console.WriteLine(result);
 
                 ssh.Disconnect();
+            }
+
+            Console.WriteLine("\n✅ DEPLOYMENT FINISHED!");
+        }
+
+        static void UploadDir(SftpClient sftp, string localDir, string remoteDir)
+        {
+            try { sftp.CreateDirectory(remoteDir); } catch {}
+            foreach (var file in Directory.GetFiles(localDir))
+            {
+                using var fs = File.OpenRead(file);
+                sftp.UploadFile(fs, remoteDir + "/" + Path.GetFileName(file), true);
+            }
+            foreach (var dir in Directory.GetDirectories(localDir))
+            {
+                string name = Path.GetFileName(dir);
+                if (name == "node_modules" || name == ".git") continue;
+                UploadDir(sftp, dir, remoteDir + "/" + name);
             }
         }
     }

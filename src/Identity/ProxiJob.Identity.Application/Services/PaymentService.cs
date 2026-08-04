@@ -148,6 +148,10 @@ namespace ProxiJob.Identity.Application.Services
             foreach (var order in orders)
             {
                 await ExpireIfNeededAsync(order, cancellationToken);
+                if (order.Status == PaymentOrderStatus.Pending && order.PayOsOrderCode.HasValue)
+                {
+                    await TryActiveVerifyPayOsAsync(order, cancellationToken);
+                }
                 if (order.Status == PaymentOrderStatus.Pending)
                     result.Add(await MapAdminOrderAsync(order, cancellationToken));
             }
@@ -436,6 +440,10 @@ namespace ProxiJob.Identity.Application.Services
             foreach (var order in orders)
             {
                 await ExpireIfNeededAsync(order, cancellationToken);
+                if (order.Status == PaymentOrderStatus.Pending && order.PayOsOrderCode.HasValue)
+                {
+                    await TryActiveVerifyPayOsAsync(order, cancellationToken);
+                }
                 result.Add(await MapAdminOrderAsync(order, cancellationToken));
             }
             return result;
